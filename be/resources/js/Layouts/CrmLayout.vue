@@ -174,12 +174,16 @@
         </div>
       </a-layout-content>
     </a-layout>
+
+    <!-- AI Chat Widget -->
+    <AiChatWidget />
   </a-layout>
 </template>
 
 <script setup>
 import { ref, computed, h, watch } from 'vue'
 import { Link, usePage, router } from '@inertiajs/vue3'
+import AiChatWidget from '@/Components/Crm/AiChatWidget.vue'
 import {
   MenuFoldOutlined,
   MenuUnfoldOutlined,

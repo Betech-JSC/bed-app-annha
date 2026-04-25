@@ -83,6 +83,12 @@ class CrmSettingsController extends Controller
             'role_count' => $roles->count(),
         ];
 
+        // AI Config
+        $aiConfig = [
+            'api_key' => Setting::where('key', 'gemini_api_key')->first()?->value ?? '',
+            'model' => Setting::where('key', 'gemini_model')->first()?->value ?? 'gemini-2.0-flash',
+        ];
+
         return Inertia::render('Crm/Settings/Index', [
             'admins' => $admins,
             'roles' => $roles,
@@ -90,6 +96,7 @@ class CrmSettingsController extends Controller
             'stats' => $stats,
             'branding' => $branding,
             'smtp' => $smtp,
+            'aiConfig' => $aiConfig,
         ]);
     }
 
@@ -214,5 +221,46 @@ class CrmSettingsController extends Controller
         } catch (\Exception $e) {
             return back()->with('error', 'Lỗi gửi email: ' . $e->getMessage());
         }
+    }
+
+    /**
+     * Update AI (Gemini) configuration
+     */
+    public function updateAiConfig(Request $request)
+    {
+        $this->guardSuperAdmin();
+        $request->validate([
+            'api_key' => 'nullable|string|max:500',
+            'model' => 'required|string|max:100',
+        ]);
+
+        Setting::updateOrCreate(
+            ['key' => 'gemini_api_key'],
+            ['value' => $request->api_key ?? '', 'type' => 'string', 'description' => 'Google Gemini API Key']
+        );
+
+        Setting::updateOrCreate(
+            ['key' => 'gemini_model'],
+            ['value' => $request->model, 'type' => 'string', 'description' => 'Gemini AI Model']
+        );
+
+        return back()->with('success', 'Đã lưu cấu hình AI thành công.');
+    }
+
+    /**
+     * Test AI chat connection
+     */
+    public function testAiChat(Request $request)
+    {
+        $this->guardSuperAdmin();
+
+        $chatService = app(\App\Services\AiChatService::class);
+        $result = $chatService->chat('Xin chào, hãy giới thiệu ngắn gọn bạn là ai trong 1 câu.');
+
+        if ($result['success']) {
+            return back()->with('success', 'AI phản hồi thành công: ' . mb_substr($result['message'], 0, 100));
+        }
+
+        return back()->with('error', 'Lỗi kết nối AI: ' . ($result['error'] ?? 'Không xác định'));
     }
 }

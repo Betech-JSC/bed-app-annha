@@ -104,11 +104,15 @@ use App\Http\Controllers\Admin\CrmKpiController;
 use App\Http\Controllers\Admin\CrmSubcontractorController;
 use App\Http\Controllers\Admin\CrmSupplierController;
 use App\Http\Controllers\Admin\CrmAcceptanceTemplateController;
+use App\Http\Controllers\Admin\CrmAiChatController;
 
 Route::name('crm.')->middleware(['auth:admin'])->group(function () {
     // Dashboard
     Route::get('/', [CrmDashboardController::class, 'index'])->name('dashboard');
     Route::get('/dashboard', [CrmDashboardController::class, 'index']);
+
+    // AI Chat
+    Route::post('/ai-chat/send', [CrmAiChatController::class, 'send'])->name('ai-chat.send');
 
     // Approval Center (Trung tâm duyệt yêu cầu)
     Route::prefix('approvals')->name('approvals.')->group(function () {
@@ -621,6 +625,8 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         Route::post('/logo', [CrmSettingsController::class, 'uploadLogo'])->name('logo');
         Route::put('/smtp', [CrmSettingsController::class, 'updateSmtp'])->name('smtp');
         Route::post('/smtp/test', [CrmSettingsController::class, 'testSmtp'])->name('smtp.test');
+        Route::put('/ai-config', [CrmSettingsController::class, 'updateAiConfig'])->name('ai-config');
+        Route::post('/ai-config/test', [CrmSettingsController::class, 'testAiChat'])->name('ai-config.test');
     });
 
     // Operations (Vận hành — Dòng tiền, Nguồn vốn, Tài sản)

@@ -11,24 +11,50 @@
   </PageHeader>
 
   <div class="px-8 pb-12">
-    <!-- System Stats Cards -->
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-      <div v-for="(val, label) in {
-        'Phiên bản PHP': stats.php_version,
-        'Phiên bản Laravel': stats.laravel_version,
-        'Dung lượng Database': stats.db_size,
-        'Quản trị viên': stats.admin_count
-      }" :key="label" class="stats-card">
-        <div class="text-gray-400 text-xs font-semibold uppercase tracking-wider mb-1">{{ label }}</div>
-        <div class="text-xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent">
-          {{ val }}
-        </div>
+    <!-- Custom Premium Tab Navigation -->
+    <div class="mb-8 border-b border-gray-100 bg-white shadow-sm z-30 -mx-8 px-8 py-3">
+      <div class="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
+        <button 
+          v-for="t in [
+            { key: 'system', label: 'Hệ thống', icon: CloudServerOutlined },
+            { key: 'branding', label: 'Thương hiệu', icon: PictureOutlined },
+            { key: 'smtp', label: 'Email (SMTP)', icon: MailOutlined },
+            { key: 'firebase', label: 'Firebase', icon: CloudUploadOutlined },
+            { key: 'ai', label: 'AI Settings', icon: RobotOutlined },
+            { key: 'admins', label: 'Quản trị viên', icon: SafetyCertificateOutlined },
+            { key: 'roles', label: 'Vai trò', icon: SafetyOutlined },
+            { key: 'config', label: 'Vận hành', icon: SettingOutlined },
+          ]" 
+          :key="t.key"
+          @click="handleTabChange(t.key)"
+          class="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all duration-200 whitespace-nowrap"
+          :class="activeTab === t.key 
+            ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' 
+            : 'bg-white text-gray-500 hover:bg-gray-100 border border-gray-100'"
+        >
+          <component :is="t.icon" class="text-base" />
+          {{ t.label }}
+        </button>
       </div>
     </div>
 
-    <a-tabs v-model:activeKey="activeTab" class="crm-tabs-premium">
-      <!-- Tab 1: System Overview -->
-      <a-tab-pane key="system" tab="Tổng quan Hệ thống">
+    <!-- Tab Sections -->
+    <div class="space-y-6">
+      <!-- Section 1: System Overview -->
+      <div v-if="activeTab === 'system'">
+        <!-- System Stats Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          <div v-for="(val, label) in {
+            'Phiên bản PHP': stats.php_version,
+            'Phiên bản Laravel': stats.laravel_version,
+            'Dung lượng Database': stats.db_size,
+            'Quản trị viên': stats.admin_count
+          }" :key="label" class="stats-card">
+            <div class="text-xs text-gray-400 font-bold uppercase tracking-wider mb-2">{{ label }}</div>
+            <div class="text-2xl font-black text-gray-800">{{ val }}</div>
+          </div>
+        </div>
+
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div class="lg:col-span-2 space-y-6">
             <div class="glass-card p-6">
@@ -95,11 +121,11 @@
             </div>
           </div>
         </div>
-      </a-tab-pane>
+      </div>
 
-      <!-- Tab 2: Branding & Logo -->
-      <a-tab-pane key="branding" tab="Thương hiệu & Logo">
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <!-- Section 2: Branding -->
+      <div v-if="activeTab === 'branding'">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
           <!-- Logo Upload -->
           <div class="glass-card p-8">
             <h3 class="text-lg font-bold text-gray-800 mb-2 flex items-center gap-2">
@@ -165,27 +191,12 @@
                 Lưu thông tin
               </a-button>
             </a-form>
-
-            <!-- Preview -->
-            <div class="mt-8 p-6 bg-gray-900 rounded-2xl">
-              <div class="text-xs text-gray-500 mb-3 uppercase tracking-wider">Xem trước Sidebar</div>
-              <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-crm-primary to-crm-primary-light flex items-center justify-center text-white font-bold text-sm flex-shrink-0 overflow-hidden">
-                  <img v-if="branding.logo" :src="`/storage/${branding.logo}`" alt="" class="w-full h-full object-cover" />
-                  <span v-else>{{ (brandingForm.app_name || 'B').charAt(0) }}</span>
-                </div>
-                <div>
-                  <div class="text-white font-bold text-base leading-tight">{{ brandingForm.app_name || 'Annha CRM' }}</div>
-                  <div class="text-white/40 text-xs">{{ brandingForm.app_tagline || 'Construction ERP' }}</div>
-                </div>
-              </div>
-            </div>
           </div>
         </div>
-      </a-tab-pane>
+      </div>
 
-      <!-- Tab 3: SMTP Configuration -->
-      <a-tab-pane key="smtp" tab="Cấu hình Email (SMTP)">
+      <!-- Section 3: SMTP Settings -->
+      <div v-if="activeTab === 'smtp'">
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div class="lg:col-span-2">
             <div class="glass-card p-8">
@@ -253,8 +264,6 @@
               </a-form>
             </div>
           </div>
-
-          <!-- Test SMTP Sidebar -->
           <div class="space-y-6">
             <div class="glass-card p-6">
               <h3 class="font-bold text-gray-800 mb-4 flex items-center gap-2">
@@ -271,37 +280,13 @@
                 </a-button>
               </a-form>
             </div>
-
-            <!-- SMTP Tips -->
-            <div class="glass-card p-6">
-              <h3 class="font-bold text-gray-800 mb-3">💡 Hướng dẫn nhanh</h3>
-              <div class="space-y-3 text-sm text-gray-500">
-                <div class="flex gap-2">
-                  <span class="font-bold text-crm-primary">Gmail:</span>
-                  <span>smtp.gmail.com, Port 587, TLS</span>
-                </div>
-                <div class="flex gap-2">
-                  <span class="font-bold text-crm-primary">Outlook:</span>
-                  <span>smtp.office365.com, Port 587, TLS</span>
-                </div>
-                <div class="flex gap-2">
-                  <span class="font-bold text-crm-primary">Zoho:</span>
-                  <span>smtp.zoho.com, Port 465, SSL</span>
-                </div>
-                <a-alert type="info" show-icon class="mt-4 rounded-xl">
-                  <template #message>
-                    <span class="text-xs">Với Gmail, bạn cần tạo <strong>App Password</strong> thay vì dùng mật khẩu chính.</span>
-                  </template>
-                </a-alert>
-              </div>
-            </div>
           </div>
         </div>
-      </a-tab-pane>
+      </div>
 
-      <!-- Tab 4: Firebase Configuration -->
-      <a-tab-pane key="firebase" tab="Firebase & Push App">
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <!-- Section 4: Firebase -->
+      <div v-if="activeTab === 'firebase'">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
           <div class="lg:col-span-2">
             <div class="glass-card p-8">
               <h3 class="text-lg font-bold text-gray-800 mb-2 flex items-center gap-2">
@@ -336,29 +321,51 @@
               </a-form>
             </div>
           </div>
+        </div>
+      </div>
 
-          <div class="space-y-6">
-            <div class="glass-card p-6">
-              <h3 class="font-bold text-gray-800 mb-4 flex items-center gap-2">
-                <NotificationOutlined class="text-crm-primary" /> Bắn Push Test
+      <!-- Section 5: AI Configuration -->
+      <div v-if="activeTab === 'ai'">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <div class="lg:col-span-2">
+            <div class="glass-card p-8">
+              <h3 class="text-lg font-bold text-gray-800 mb-2 flex items-center gap-2">
+                <RobotOutlined class="text-crm-primary" /> Cấu hình Google Gemini AI
               </h3>
-              <p class="text-sm text-gray-400 mb-4">Nhập Device Token để bắt thử một thông báo tới điện thoại.</p>
+              <p class="text-sm text-gray-400 mb-6">Kết nối API Google Gemini để kích hoạt Trợ lý AI trong hệ thống CRM.</p>
+
               <a-form layout="vertical">
-                <a-form-item label="FCM Device Token">
-                  <a-input size="large" placeholder="diQw8sA9s..." />
+                <a-form-item label="API Key">
+                  <a-input-password
+                    v-model:value="aiForm.api_key"
+                    size="large"
+                    placeholder="AIzaSy...."
+                    :visibility-toggle="true"
+                  />
                 </a-form-item>
-                <a-button type="primary" size="large" block ghost class="premium-button" @click="message.success('Đã bắn Push Notification tới thiết bị!')">
-                  <template #icon><SendOutlined /></template>
-                  Gửi Push Test
-                </a-button>
+
+                <a-form-item label="Model AI">
+                  <a-select v-model:value="aiForm.model" size="large" :options="aiModelOptions" />
+                </a-form-item>
+
+                <div class="flex gap-3">
+                  <a-button type="primary" size="large" class="premium-button flex-1" :loading="aiSaving" @click="saveAiConfig">
+                    <template #icon><SaveOutlined /></template>
+                    Lưu cấu hình AI
+                  </a-button>
+                  <a-button size="large" class="premium-button" :loading="aiTesting" :disabled="!aiForm.api_key" @click="testAiChat">
+                    <template #icon><ThunderboltOutlined /></template>
+                    Test kết nối
+                  </a-button>
+                </div>
               </a-form>
             </div>
           </div>
         </div>
-      </a-tab-pane>
+      </div>
 
-      <!-- Tab 5: Admins -->
-      <a-tab-pane key="admins" tab="Quản trị viên">
+      <!-- Section 6: Admins -->
+      <div v-if="activeTab === 'admins'">
         <div class="glass-card">
           <a-table :data-source="admins" :columns="adminCols" :pagination="false" class="premium-table">
             <template #bodyCell="{ column, record }">
@@ -387,47 +394,10 @@
             </template>
           </a-table>
         </div>
-      </a-tab-pane>
+      </div>
 
-      <!-- Admin Edit Modal -->
-      <a-modal
-        v-model:open="showAdminEditModal"
-        title="Chỉnh sửa quản trị viên"
-        ok-text="Lưu"
-        cancel-text="Hủy"
-        :width="520"
-        @ok="saveAdmin"
-        :confirm-loading="adminSaving"
-        centered
-        destroy-on-close
-      >
-        <div class="space-y-4 mt-4" v-if="editingAdmin">
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Tên</label>
-            <a-input v-model:value="adminForm.name" size="large" />
-          </div>
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Email</label>
-            <a-input v-model:value="adminForm.email" size="large" disabled />
-          </div>
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Mật khẩu mới (để trống nếu không đổi)</label>
-            <a-input-password v-model:value="adminForm.password" size="large" placeholder="••••••••" />
-          </div>
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Vai trò</label>
-            <div class="flex flex-wrap gap-1">
-              <a-tag v-for="role in editingAdmin.roles" :key="role" color="blue" class="rounded-full px-3">
-                {{ roleLabels[role] || role }}
-              </a-tag>
-            </div>
-            <div class="text-xs text-gray-400 mt-2">Để thay đổi vai trò, vui lòng vào Quản lý nhân sự → Chỉnh sửa</div>
-          </div>
-        </div>
-      </a-modal>
-
-      <!-- Tab 5: Roles -->
-      <a-tab-pane key="roles" tab="Vai trò & Quyền">
+      <!-- Section 7: Roles -->
+      <div v-if="activeTab === 'roles'">
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           <div v-for="role in roles" :key="role.id" class="role-card">
             <div class="flex justify-between items-start mb-4">
@@ -454,10 +424,10 @@
             </div>
           </div>
         </div>
-      </a-tab-pane>
+      </div>
 
-      <!-- Tab 6: General Settings -->
-      <a-tab-pane key="config" tab="Tham số vận hành">
+      <!-- Section 8: General Config -->
+      <div v-if="activeTab === 'config'">
         <div class="glass-card p-6">
           <div class="max-w-2xl">
             <h3 class="text-lg font-bold text-gray-800 mb-6">Tham số vận hành</h3>
@@ -477,8 +447,8 @@
             </a-form>
           </div>
         </div>
-      </a-tab-pane>
-    </a-tabs>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -505,6 +475,9 @@ import {
   SaveOutlined,
   MobileOutlined,
   NotificationOutlined,
+  RobotOutlined,
+  LinkOutlined,
+  ThunderboltOutlined,
 } from '@ant-design/icons-vue'
 
 defineOptions({ layout: CrmLayout })
@@ -516,9 +489,24 @@ const props = defineProps({
   stats: Object,
   branding: Object,
   smtp: Object,
+  aiConfig: Object,
 })
 
 const activeTab = ref(new URLSearchParams(window.location.search).get('tab') || 'system')
+
+const handleTabChange = (key) => {
+  activeTab.value = key
+  // feedback for user to know click worked
+  message.loading({ content: 'Đang chuyển...', key: 'tab-change', duration: 0.5 })
+  router.get(window.location.pathname, { tab: key }, {
+    preserveState: true,
+    preserveScroll: true,
+    replace: true,
+    onSuccess: () => {
+      message.success({ content: 'Đã chuyển tab', key: 'tab-change', duration: 1 })
+    }
+  })
+}
 
 // Vietnamese role labels
 const roleLabels = {
@@ -689,8 +677,50 @@ const firebaseForm = ref({
   sender_id: ''
 })
 
+// ========== AI Config ==========
+const aiForm = ref({
+  api_key: props.aiConfig?.api_key || '',
+  model: props.aiConfig?.model || 'gemini-2.0-flash',
+})
+const aiSaving = ref(false)
+const aiTesting = ref(false)
+
+const aiModelOptions = [
+  { value: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash (Nhanh, miễn phí)' },
+  { value: 'gemini-2.0-flash-lite', label: 'Gemini 2.0 Flash Lite (Siêu nhanh)' },
+  { value: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash' },
+  { value: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro (Chính xác cao)' },
+]
+
+const saveAiConfig = () => {
+  aiSaving.value = true
+  router.put('/settings/ai-config', aiForm.value, {
+    onSuccess: () => {
+      message.success('Đã lưu cấu hình AI!')
+      aiSaving.value = false
+    },
+    onError: (errors) => {
+      message.error('Lỗi lưu cấu hình: ' + Object.values(errors).flat().join(', '))
+      aiSaving.value = false
+    },
+  })
+}
+
+const testAiChat = () => {
+  aiTesting.value = true
+  router.post('/settings/ai-config/test', {}, {
+    onSuccess: () => {
+      aiTesting.value = false
+    },
+    onError: () => {
+      message.error('Không thể kết nối tới AI. Kiểm tra lại API Key.')
+      aiTesting.value = false
+    },
+  })
+}
+
 // ========== General Settings ==========
-const smtpKeys = ['smtp_host', 'smtp_port', 'smtp_username', 'smtp_password', 'smtp_encryption', 'smtp_from_address', 'smtp_from_name', 'app_logo', 'app_name', 'app_tagline']
+const smtpKeys = ['smtp_host', 'smtp_port', 'smtp_username', 'smtp_password', 'smtp_encryption', 'smtp_from_address', 'smtp_from_name', 'app_logo', 'app_name', 'app_tagline', 'gemini_api_key', 'gemini_model']
 const generalSettings = computed(() => (props.settings || []).filter(s => !smtpKeys.includes(s.key)))
 
 const saveSetting = (s) => {

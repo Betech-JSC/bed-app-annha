@@ -26,5 +26,9 @@ return [
         'database_url' => env('FIREBASE_DATABASE_URL'),
     ],
 
+    'gemini' => [
+        'api_key' => env('GEMINI_API_KEY', ''),
+        'model' => env('GEMINI_MODEL', 'gemini-2.0-flash'),
+    ],
 
 ];
