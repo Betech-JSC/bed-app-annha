@@ -86,6 +86,7 @@ class CrmSettingsController extends Controller
         // AI Config
         $aiConfig = [
             'api_key' => Setting::where('key', 'gemini_api_key')->first()?->value ?? '',
+            'openai_api_key' => Setting::where('key', 'openai_api_key')->first()?->value ?? '',
             'model' => Setting::where('key', 'gemini_model')->first()?->value ?? 'gemini-2.0-flash',
         ];
 
@@ -231,17 +232,27 @@ class CrmSettingsController extends Controller
         $this->guardSuperAdmin();
         $request->validate([
             'api_key' => 'nullable|string|max:500',
+            'openai_api_key' => 'nullable|string|max:500',
             'model' => 'required|string|max:100',
         ]);
 
-        Setting::updateOrCreate(
-            ['key' => 'gemini_api_key'],
-            ['value' => $request->api_key ?? '', 'type' => 'string', 'description' => 'Google Gemini API Key']
-        );
+        if ($request->has('api_key')) {
+            Setting::updateOrCreate(
+                ['key' => 'gemini_api_key'],
+                ['value' => $request->api_key ?? '', 'type' => 'string', 'description' => 'Google Gemini API Key']
+            );
+        }
+
+        if ($request->has('openai_api_key')) {
+            Setting::updateOrCreate(
+                ['key' => 'openai_api_key'],
+                ['value' => $request->openai_api_key ?? '', 'type' => 'string', 'description' => 'OpenAI API Key']
+            );
+        }
 
         Setting::updateOrCreate(
             ['key' => 'gemini_model'],
-            ['value' => $request->model, 'type' => 'string', 'description' => 'Gemini AI Model']
+            ['value' => $request->model, 'type' => 'string', 'description' => 'Selected AI Model']
         );
 
         return back()->with('success', 'Đã lưu cấu hình AI thành công.');

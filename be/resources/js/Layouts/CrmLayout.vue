@@ -175,8 +175,8 @@
       </a-layout-content>
     </a-layout>
 
-    <!-- AI Chat Widget -->
-    <AiChatWidget />
+    <!-- AI Chat Widget (Only for BDH & Admin) -->
+    <AiChatWidget v-if="canShowAiChat" />
   </a-layout>
 </template>
 
@@ -278,6 +278,13 @@ const userPerms = computed(() => props.auth?.user?.permissions || [])
 const isSuperAdmin = computed(() => props.auth?.user?.super_admin === true)
 const can = (perm) => isSuperAdmin.value || userPerms.value.includes(perm)
 const canAny = (...perms) => isSuperAdmin.value || perms.some(p => userPerms.value.includes(p))
+
+const canShowAiChat = computed(() => {
+  if (isSuperAdmin.value) return true
+  const userRoles = props.auth?.user?.roles || []
+  const allowedRoles = ['Ban Dieu Hanh', 'Ban Điều Hành', 'Admin', 'Quản trị viên']
+  return userRoles.some(role => allowedRoles.includes(role))
+})
 
 const menuItems = computed(() => {
   const allItems = [

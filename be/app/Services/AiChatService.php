@@ -14,21 +14,24 @@ class AiChatService
 
     public function __construct()
     {
-        // Priority: Settings DB → .env config → empty
-        $this->apiKey = Setting::where('key', 'gemini_api_key')->first()?->value
-            ?: config('services.gemini.api_key', '');
+        // Get the selected model
         $this->model = Setting::where('key', 'gemini_model')->first()?->value
             ?: config('services.gemini.model', 'gemini-2.0-flash');
-        $this->baseUrl = 'https://generativelanguage.googleapis.com/v1beta';
+
+        // Choose API Key based on model
+        if (str_starts_with($this->model, 'gpt-') || str_starts_with($this->model, 'o1-') || str_starts_with($this->model, 'o3-')) {
+            $this->apiKey = Setting::where('key', 'openai_api_key')->first()?->value
+                ?: config('services.openai.api_key', '');
+            $this->baseUrl = 'https://api.openai.com/v1';
+        } else {
+            $this->apiKey = Setting::where('key', 'gemini_api_key')->first()?->value
+                ?: config('services.gemini.api_key', '');
+            $this->baseUrl = 'https://generativelanguage.googleapis.com/v1beta';
+        }
     }
 
     /**
-     * Send a message to Gemini and get a response.
-     *
-     * @param string $userMessage The user's message
-     * @param array $conversationHistory Previous messages [{role, content}, ...]
-     * @param array $systemContext CRM context data for the AI
-     * @return array ['success' => bool, 'message' => string, 'error' => string|null]
+     * Send a message to AI and get a response.
      */
     public function chat(string $userMessage, array $conversationHistory = [], array $systemContext = []): array
     {
@@ -36,59 +39,70 @@ class AiChatService
             return [
                 'success' => false,
                 'message' => '',
-                'error' => 'API key chưa được cấu hình. Vui lòng vào Cấu hình → Trí tuệ nhân tạo (AI) để thiết lập.',
+                'error' => 'API key chưa được cấu hình cho model ' . $this->model,
             ];
         }
 
         try {
-            // Build system instruction with CRM context
             $systemInstruction = $this->buildSystemInstruction($systemContext);
 
-            // Build conversation contents for Gemini
-            $contents = $this->buildContents($conversationHistory, $userMessage);
-
-            $response = Http::timeout(30)->post(
-                "{$this->baseUrl}/models/{$this->model}:generateContent?key={$this->apiKey}",
-                [
-                    'system_instruction' => [
-                        'parts' => [['text' => $systemInstruction]],
-                    ],
-                    'contents' => $contents,
-                    'generationConfig' => [
-                        'temperature' => 0.7,
-                        'topP' => 0.95,
-                        'maxOutputTokens' => 2048,
-                    ],
-                    'safetySettings' => [
-                        ['category' => 'HARM_CATEGORY_HARASSMENT', 'threshold' => 'BLOCK_ONLY_HIGH'],
-                        ['category' => 'HARM_CATEGORY_HATE_SPEECH', 'threshold' => 'BLOCK_ONLY_HIGH'],
-                        ['category' => 'HARM_CATEGORY_SEXUALLY_EXPLICIT', 'threshold' => 'BLOCK_ONLY_HIGH'],
-                        ['category' => 'HARM_CATEGORY_DANGEROUS_CONTENT', 'threshold' => 'BLOCK_ONLY_HIGH'],
-                    ],
-                ]
-            );
-
-            if ($response->successful()) {
-                $data = $response->json();
-                $text = $data['candidates'][0]['content']['parts'][0]['text'] ?? '';
-
-                if (empty($text)) {
-                    return ['success' => false, 'message' => '', 'error' => 'AI không phản hồi. Vui lòng thử lại.'];
-                }
-
-                return ['success' => true, 'message' => $text, 'error' => null];
+            if (str_starts_with($this->model, 'gpt-') || str_starts_with($this->model, 'o1-') || str_starts_with($this->model, 'o3-')) {
+                return $this->chatOpenAI($userMessage, $conversationHistory, $systemInstruction);
             }
 
-            $errorBody = $response->json();
-            $errorMessage = $errorBody['error']['message'] ?? 'Lỗi không xác định từ API';
-            Log::error('Gemini API Error', ['status' => $response->status(), 'body' => $errorBody]);
-
-            return ['success' => false, 'message' => '', 'error' => "Lỗi API: {$errorMessage}"];
+            return $this->chatGemini($userMessage, $conversationHistory, $systemInstruction);
 
         } catch (\Exception $e) {
             Log::error('AI Chat Service Exception', ['error' => $e->getMessage()]);
             return ['success' => false, 'message' => '', 'error' => 'Lỗi kết nối tới AI: ' . $e->getMessage()];
         }
+    }
+
+    private function chatGemini(string $userMessage, array $conversationHistory, string $systemInstruction): array
+    {
+        $contents = $this->buildContents($conversationHistory, $userMessage);
+
+        $response = Http::timeout(30)->post(
+            "{$this->baseUrl}/models/{$this->model}:generateContent?key={$this->apiKey}",
+            [
+                'system_instruction' => ['parts' => [['text' => $systemInstruction]]],
+                'contents' => $contents,
+                'generationConfig' => ['temperature' => 0.7, 'maxOutputTokens' => 2048],
+            ]
+        );
+
+        if ($response->successful()) {
+            $text = $response->json()['candidates'][0]['content']['parts'][0]['text'] ?? '';
+            return ['success' => true, 'message' => $text, 'error' => null];
+        }
+
+        return ['success' => false, 'message' => '', 'error' => 'Gemini API Error: ' . ($response->json()['error']['message'] ?? 'Unknown error')];
+    }
+
+    private function chatOpenAI(string $userMessage, array $conversationHistory, string $systemInstruction): array
+    {
+        $messages = [['role' => 'system', 'content' => $systemInstruction]];
+        
+        foreach (array_slice($conversationHistory, -10) as $msg) {
+            $messages[] = ['role' => $msg['role'], 'content' => $msg['content']];
+        }
+        
+        $messages[] = ['role' => 'user', 'content' => $userMessage];
+
+        $response = Http::timeout(30)
+            ->withToken($this->apiKey)
+            ->post("{$this->baseUrl}/chat/completions", [
+                'model' => $this->model,
+                'messages' => $messages,
+                'temperature' => 0.7,
+            ]);
+
+        if ($response->successful()) {
+            $text = $response->json()['choices'][0]['message']['content'] ?? '';
+            return ['success' => true, 'message' => $text, 'error' => null];
+        }
+
+        return ['success' => false, 'message' => '', 'error' => 'OpenAI API Error: ' . ($response->json()['error']['message'] ?? 'Unknown error')];
     }
 
     /**

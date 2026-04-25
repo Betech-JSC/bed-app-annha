@@ -329,33 +329,46 @@
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
           <div class="lg:col-span-2">
             <div class="glass-card p-8">
-              <h3 class="text-lg font-bold text-gray-800 mb-2 flex items-center gap-2">
-                <RobotOutlined class="text-crm-primary" /> Cấu hình Google Gemini AI
+              <h3 class="text-lg font-bold text-gray-800 mb-6 flex items-center gap-2">
+                <RobotOutlined class="text-crm-primary" /> Cấu hình Trí tuệ nhân tạo (AI)
               </h3>
-              <p class="text-sm text-gray-400 mb-6">Kết nối API Google Gemini để kích hoạt Trợ lý AI trong hệ thống CRM.</p>
 
               <a-form layout="vertical">
-                <a-form-item label="API Key">
-                  <a-input-password
-                    v-model:value="aiForm.api_key"
-                    size="large"
-                    placeholder="AIzaSy...."
-                    :visibility-toggle="true"
-                  />
-                </a-form-item>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                  <div class="p-6 rounded-2xl bg-blue-50/50 border border-blue-100">
+                    <h4 class="font-bold text-blue-800 mb-4 flex items-center gap-2">
+                      <img src="https://www.gstatic.com/lamda/images/favicon_v2_71f2802fa2d2a412c.png" class="w-4 h-4" /> Google Gemini
+                    </h4>
+                    <a-form-item label="Gemini API Key">
+                      <a-input-password v-model:value="aiForm.api_key" placeholder="AIzaSy...." />
+                    </a-form-item>
+                  </div>
 
-                <a-form-item label="Model AI">
+                  <div class="p-6 rounded-2xl bg-emerald-50/50 border border-emerald-100">
+                    <h4 class="font-bold text-emerald-800 mb-4 flex items-center gap-2">
+                      <img src="https://openai.com/favicon.ico" class="w-4 h-4" /> OpenAI
+                    </h4>
+                    <a-form-item label="OpenAI API Key">
+                      <a-input-password v-model:value="aiForm.openai_api_key" placeholder="sk-proj-...." />
+                    </a-form-item>
+                  </div>
+                </div>
+
+                <a-form-item label="Lựa chọn Model AI Mặc định">
                   <a-select v-model:value="aiForm.model" size="large" :options="aiModelOptions" />
+                  <div class="text-xs text-gray-400 mt-2">
+                    <InfoCircleOutlined /> Hệ thống sẽ tự động sử dụng API Key tương ứng với Model bạn chọn.
+                  </div>
                 </a-form-item>
 
-                <div class="flex gap-3">
+                <div class="flex gap-3 mt-8">
                   <a-button type="primary" size="large" class="premium-button flex-1" :loading="aiSaving" @click="saveAiConfig">
                     <template #icon><SaveOutlined /></template>
-                    Lưu cấu hình AI
+                    Lưu toàn bộ cấu hình AI
                   </a-button>
-                  <a-button size="large" class="premium-button" :loading="aiTesting" :disabled="!aiForm.api_key" @click="testAiChat">
+                  <a-button size="large" class="premium-button" :loading="aiTesting" @click="testAiChat">
                     <template #icon><ThunderboltOutlined /></template>
-                    Test kết nối
+                    Test kết nối (với Model đã chọn)
                   </a-button>
                 </div>
               </a-form>
@@ -478,6 +491,7 @@ import {
   RobotOutlined,
   LinkOutlined,
   ThunderboltOutlined,
+  InfoCircleOutlined,
 } from '@ant-design/icons-vue'
 
 defineOptions({ layout: CrmLayout })
@@ -680,17 +694,24 @@ const firebaseForm = ref({
 // ========== AI Config ==========
 const aiForm = ref({
   api_key: props.aiConfig?.api_key || '',
+  openai_api_key: props.aiConfig?.openai_api_key || '',
   model: props.aiConfig?.model || 'gemini-2.0-flash',
 })
 const aiSaving = ref(false)
 const aiTesting = ref(false)
 
 const aiModelOptions = [
-  { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash (Thế hệ mới nhất)' },
-  { value: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash (Nhanh, miễn phí)' },
-  { value: 'gemini-2.0-flash-lite', label: 'Gemini 2.0 Flash Lite (Siêu nhanh)' },
-  { value: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash' },
-  { value: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro (Chính xác cao)' },
+  { label: 'OpenAI (Thế hệ mới)', options: [
+    { value: 'gpt-4o', label: 'GPT-4o (Đỉnh nhất, đa nhiệm)' },
+    { value: 'gpt-4o-mini', label: 'GPT-4o-mini (Nhanh & Rẻ)' },
+    { value: 'o1', label: 'OpenAI o1 (Suy luận chuyên sâu)' },
+    { value: 'o1-mini', label: 'OpenAI o1-mini' },
+  ]},
+  { label: 'Google Gemini', options: [
+    { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash (Thế hệ mới nhất)' },
+    { value: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash (Khuyên dùng)' },
+    { value: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro' },
+  ]}
 ]
 
 const saveAiConfig = () => {
