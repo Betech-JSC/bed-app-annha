@@ -476,36 +476,15 @@ class AcceptanceItemController extends Controller
     }
 
     /**
-     * Project Manager approve
+     * DEPRECATED: Cấp duyệt QLDA (Cấp 2) đã bị bãi bỏ.
+     * Flow mới: GS xác nhận (Cấp 1) → KH duyệt (Cấp 3).
      */
     public function projectManagerApprove(Request $request, string $projectId, string $stageId, string $id)
     {
-        $project = Project::findOrFail($projectId);
-        $stage = AcceptanceStage::where('project_id', $project->id)->findOrFail($stageId);
-        $item = AcceptanceItem::where('acceptance_stage_id', $stage->id)->findOrFail($id);
-        $user = $request->user();
-
-        // Check RBAC permission
-        if (!$this->authService->can($user, Permissions::ACCEPTANCE_APPROVE_LEVEL_2, $project)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Bạn không có quyền duyệt nghiệm thu (Cấp 2 - Quản lý dự án).'
-            ], 403);
-        }
-
-        try {
-            $this->acceptanceService->approveItem($item, $user, 2);
-            return response()->json([
-                'success' => true,
-                'message' => 'Đã duyệt thành công.',
-                'data' => $item->fresh()->load(['projectManagerApprover', 'attachments'])
-            ]);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => $e->getMessage()
-            ], 400);
-        }
+        return response()->json([
+            'success' => false,
+            'message' => 'Cấp duyệt QLDA đã bị bãi bỏ. Vui lòng dùng quy trình GS → KH.'
+        ], 410);
     }
 
     /**

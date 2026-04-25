@@ -292,8 +292,16 @@ class TaskProgressService
             // STEP 1: Auto-create acceptance stage BEFORE status calculation
             // This ensures calculateStatus() can see the newly created stage
             // and return 'pending_acceptance' instead of 'completed'
-            if ($progress >= 99.9 && !$task->parent_id) {
-                $this->autoCreateAcceptanceStage($task);
+            //
+            // BUSINESS RULE: Push individual child to acceptance the moment it hits 100%.
+            // Stage is created on the parent (resolves recursively if child has parent),
+            // and the corresponding item flips draft → submitted ("Đang nghiệm thu").
+            if ($progress >= 99.9) {
+                if (!$task->parent_id) {
+                    $this->autoCreateAcceptanceStage($task);
+                } else {
+                    $this->pushChildToAcceptance($task);
+                }
             }
 
             // STEP 2: Calculate status (now aware of acceptance state)
@@ -391,22 +399,27 @@ class TaskProgressService
     }
 
     /**
-     * Auto-create acceptance stage when parent task reaches 100%
-     * 
+     * Auto-create acceptance stage on the parent (root) task.
+     *
      * BUSINESS RULE:
-     * - Only parent tasks (no parent_id) can have acceptance stages
-     * - Only create if task is at 100% and completed
-     * - Only create if no acceptance stage exists for this task
-     * 
+     * - Stage always lives on a root task (parent_id = null).
+     * - If a child is passed in, walk up to the root and create stage there.
+     * - Items are created (draft) for all immediate children of the root.
+     * - Idempotent: skips if stage already exists.
+     *
      * @param ProjectTask $task
      * @return AcceptanceStage|null
      */
     protected function autoCreateAcceptanceStage(ProjectTask $task): ?AcceptanceStage
     {
         try {
-            // Only create for parent tasks (Category A)
-            if ($task->parent_id !== null) {
-                return null;
+            // Resolve up to root if a child was passed in
+            while ($task->parent_id !== null) {
+                $parent = ProjectTask::find($task->parent_id);
+                if (!$parent) {
+                    return null;
+                }
+                $task = $parent;
             }
 
             // Check if acceptance stage already exists for this task
@@ -485,6 +498,91 @@ class TaskProgressService
     public function autoCreateAcceptanceStagePublic(ProjectTask $task): ?AcceptanceStage
     {
         return $this->autoCreateAcceptanceStage($task);
+    }
+
+    /**
+     * Push a single child task into the acceptance flow when it hits 100%.
+     *
+     * BUSINESS RULE:
+     * - Walk up to the root parent and ensure a stage exists.
+     * - Find the AcceptanceItem linked to this child; if missing, create it
+     *   (covers cases where the child was added after the stage was created).
+     * - If item is in 'draft', flip to 'submitted' ("Đang nghiệm thu").
+     * - Re-sync stage status via checkCompletion().
+     */
+    protected function pushChildToAcceptance(ProjectTask $child): void
+    {
+        try {
+            if ($child->parent_id === null) {
+                return;
+            }
+
+            // Resolve root parent
+            $root = $child;
+            while ($root->parent_id !== null) {
+                $parent = ProjectTask::find($root->parent_id);
+                if (!$parent) {
+                    return;
+                }
+                $root = $parent;
+            }
+
+            // Ensure stage exists on root
+            $stage = AcceptanceStage::where('task_id', $root->id)
+                ->where('project_id', $root->project_id)
+                ->first();
+            if (!$stage) {
+                $stage = $this->autoCreateAcceptanceStage($root);
+                if (!$stage) {
+                    return;
+                }
+            }
+
+            // Find item for this child
+            $item = \App\Models\AcceptanceItem::where('acceptance_stage_id', $stage->id)
+                ->where('task_id', $child->id)
+                ->first();
+
+            // If item doesn't exist (child added after stage creation), create it
+            if (!$item) {
+                $maxOrder = (int) (\App\Models\AcceptanceItem::where('acceptance_stage_id', $stage->id)->max('order') ?? 0);
+                $item = \App\Models\AcceptanceItem::create([
+                    'acceptance_stage_id' => $stage->id,
+                    'task_id' => $child->id,
+                    'name' => $child->name,
+                    'description' => $child->description,
+                    'order' => $maxOrder + 1,
+                    'workflow_status' => 'draft',
+                    'acceptance_status' => 'not_started',
+                    'start_date' => $child->start_date ?? $root->start_date ?? now(),
+                    'end_date' => $child->end_date ?? $root->end_date ?? now(),
+                    'created_by' => $child->created_by,
+                ]);
+            }
+
+            // Flip draft → submitted ("Đang nghiệm thu")
+            if ($item->workflow_status === 'draft') {
+                $item->workflow_status = 'submitted';
+                $item->submitted_at = now();
+                $item->submitted_by = auth()->id() ?? $child->updated_by ?? $child->created_by;
+                $item->save();
+
+                $stage->checkCompletion();
+
+                Log::info('Child task auto-pushed to acceptance (submitted)', [
+                    'child_task_id' => $child->id,
+                    'root_task_id' => $root->id,
+                    'stage_id' => $stage->id,
+                    'item_id' => $item->id,
+                ]);
+            }
+        } catch (\Exception $e) {
+            Log::error('Error pushing child to acceptance', [
+                'child_task_id' => $child->id,
+                'error' => $e->getMessage(),
+            ]);
+            // Don't throw — push to acceptance must not break progress recalculation
+        }
     }
 }
 

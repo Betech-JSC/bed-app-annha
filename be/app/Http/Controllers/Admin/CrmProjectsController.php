@@ -2772,7 +2772,7 @@ class CrmProjectsController extends Controller
         $admin = auth('admin')->user();
 
         $validated = $request->validate([
-            'level' => 'required|in:1,2,3',
+            'level' => 'required|in:1,3',
         ]);
 
         $stage = AcceptanceStage::where('project_id', $project->id)->findOrFail($id);
@@ -3679,23 +3679,12 @@ class CrmProjectsController extends Controller
     }
 
     /**
-     * PM approves acceptance item (Level 2)
+     * DEPRECATED: Cấp duyệt QLDA (Cấp 2) đã bị bãi bỏ.
+     * Flow mới: GS xác nhận → KH duyệt.
      */
     public function approveAcceptanceItemPM(string $projectId, string $stageId, string $itemId)
     {
-        $project = Project::findOrFail($projectId);
-        $user = auth('admin')->user();
-        $this->crmRequire($user, Permissions::ACCEPTANCE_APPROVE_LEVEL_2, $project);
-
-        $stage = AcceptanceStage::where('project_id', $project->id)->findOrFail($stageId);
-        $item = AcceptanceItem::where('acceptance_stage_id', $stage->id)->findOrFail($itemId);
-
-        try {
-            $this->acceptanceService->approveItem($item, $user, 2);
-            return back()->with('success', 'Đã duyệt (PM).');
-        } catch (\Exception $e) {
-            return back()->with('error', $e->getMessage());
-        }
+        return back()->with('error', 'Cấp duyệt QLDA đã bị bãi bỏ. Vui lòng dùng quy trình GS → KH.');
     }
 
     public function revertAcceptanceItemToDraft(string $projectId, string $stageId, string $itemId)

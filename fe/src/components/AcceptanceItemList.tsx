@@ -846,24 +846,24 @@ export default function AcceptanceItemList({
                         ['submitted', 'supervisor_approved', 'project_manager_approved', 'customer_approved'].includes(item.workflow_status) && styles.workflowConnectorActive
                       ]} />
 
-                      {/* Step 2: Quản lý dự án duyệt */}
+                      {/* Step 2: Khách hàng duyệt (2-cấp flow) */}
                       <View style={styles.workflowStepContainer}>
                         <View style={styles.workflowStepContent}>
                           <View style={[
                             styles.workflowStepIcon,
-                            ['supervisor_approved', 'project_manager_approved', 'customer_approved'].includes(item.workflow_status) && styles.workflowStepIconCompleted
+                            item.workflow_status === 'customer_approved' && styles.workflowStepIconCompleted
                           ]}>
                             <Ionicons
-                              name={['supervisor_approved', 'project_manager_approved', 'customer_approved'].includes(item.workflow_status) ? "checkmark" : "briefcase-outline"}
+                              name={item.workflow_status === 'customer_approved' ? "checkmark" : "person-outline"}
                               size={16}
-                              color={['supervisor_approved', 'project_manager_approved', 'customer_approved'].includes(item.workflow_status) ? "#FFFFFF" : "#6B7280"}
+                              color={item.workflow_status === 'customer_approved' ? "#FFFFFF" : "#6B7280"}
                             />
                           </View>
                           <Text style={[
                             styles.workflowStepLabel,
-                            ['supervisor_approved', 'project_manager_approved', 'customer_approved'].includes(item.workflow_status) && styles.workflowStepLabelCompleted
-                          ]}>Quản lý dự án</Text>
-                          <Text style={styles.workflowStepSubLabel}>Duyệt hạng mục</Text>
+                            item.workflow_status === 'customer_approved' && styles.workflowStepLabelCompleted
+                          ]}>Khách hàng</Text>
+                          <Text style={styles.workflowStepSubLabel}>Duyệt cuối</Text>
                         </View>
                       </View>
                     </View>
@@ -1003,8 +1003,8 @@ export default function AcceptanceItemList({
                     </View>
                   )}
 
-                  {/* Project Manager approve - khi supervisor_approved */}
-                  {item.workflow_status === "supervisor_approved" && (isProjectManager || isAdminUser) && (
+                  {/* Customer approve - khi supervisor_approved (2-cấp flow: GS xác nhận → KH duyệt) */}
+                  {item.workflow_status === "supervisor_approved" && (isCustomer || isAdminUser) && (
                     <View style={styles.actionButtonGroup}>
                       <TouchableOpacity
                         style={[
@@ -1020,12 +1020,12 @@ export default function AcceptanceItemList({
                             );
                             return;
                           }
-                          handleProjectManagerApprove(item);
+                          handleCustomerApprove(item);
                         }}
                         disabled={itemDefects[item.id] > 0}
                       >
                         <Ionicons name="checkmark-circle" size={16} color="#FFFFFF" />
-                        <Text style={styles.approveButtonTextPrimary}>Duyệt</Text>
+                        <Text style={styles.approveButtonTextPrimary}>Duyệt cuối</Text>
                       </TouchableOpacity>
                       <TouchableOpacity
                         style={[styles.actionButton, styles.rejectButtonSecondary]}
@@ -1037,8 +1037,8 @@ export default function AcceptanceItemList({
                     </View>
                   )}
 
-                  {/* Customer approve - khi project_manager_approved (legacy - không còn dùng cho item) */}
-                  {item.workflow_status === "project_manager_approved" && (isCustomer || isAdminUser) && (
+                  {/* Customer approve - khi project_manager_approved (DEPRECATED - cấp 2 đã bãi bỏ) */}
+                  {false && item.workflow_status === "project_manager_approved" && (isCustomer || isAdminUser) && (
                     <View style={styles.actionButtonGroup}>
                       <TouchableOpacity
                         style={[

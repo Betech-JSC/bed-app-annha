@@ -226,17 +226,11 @@ class AcceptanceStage extends Model
         switch ($this->status) {
             case 'pending':
                 return [
-                    'label' => 'Chờ Giám sát duyệt',
+                    'label' => 'Chờ Giám sát xác nhận',
                     'role' => 'supervisor',
                     'action' => 'Duyệt (Giám sát)',
                 ];
             case 'supervisor_approved':
-                return [
-                    'label' => 'Chờ QLDA duyệt',
-                    'role' => 'pm',
-                    'action' => 'Duyệt (QLDA)',
-                ];
-            case 'project_manager_approved':
                 return [
                     'label' => 'Chờ Khách hàng duyệt',
                     'role' => 'customer',
@@ -340,8 +334,6 @@ class AcceptanceStage extends Model
         if ($this->status === 'pending') {
             return $this->approveSupervisor($user);
         } elseif ($this->status === 'supervisor_approved') {
-            return $this->approveProjectManager($user);
-        } elseif ($this->status === 'project_manager_approved') {
             return $this->approveCustomer($user);
         }
         return false;
@@ -350,7 +342,7 @@ class AcceptanceStage extends Model
     public function reject($user, ?string $reason = null): bool
     {
         // Only allow rejection from non-final states
-        $rejectableStatuses = ['pending', 'internal_approved', 'supervisor_approved', 'project_manager_approved', 'design_approved'];
+        $rejectableStatuses = ['pending', 'internal_approved', 'supervisor_approved', 'design_approved'];
         if (!in_array($this->status, $rejectableStatuses)) {
             return false;
         }
@@ -379,10 +371,9 @@ class AcceptanceStage extends Model
     public function isPendingApproval(): bool
     {
         return in_array($this->status, [
-            'pending', // chờ GS
+            'pending', // chờ GS xác nhận
             'internal_approved', // (nếu có dùng)
-            'supervisor_approved', // chờ PM
-            'project_manager_approved', // chờ KH
+            'supervisor_approved', // chờ KH duyệt
             'design_approved' // chờ chủ nhà
         ]);
     }
@@ -421,29 +412,21 @@ class AcceptanceStage extends Model
     }
 
     /**
-     * Project Manager approve (Quản lý dự án duyệt)
-     * Workflow: supervisor_approved → project_manager_approved
+     * DEPRECATED: Cấp duyệt QLDA đã bị bãi bỏ.
+     * Trả false để mọi caller cũ thấy thao tác không thành công.
      */
     public function approveProjectManager($user = null): bool
     {
-        if ($this->status !== 'supervisor_approved') {
-            return false;
-        }
-        $this->status = 'project_manager_approved';
-        if ($user) {
-            $this->project_manager_approved_by = $user->id;
-        }
-        $this->project_manager_approved_at = now();
-        return $this->save();
+        return false;
     }
 
     /**
      * Customer approve (Khách hàng duyệt)
-     * Workflow: project_manager_approved → customer_approved
+     * Workflow: supervisor_approved → customer_approved
      */
     public function approveCustomer($user = null): bool
     {
-        if ($this->status !== 'project_manager_approved') {
+        if ($this->status !== 'supervisor_approved') {
             return false;
         }
         $this->status = 'customer_approved';
@@ -543,11 +526,9 @@ class AcceptanceStage extends Model
             if ($hasRejected || $hasPendingOrDraft) {
                 if ($this->status !== 'pending') {
                     // Reset tất cả các trường duyệt cũ để bắt đầu luồng mới sạch sẽ
-                    if (in_array($this->status, ['rejected', 'customer_approved', 'owner_approved', 'project_manager_approved', 'supervisor_approved'])) {
+                    if (in_array($this->status, ['rejected', 'customer_approved', 'owner_approved', 'supervisor_approved'])) {
                          $this->supervisor_approved_by = null;
                          $this->supervisor_approved_at = null;
-                         $this->project_manager_approved_by = null;
-                         $this->project_manager_approved_at = null;
                          $this->customer_approved_by = null;
                          $this->customer_approved_at = null;
                          $this->rejected_by = null;
@@ -558,13 +539,10 @@ class AcceptanceStage extends Model
                     $this->save();
                 }
             } else {
-                // Tự động nâng status stage dựa trên trạng thái tối thiểu của tất cả items
-                // IMPORTANT: Do NOT auto-promote to customer_approved here.
-                // customer_approved must ONLY be set explicitly via approveStage(level=3)
-                // to prevent infinite loops with autoCreateAcceptanceItems().
+                // 2-cấp flow: pending → supervisor_approved → customer_approved.
+                // QLDA (level 2) đã bị bãi bỏ.
                 $allCustomerApproved = $items->every(fn($i) => $i->workflow_status === 'customer_approved');
-                $allPmApproved = $items->every(fn($i) => in_array($i->workflow_status, ['project_manager_approved', 'customer_approved']));
-                $allSupervisorApproved = $items->every(fn($i) => in_array($i->workflow_status, ['supervisor_approved', 'project_manager_approved', 'customer_approved']));
+                $allSupervisorApproved = $items->every(fn($i) => in_array($i->workflow_status, ['supervisor_approved', 'customer_approved']));
 
                 $userId = auth()->id() ?? $this->created_by;
 
@@ -594,12 +572,7 @@ class AcceptanceStage extends Model
                         'stage_name' => $this->name,
                         'items_count' => $items->count(),
                     ]);
-                } elseif ($allPmApproved && !$allCustomerApproved && !in_array($this->status, ['project_manager_approved', 'customer_approved'])) {
-                    $this->status = 'project_manager_approved';
-                    $this->project_manager_approved_at = now();
-                    $this->project_manager_approved_by = $userId;
-                    $this->save();
-                } elseif ($allSupervisorApproved && !$allPmApproved && !in_array($this->status, ['supervisor_approved', 'project_manager_approved', 'customer_approved'])) {
+                } elseif ($allSupervisorApproved && !$allCustomerApproved && !in_array($this->status, ['supervisor_approved', 'customer_approved'])) {
                     $this->status = 'supervisor_approved';
                     $this->supervisor_approved_at = now();
                     $this->supervisor_approved_by = $userId;

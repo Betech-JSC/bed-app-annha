@@ -163,10 +163,10 @@ class ApprovalCenterController extends Controller
         if ($type === 'acceptance') {
             if ($isReject) return 'acceptance'; // reject handler uses model detection
             $stage = AcceptanceStage::findOrFail($id);
+            // 2-cấp flow: pending/rejected → GS xác nhận; supervisor_approved → KH duyệt.
             return match ($stage->status) {
                 'pending', 'rejected' => 'acceptance_supervisor',
-                'supervisor_approved' => 'acceptance_pm',
-                'project_manager_approved' => 'acceptance_customer',
+                'supervisor_approved' => 'acceptance_customer',
                 default => 'acceptance',
             };
         }
@@ -321,10 +321,10 @@ class ApprovalCenterController extends Controller
     {
         $stage = AcceptanceStage::find($id);
         if (!$stage) return null;
+        // 2-cấp flow: pending/rejected → GS (level 1); supervisor_approved → KH (level 3).
         return match ($stage->status) {
             'pending', 'rejected' => Permissions::ACCEPTANCE_APPROVE_LEVEL_1,
-            'supervisor_approved' => Permissions::ACCEPTANCE_APPROVE_LEVEL_2,
-            'project_manager_approved' => Permissions::ACCEPTANCE_APPROVE_LEVEL_3,
+            'supervisor_approved' => Permissions::ACCEPTANCE_APPROVE_LEVEL_3,
             default => Permissions::ACCEPTANCE_APPROVE_LEVEL_3,
         };
     }

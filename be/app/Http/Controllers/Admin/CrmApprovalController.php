@@ -75,8 +75,8 @@ class CrmApprovalController extends Controller
             $formatted = array_merge($this->formatDefectItem($defect), ['_approveType' => 'defect_verify']);
             $targetRole = 'supervisor';
             if ($defect->acceptanceStage) {
-                if ($defect->acceptanceStage->status === 'supervisor_approved') $targetRole = 'project_manager';
-                elseif ($defect->acceptanceStage->status === 'project_manager_approved') $targetRole = 'customer';
+                // 2-cấp flow: GS xác nhận xong → KH duyệt (bỏ QLDA).
+                if ($defect->acceptanceStage->status === 'supervisor_approved') $targetRole = 'customer';
             }
             $defectsByRole[$targetRole]->push($formatted);
         }

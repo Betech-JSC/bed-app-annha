@@ -83,41 +83,20 @@ class AcceptanceStageController extends Controller
     }
 
     /**
-     * Project Manager approve (Quản lý dự án duyệt giai đoạn)
-     * Workflow: supervisor_approved → project_manager_approved
+     * DEPRECATED: Cấp duyệt QLDA (Cấp 2) đã bị bãi bỏ.
+     * Flow mới: GS xác nhận (Cấp 1) → KH duyệt (Cấp 3).
      */
     public function projectManagerApprove(Request $request, string $projectId, string $id)
     {
-        $project = Project::findOrFail($projectId);
-        $stage = AcceptanceStage::where('project_id', $project->id)->findOrFail($id);
-        $user = $request->user();
-
-        // Check RBAC permission
-        if (!$this->authService->can($user, \App\Constants\Permissions::ACCEPTANCE_APPROVE_LEVEL_2, $project)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Bạn không có quyền duyệt nghiệm thu (Cấp 2 - Quản lý dự án).'
-            ], 403);
-        }
-
-        try {
-            $this->acceptanceService->approveStage($stage, $user, 2);
-            return response()->json([
-                'success' => true,
-                'message' => 'Đã duyệt thành công.',
-                'data' => $stage->fresh(['projectManagerApprover'])
-            ]);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => $e->getMessage()
-            ], 400);
-        }
+        return response()->json([
+            'success' => false,
+            'message' => 'Cấp duyệt QLDA đã bị bãi bỏ. Vui lòng dùng quy trình GS → KH.'
+        ], 410);
     }
 
     /**
      * Customer approve (Khách hàng duyệt giai đoạn)
-     * Workflow: project_manager_approved → customer_approved
+     * Workflow: supervisor_approved → customer_approved
      */
     public function customerApprove(Request $request, string $projectId, string $id)
     {

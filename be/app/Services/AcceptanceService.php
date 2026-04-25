@@ -149,21 +149,17 @@ class AcceptanceService
     {
         $level = $level ?? $this->determineLevelForUser($item, $user);
 
-        // 1. Level-specific status validation
+        // 2-cấp flow: Giám sát (level 1) xác nhận → Khách hàng (level 3) duyệt.
+        // Level 2 (PM) đã bị bãi bỏ.
         switch ($level) {
             case 1: // Supervisor
                 if ($item->workflow_status !== 'submitted') {
                     throw new \Exception('Hạng mục không ở trạng thái chờ giám sát duyệt.');
                 }
                 break;
-            case 2: // PM
-                if ($item->workflow_status !== 'supervisor_approved') {
-                    throw new \Exception('Hạng mục cần được giám sát duyệt trước.');
-                }
-                break;
             case 3: // Customer
-                if ($item->workflow_status !== 'project_manager_approved') {
-                    throw new \Exception('Hạng mục cần được PM duyệt trước.');
+                if ($item->workflow_status !== 'supervisor_approved') {
+                    throw new \Exception('Hạng mục cần được giám sát xác nhận trước khi khách hàng duyệt.');
                 }
                 break;
             default:
@@ -179,11 +175,6 @@ class AcceptanceService
                     $item->workflow_status = 'supervisor_approved';
                     $item->supervisor_approved_by = $user->id;
                     $item->supervisor_approved_at = now();
-                    break;
-                case 2:
-                    $item->workflow_status = 'project_manager_approved';
-                    $item->project_manager_approved_by = $user->id;
-                    $item->project_manager_approved_at = now();
                     break;
                 case 3:
                     $item->workflow_status = 'customer_approved';
@@ -207,7 +198,7 @@ class AcceptanceService
                     $stage->checkCompletion();
                 }
 
-                $eventMap = [1 => 'supervisor_approved', 2 => 'pm_approved', 3 => 'customer_approved'];
+                $eventMap = [1 => 'supervisor_approved', 3 => 'customer_approved'];
                 $stage->notifyEvent($eventMap[$level], $user);
 
                 if ($level === 3) {
@@ -227,7 +218,7 @@ class AcceptanceService
         if ($item->acceptanceStage && $item->acceptanceStage->status === 'customer_approved') {
             throw new \Exception('Không thể từ chối — Nghiệm thu đã hoàn tất.');
         }
-        if (!in_array($item->workflow_status, ['submitted', 'supervisor_approved', 'project_manager_approved'])) {
+        if (!in_array($item->workflow_status, ['submitted', 'supervisor_approved'])) {
             throw new \Exception('Hạng mục không ở trạng thái chờ duyệt.');
         }
 
@@ -259,7 +250,7 @@ class AcceptanceService
         if ($item->acceptanceStage && $item->acceptanceStage->status === 'customer_approved') {
             throw new \Exception('Không thể hoàn duyệt — Nghiệm thu đã hoàn tất.');
         }
-        $revertibleStatuses = ['submitted', 'supervisor_approved', 'project_manager_approved', 'rejected'];
+        $revertibleStatuses = ['submitted', 'supervisor_approved', 'rejected'];
         if (!in_array($item->workflow_status, $revertibleStatuses)) {
             throw new \Exception('Chỉ có thể hoàn duyệt hạng mục đang chờ duyệt hoặc bị từ chối.');
         }
@@ -267,9 +258,7 @@ class AcceptanceService
         $item->workflow_status = 'draft';
         $item->supervisor_approved_by = null;
         $item->supervisor_approved_at = null;
-        $item->project_manager_approved_by = null;
-        $item->project_manager_approved_at = null;
-        
+
         $saved = $item->save();
 
         if ($saved) {
@@ -297,11 +286,8 @@ class AcceptanceService
             case 1: // Supervisor
                 if (!in_array($stage->status, ['pending', 'rejected'])) throw new \Exception('Giai đoạn không ở trạng thái chờ duyệt hoặc đã bị từ chối.');
                 break;
-            case 2: // PM
-                if ($stage->status !== 'supervisor_approved') throw new \Exception('Chỉ có thể duyệt sau khi giám sát đã duyệt.');
-                break;
             case 3: // Customer
-                if ($stage->status !== 'project_manager_approved') throw new \Exception('Chỉ có thể duyệt sau khi QLDA đã duyệt.');
+                if ($stage->status !== 'supervisor_approved') throw new \Exception('Chỉ có thể duyệt sau khi giám sát đã xác nhận.');
                 break;
             default:
                 throw new \Exception('Bạn không có quyền duyệt giai đoạn này.');
@@ -312,9 +298,8 @@ class AcceptanceService
             // IMPORTANT: skipCheckCompletion=true to prevent premature auto-promotion
             foreach ($stage->items as $item) {
                 $isCorrectStatus = ($level === 1 && $item->workflow_status === 'submitted') ||
-                                  ($level === 2 && $item->workflow_status === 'supervisor_approved') ||
-                                  ($level === 3 && $item->workflow_status === 'project_manager_approved');
-                
+                                  ($level === 3 && $item->workflow_status === 'supervisor_approved');
+
                 if ($isCorrectStatus) {
                     $this->approveItem($item, $user, $level, true); // skipCheckCompletion
                 }
@@ -327,12 +312,6 @@ class AcceptanceService
                     $stage->supervisor_approved_by = $user->id;
                     $stage->supervisor_approved_at = now();
                     $stage->notifyEvent('supervisor_approved', $user);
-                    break;
-                case 2:
-                    $stage->status = 'project_manager_approved';
-                    $stage->project_manager_approved_by = $user->id;
-                    $stage->project_manager_approved_at = now();
-                    $stage->notifyEvent('pm_approved', $user);
                     break;
                 case 3:
                     $stage->status = 'customer_approved';
@@ -393,7 +372,7 @@ class AcceptanceService
      */
     public function rejectStage(AcceptanceStage $stage, $user, string $reason): bool
     {
-        $rejectableStatuses = ['pending', 'supervisor_approved', 'project_manager_approved'];
+        $rejectableStatuses = ['pending', 'supervisor_approved'];
         if (!in_array($stage->status, $rejectableStatuses)) {
             throw new \Exception('Giai đoạn không ở trạng thái có thể từ chối.');
         }
@@ -465,7 +444,7 @@ class AcceptanceService
     public function approveAllInStage(AcceptanceStage $stage, $user): int
     {
         $items = $stage->items()
-            ->whereIn('workflow_status', ['submitted', 'supervisor_approved', 'pm_approved', 'project_manager_approved'])
+            ->whereIn('workflow_status', ['submitted', 'supervisor_approved'])
             ->get();
 
         $count = 0;
@@ -512,9 +491,9 @@ class AcceptanceService
             throw new \Exception("Không thể duyệt vì còn {$openDefects} lỗi chưa được xử lý xong.");
         }
 
-        // 3. Overall stage progress check (for Level 2 and 3)
-        // If we want to strictly enforce PM/Customer approval only when tasks are 100%
-        if (in_array($item->workflow_status, ['supervisor_approved', 'project_manager_approved', 'pm_approved'])) {
+        // 3. Overall stage progress check (for Customer approval - level 3)
+        // Strictly enforce: customer can only approve when all tasks are 100%
+        if ($item->workflow_status === 'supervisor_approved') {
             $stageItems = AcceptanceItem::where('acceptance_stage_id', $item->acceptance_stage_id)
                 ->whereNotNull('task_id')->with('task')->get();
             
@@ -543,9 +522,6 @@ class AcceptanceService
         if ($this->hasPermission($user, \App\Constants\Permissions::ACCEPTANCE_APPROVE_LEVEL_3, $project)) {
             return 3;
         }
-        if ($this->hasPermission($user, \App\Constants\Permissions::ACCEPTANCE_APPROVE_LEVEL_2, $project)) {
-            return 2;
-        }
         if ($this->hasPermission($user, \App\Constants\Permissions::ACCEPTANCE_APPROVE_LEVEL_1, $project)) {
             return 1;
         }
@@ -557,7 +533,6 @@ class AcceptanceService
     {
         $project = $stage->project;
         if ($this->hasPermission($user, \App\Constants\Permissions::ACCEPTANCE_APPROVE_LEVEL_3, $project)) return 3;
-        if ($this->hasPermission($user, \App\Constants\Permissions::ACCEPTANCE_APPROVE_LEVEL_2, $project)) return 2;
         if ($this->hasPermission($user, \App\Constants\Permissions::ACCEPTANCE_APPROVE_LEVEL_1, $project)) return 1;
         return null;
     }
@@ -701,8 +676,8 @@ class AcceptanceService
                     $success = $stage->approveSupervisor($user);
                     break;
                 case 'project_manager':
-                    $success = $stage->approveProjectManager($user);
-                    break;
+                    // BUSINESS RULE: PM approval level was removed. Reject calls to legacy endpoint.
+                    throw new \Exception('Cấp duyệt QLDA đã bị bãi bỏ. Vui lòng dùng quy trình GS → KH.');
                 case 'customer':
                     $success = $stage->approveCustomer($user);
                     break;

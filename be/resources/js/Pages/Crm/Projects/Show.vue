@@ -799,7 +799,7 @@
 
       <!-- ============ ACCEPTANCE TAB ============ -->
       <a-tab-pane key="acceptance" v-if="isTabVisible('acceptance')">
-        <template #tab><a-tooltip title="Quản lý nghiệm thu: tạo giai đoạn, duyệt 3 cấp, bộ tài liệu, lỗi ghi nhận" placement="bottom">Nghiệm thu ({{ counts.acceptance_stages || 0 }})</a-tooltip></template>
+        <template #tab><a-tooltip title="Quản lý nghiệm thu: tạo giai đoạn, duyệt 2 cấp (GS xác nhận → KH duyệt), bộ tài liệu, lỗi ghi nhận" placement="bottom">Nghiệm thu ({{ counts.acceptance_stages || 0 }})</a-tooltip></template>
         <div class="p-4">
           <div class="flex justify-end mb-3 gap-2">
             <a-button v-if="can('acceptance.create')" type="primary" size="small" @click="openAcceptModal()">
@@ -962,7 +962,7 @@
                 <span :class="item.workflow_status === 'customer_approved' ? 'text-gray-400 line-through' : 'text-gray-700'">{{ item.name }}</span>
                 <div class="flex items-center gap-2 ml-auto">
                   <a-tag v-if="item.workflow_status && item.workflow_status !== 'pending'" :color="acceptItemStatusColor(item.workflow_status)" class="rounded-full text-[10px]">{{ acceptItemStatusLabel(item.workflow_status) }}</a-tag>
-                  <a-button v-if="['pending', 'supervisor_approved', 'project_manager_approved', 'rejected'].includes(item.workflow_status) && can('acceptance.revert') && stage.status !== 'customer_approved'"
+                  <a-button v-if="['pending', 'submitted', 'supervisor_approved', 'rejected'].includes(item.workflow_status) && can('acceptance.revert') && stage.status !== 'customer_approved'"
                             type="text" size="small" class="text-orange-500 hover:text-orange-600 p-0 h-auto" @click.stop="revertAcceptItemAction(stage, item)">
                     <ReloadOutlined class="text-[10px]" />
                   </a-button>
@@ -6211,22 +6211,18 @@
         
         <div class="flex gap-2">
            <template v-if="!isAcceptanceLocked && acceptDetailStage.status !== 'owner_approved'">
-             <!-- Approval Buttons -->
-             <a-button v-if="['pending', 'rejected'].includes(acceptDetailStage.status) && can('acceptance.approve.level_1')" 
+             <!-- Approval Buttons (2-cấp: GS xác nhận → KH duyệt) -->
+             <a-button v-if="['pending', 'rejected'].includes(acceptDetailStage.status) && can('acceptance.approve.level_1')"
                        type="primary" size="large" class="rounded-xl h-12 px-8 font-bold bg-blue-600 hover:bg-blue-700" @click="approveAccept(acceptDetailStage, 1)">
                Duyệt (GS)
              </a-button>
-             <a-button v-if="acceptDetailStage.status === 'supervisor_approved' && can('acceptance.approve.level_2')" 
-                       type="primary" size="large" class="rounded-xl h-12 px-8 font-bold bg-blue-600 hover:bg-blue-700" @click="approveAccept(acceptDetailStage, 2)">
-               Duyệt (QLDA)
-             </a-button>
-             <a-button v-if="acceptDetailStage.status === 'project_manager_approved' && can('acceptance.approve.level_3')" 
+             <a-button v-if="acceptDetailStage.status === 'supervisor_approved' && can('acceptance.approve.level_3')"
                        type="primary" size="large" class="rounded-xl h-12 px-8 font-bold bg-emerald-600 hover:bg-emerald-700 border-emerald-600" @click="approveAccept(acceptDetailStage, 3)">
                Duyệt (KH)
              </a-button>
-             
+
              <!-- Reject Button -->
-             <a-button v-if="['pending', 'supervisor_approved', 'project_manager_approved'].includes(acceptDetailStage.status)" 
+             <a-button v-if="['pending', 'supervisor_approved'].includes(acceptDetailStage.status)"
                        danger ghost size="large" class="rounded-xl h-12 px-6 font-bold" @click="rejectAcceptDrawer">
                Từ chối
              </a-button>
@@ -8044,10 +8040,9 @@ const riskCategoryLabels = { schedule: 'Tiến độ', cost: 'Chi phí', quality
 const riskLevelLabels = { very_low: 'Rất thấp', low: 'Thấp', medium: 'TB', high: 'Cao', very_high: 'Rất cao' }
 const riskLevelColors = { very_low: 'default', low: 'green', medium: 'blue', high: 'orange', very_high: 'red' }
 const acceptStatusLabels = {
-  pending: 'Chờ duyệt',
-  supervisor_approved: 'GS đã duyệt',
-  project_manager_approved: 'QLDA đã duyệt',
-  customer_approved: 'KH đã duyệt',
+  pending: 'Đang nghiệm thu',
+  supervisor_approved: 'GS đã xác nhận',
+  customer_approved: 'Đã nghiệm thu',
   owner_approved: 'CĐT đã duyệt',
   design_approved: 'TK đã duyệt',
   internal_approved: 'Nội bộ đã duyệt',
@@ -9574,16 +9569,13 @@ const deleteAccept = (stage) => {
   })
 }
 
-// Item actions inside drawer
+// Item actions inside drawer (2-cấp: GS → KH, bỏ QLDA)
 const approveItem = (item) => {
   const stageId = acceptDetailStage.value.id
   const base = `/projects/${props.project.id}/acceptance/${stageId}/items/${item.id}`
 
-  // Chọn URL duyệt theo workflow_status hiện tại
   let url = `${base}/approve-supervisor`
   if (item.workflow_status === 'supervisor_approved') {
-    url = `${base}/approve-pm`
-  } else if (item.workflow_status === 'project_manager_approved') {
     url = `${base}/approve-customer`
   }
 
@@ -9704,7 +9696,7 @@ const updateAccept = () => {
 
 // Acceptance status helpers
 const acceptStatusColors = {
-  pending: 'orange', supervisor_approved: 'blue', project_manager_approved: 'cyan',
+  pending: 'orange', supervisor_approved: 'cyan',
   customer_approved: 'green', owner_approved: 'purple', design_approved: 'geekblue',
   internal_approved: 'gold', rejected: 'red',
 }
@@ -9737,8 +9729,8 @@ const getAcceptCompletion = (stage) => {
 const getOpenDefects = (stage) => {
   return (stage.defects || []).filter(d => d.status !== 'verified').length
 }
-const acceptItemStatusColor = (status) => ({ draft: 'default', pending: 'default', submitted: 'processing', supervisor_approved: 'cyan', project_manager_approved: 'blue', customer_approved: 'success', rejected: 'error' }[status] || 'default')
-const acceptItemStatusLabel = (status) => ({ draft: 'Nháp', pending: 'Chờ duyệt', submitted: 'Chờ GS duyệt', supervisor_approved: 'Chờ PM duyệt', project_manager_approved: 'Chờ KH duyệt', customer_approved: 'KH đã duyệt', rejected: 'Từ chối' }[status] || status)
+const acceptItemStatusColor = (status) => ({ draft: 'default', pending: 'default', submitted: 'processing', supervisor_approved: 'cyan', customer_approved: 'success', rejected: 'error' }[status] || 'default')
+const acceptItemStatusLabel = (status) => ({ draft: 'Nháp', pending: 'Đang nghiệm thu', submitted: 'Đang nghiệm thu', supervisor_approved: 'Chờ KH duyệt', customer_approved: 'Đã nghiệm thu', rejected: 'Từ chối' }[status] || status)
 
 // ============ ACCEPTANCE DETAIL DRAWER (Giống APP: "Nghiệm thu giai đoạn") ============
 const showAcceptDetailDrawer = ref(false)
@@ -9883,19 +9875,11 @@ const editingAcceptItemData = ref(null)
 const editAcceptItemForm = ref({ name: '', start_date: null, end_date: null, notes: '' })
 const editingAcceptItemLoading = ref(false)
 
-// Workflow step progress helper
+// Workflow step progress helper (2-cấp: GS xác nhận → KH duyệt)
 const getStepState = (currentStatus, stepKey) => {
-  const steps = ['submitted', 'supervisor_approved', 'project_manager_approved', 'customer_approved']
+  const steps = ['submitted', 'supervisor_approved', 'customer_approved']
   const currentIdx = steps.indexOf(currentStatus)
   const stepIdx = steps.indexOf(stepKey)
-
-  // Handle pm_approved alias
-  if (currentStatus === 'pm_approved') {
-    const aliasIdx = steps.indexOf('project_manager_approved')
-    if (stepIdx < aliasIdx) return 'done'
-    if (stepIdx === aliasIdx) return 'done'
-    return 'pending'
-  }
 
   if (currentStatus === 'rejected' || currentStatus === 'draft' || !currentStatus) return 'pending'
   if (stepIdx < currentIdx) return 'done'
@@ -9980,16 +9964,7 @@ const approveAcceptItemSupervisor = (item) => {
   })
 }
 
-// PM approve (supervisor_approved → project_manager_approved)
-const approveAcceptItemPM = (item) => {
-  const stageId = acceptDetailStage.value.id
-  router.post(`/projects/${props.project.id}/acceptance/${stageId}/items/${item.id}/approve-pm`, {}, {
-    preserveScroll: true,
-    onSuccess: () => { showAcceptDetailDrawer.value = false },
-  })
-}
-
-// Customer approve (project_manager_approved → customer_approved)
+// Customer approve (supervisor_approved → customer_approved)
 const approveAcceptItemCustomer = (item) => {
   const stageId = acceptDetailStage.value.id
   router.post(`/projects/${props.project.id}/acceptance/${stageId}/items/${item.id}/approve-customer`, {}, {

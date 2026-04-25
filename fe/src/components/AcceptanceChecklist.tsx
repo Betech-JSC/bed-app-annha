@@ -1438,40 +1438,10 @@ export default function AcceptanceChecklist({
                     </TouchableOpacity>
                   )}
 
-                  {/* Project Manager Approve Button - Level 2 */}
-                  {(isAdmin || canApproveLevel2) && (
-                    <TouchableOpacity
-                      style={[
-                        styles.approvalButton,
-                        acceptingStage.status === "project_manager_approved" && styles.approvalButtonCompleted,
-                        acceptingStage.status === "customer_approved" && styles.approvalButtonCompleted,
-                      ]}
-                      onPress={async () => {
-                        if (!projectId || !acceptingStage) return;
-                        try {
-                          const response = await acceptanceApi.projectManagerApproveStage(projectId, acceptingStage.id);
-                          if (response.success) {
-                            Alert.alert("Thành công", "Đã duyệt thành công");
-                            onRefresh?.();
-                            setAcceptanceModalVisible(false);
-                          }
-                        } catch (error: any) {
-                          Alert.alert("Lỗi", error.response?.data?.message || "Không thể duyệt");
-                        }
-                      }}
-                      disabled={savingAcceptance}
-                    >
-                      <Ionicons
-                        name={acceptingStage.status === "project_manager_approved" || acceptingStage.status === "customer_approved" ? "checkmark-circle" : "checkmark-circle-outline"}
-                        size={20}
-                        color={acceptingStage.status === "project_manager_approved" || acceptingStage.status === "customer_approved" ? "#10B981" : "#3B82F6"}
-                      />
-                      <Text style={[
-                        styles.approvalButtonText,
-                        (acceptingStage.status === "project_manager_approved" || acceptingStage.status === "customer_approved") && styles.approvalButtonTextCompleted,
-                      ]}>
-                        {acceptingStage.status === "project_manager_approved" || acceptingStage.status === "customer_approved" ? "Đã duyệt (Quản lý)" : "Duyệt (Quản lý)"}
-                      </Text>
+                  {/* Project Manager Approve Button - DEPRECATED (cấp 2 đã bị bãi bỏ) */}
+                  {false && (isAdmin || canApproveLevel2) && (
+                    <TouchableOpacity style={styles.approvalButton} disabled>
+                      <Text style={styles.approvalButtonText}>Duyệt (Quản lý) - đã bãi bỏ</Text>
                     </TouchableOpacity>
                   )}
 
