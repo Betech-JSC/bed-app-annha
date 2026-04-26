@@ -36,7 +36,7 @@
       <div class="flex flex-wrap items-center gap-3 w-full">
         <a-input-search
           v-model:value="localFilters.search" placeholder="Tìm chi phí..." style="width: 220px;"
-          size="large" class="rounded-xl" allow-clear @search="applyFilters" @pressEnter="applyFilters"
+          size="large" allow-clear @search="applyFilters" @pressEnter="applyFilters"
         />
         <a-select v-model:value="localFilters.status" style="width: 140px;" size="large" @change="applyFilters" placeholder="Trạng thái">
           <a-select-option value="">Tất cả</a-select-option>

@@ -138,6 +138,7 @@ class Permissions
     public const WARRANTY_UPDATE = 'warranty.update';
     public const WARRANTY_DELETE = 'warranty.delete';
     public const WARRANTY_APPROVE = 'warranty.approve';
+    public const WARRANTY_REVERT = 'warranty.revert';
 
 
     // ===================================================================
@@ -225,6 +226,7 @@ class Permissions
     public const LOG_UPDATE = 'log.update';
     public const LOG_DELETE = 'log.delete';
     public const LOG_APPROVE = 'log.approve';
+    public const LOG_REVERT = 'log.revert';
 
     // ===================================================================
     // DEFECT MODULE
@@ -326,6 +328,7 @@ class Permissions
     public const CHANGE_REQUEST_DELETE = 'change_request.delete';
     public const CHANGE_REQUEST_APPROVE = 'change_request.approve';
     public const CHANGE_REQUEST_REJECT = 'change_request.reject';
+    public const CHANGE_REQUEST_REVERT = 'change_request.revert';
 
     // ===================================================================
     // PROJECT RISK MODULE
@@ -592,6 +595,7 @@ class Permissions
             self::LOG_UPDATE,
             self::LOG_DELETE,
             self::LOG_APPROVE,
+            self::LOG_REVERT,
 
             // Defect
             self::DEFECT_VIEW,
@@ -669,6 +673,7 @@ class Permissions
             self::CHANGE_REQUEST_DELETE,
             self::CHANGE_REQUEST_APPROVE,
             self::CHANGE_REQUEST_REJECT,
+            self::CHANGE_REQUEST_REVERT,
 
             // Project Risk
             self::PROJECT_RISK_VIEW,
@@ -748,6 +753,7 @@ class Permissions
             self::WARRANTY_UPDATE,
             self::WARRANTY_DELETE,
             self::WARRANTY_APPROVE,
+            self::WARRANTY_REVERT,
         ];
     }
 
@@ -922,6 +928,7 @@ class Permissions
                 self::LOG_UPDATE,
                 self::LOG_DELETE,
                 self::LOG_APPROVE,
+                self::LOG_REVERT,
             ],
             'defect' => [
                 self::DEFECT_VIEW,
@@ -980,6 +987,7 @@ class Permissions
                 self::CHANGE_REQUEST_DELETE,
                 self::CHANGE_REQUEST_APPROVE,
                 self::CHANGE_REQUEST_REJECT,
+                self::CHANGE_REQUEST_REVERT,
             ],
             'project_risk' => [
                 self::PROJECT_RISK_VIEW,
@@ -1054,6 +1062,7 @@ class Permissions
                 self::WARRANTY_UPDATE,
                 self::WARRANTY_DELETE,
                 self::WARRANTY_APPROVE,
+                self::WARRANTY_REVERT,
             ],
         ];
     }

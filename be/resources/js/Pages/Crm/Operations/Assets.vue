@@ -28,7 +28,7 @@
   <div class="crm-content-card mb-6">
     <div class="crm-content-card__header" style="border-bottom: none; padding-bottom: 0;">
       <div class="flex flex-wrap items-center gap-3 w-full">
-        <a-input-search v-model:value="localFilters.search" placeholder="Tìm tên, mã, SN..." style="width: 220px;" size="large" class="rounded-xl" allow-clear @search="applyFilters" @pressEnter="applyFilters" />
+        <a-input-search v-model:value="localFilters.search" placeholder="Tìm tên, mã, SN..." style="width: 220px;" size="large" allow-clear @search="applyFilters" @pressEnter="applyFilters" />
         <a-select v-model:value="localFilters.category" style="width: 170px;" size="large" @change="applyFilters" placeholder="Loại tài sản" allow-clear>
           <a-select-option value="">Tất cả loại</a-select-option>
           <a-select-option v-for="(label, key) in categoryLabels" :key="key" :value="key">{{ label }}</a-select-option>

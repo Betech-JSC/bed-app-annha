@@ -996,7 +996,7 @@ class CrmProjectsController extends Controller
 
         $log = ConstructionLog::where('project_id', $project->id)->findOrFail($logId);
 
-        if (!$isSuperAdmin && $log->created_by !== $user->id && !$user->can(Permissions::LOG_APPROVE)) {
+        if (!$isSuperAdmin && $log->created_by !== $user->id && !$user->can(Permissions::LOG_REVERT)) {
             return back()->with('error', 'Bạn không có quyền hoàn duyệt nhật ký này.');
         }
 
@@ -1515,7 +1515,7 @@ class CrmProjectsController extends Controller
 
         $cr = ChangeRequest::where('project_id', $project->id)->findOrFail($id);
 
-        if (!$isSuperAdmin && $cr->requested_by !== $user->id && !$user->can(Permissions::CHANGE_REQUEST_APPROVE)) {
+        if (!$isSuperAdmin && $cr->requested_by !== $user->id && !$user->can(Permissions::CHANGE_REQUEST_REVERT)) {
             return back()->with('error', 'Bạn không có quyền hoàn duyệt yêu cầu này.');
         }
 
@@ -4602,7 +4602,7 @@ class CrmProjectsController extends Controller
 
         $warranty = \App\Models\ProjectWarranty::where('project_id', $project->id)->where('uuid', $uuid)->firstOrFail();
 
-        if (!$isSuperAdmin && $warranty->created_by !== $user->id && !$user->can(Permissions::WARRANTY_APPROVE)) {
+        if (!$isSuperAdmin && $warranty->created_by !== $user->id && !$user->can(Permissions::WARRANTY_REVERT)) {
             return back()->with('error', 'Bạn không có quyền hoàn duyệt phiếu này.');
         }
 
@@ -4749,7 +4749,7 @@ class CrmProjectsController extends Controller
 
         $maintenance = \App\Models\ProjectMaintenance::where('project_id', $project->id)->where('uuid', $uuid)->firstOrFail();
 
-        if (!$isSuperAdmin && $maintenance->created_by !== $user->id && !$user->can(Permissions::WARRANTY_APPROVE)) {
+        if (!$isSuperAdmin && $maintenance->created_by !== $user->id && !$user->can(Permissions::WARRANTY_REVERT)) {
             return back()->with('error', 'Bạn không có quyền hoàn duyệt phiếu này.');
         }
 

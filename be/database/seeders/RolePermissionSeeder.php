@@ -177,6 +177,7 @@ class RolePermissionSeeder extends Seeder
             Permissions::SUBCONTRACTOR_CREATE,
             Permissions::SUBCONTRACTOR_UPDATE,
             Permissions::SUBCONTRACTOR_DELETE,
+            Permissions::SUBCONTRACTOR_APPROVE,
             Permissions::SUBCONTRACTOR_REVERT,
 
             // Subcontractor Payment
@@ -198,6 +199,7 @@ class RolePermissionSeeder extends Seeder
             Permissions::LOG_CREATE,
             Permissions::LOG_UPDATE,
             Permissions::LOG_DELETE,
+            Permissions::LOG_REVERT,
 
             // Project Task
             Permissions::PROJECT_TASK_VIEW,
@@ -232,6 +234,31 @@ class RolePermissionSeeder extends Seeder
             // Settings
             Permissions::SETTINGS_VIEW,
             Permissions::SETTINGS_MANAGE,
+            // Missing Modules for Admin
+            Permissions::KPI_VIEW, Permissions::KPI_CREATE, Permissions::KPI_UPDATE, Permissions::KPI_DELETE, Permissions::KPI_VERIFY,
+            Permissions::BUDGET_VIEW, Permissions::BUDGET_CREATE, Permissions::BUDGET_UPDATE, Permissions::BUDGET_DELETE, Permissions::BUDGET_APPROVE, Permissions::BUDGET_REVERT,
+            Permissions::PROJECT_PHASE_VIEW, Permissions::PROJECT_PHASE_CREATE, Permissions::PROJECT_PHASE_UPDATE, Permissions::PROJECT_PHASE_DELETE,
+            Permissions::PROJECT_DOCUMENT_VIEW, Permissions::PROJECT_DOCUMENT_UPLOAD, Permissions::PROJECT_DOCUMENT_DELETE,
+            Permissions::RECEIPT_VIEW, Permissions::RECEIPT_CREATE, Permissions::RECEIPT_UPDATE, Permissions::RECEIPT_DELETE, Permissions::RECEIPT_VERIFY,
+            Permissions::SUPPLIER_VIEW, Permissions::SUPPLIER_CREATE, Permissions::SUPPLIER_UPDATE, Permissions::SUPPLIER_DELETE,
+            Permissions::SUPPLIER_CONTRACT_VIEW, Permissions::SUPPLIER_CONTRACT_CREATE, Permissions::SUPPLIER_CONTRACT_UPDATE, Permissions::SUPPLIER_CONTRACT_DELETE, Permissions::SUPPLIER_CONTRACT_APPROVE,
+            Permissions::SUPPLIER_ACCEPTANCE_VIEW, Permissions::SUPPLIER_ACCEPTANCE_CREATE, Permissions::SUPPLIER_ACCEPTANCE_UPDATE, Permissions::SUPPLIER_ACCEPTANCE_DELETE,
+            Permissions::CHANGE_REQUEST_VIEW, Permissions::CHANGE_REQUEST_CREATE, Permissions::CHANGE_REQUEST_UPDATE, Permissions::CHANGE_REQUEST_DELETE, Permissions::CHANGE_REQUEST_APPROVE, Permissions::CHANGE_REQUEST_REJECT, Permissions::CHANGE_REQUEST_REVERT,
+            Permissions::PROJECT_RISK_VIEW, Permissions::PROJECT_RISK_CREATE, Permissions::PROJECT_RISK_UPDATE, Permissions::PROJECT_RISK_DELETE,
+            Permissions::ISSUE_VIEW, Permissions::ISSUE_CREATE, Permissions::ISSUE_UPDATE, Permissions::ISSUE_DELETE, Permissions::ISSUE_RESOLVE,
+            Permissions::ACCEPTANCE_TEMPLATE_VIEW, Permissions::ACCEPTANCE_TEMPLATE_CREATE, Permissions::ACCEPTANCE_TEMPLATE_UPDATE, Permissions::ACCEPTANCE_TEMPLATE_DELETE,
+            Permissions::GANTT_VIEW, Permissions::GANTT_UPDATE, Permissions::WBS_TEMPLATE_VIEW, Permissions::WBS_TEMPLATE_CREATE,
+            Permissions::FINANCE_VIEW, Permissions::FINANCE_MANAGE,
+            Permissions::ATTENDANCE_VIEW, Permissions::ATTENDANCE_CHECK_IN, Permissions::ATTENDANCE_MANAGE, Permissions::ATTENDANCE_APPROVE, Permissions::ATTENDANCE_REVERT,
+            Permissions::LABOR_PRODUCTIVITY_VIEW, Permissions::LABOR_PRODUCTIVITY_CREATE, Permissions::LABOR_PRODUCTIVITY_UPDATE, Permissions::LABOR_PRODUCTIVITY_DELETE,
+            Permissions::EVM_VIEW, Permissions::PREDICTIVE_VIEW,
+            Permissions::COMPANY_FINANCIAL_VIEW,
+            Permissions::SHAREHOLDER_VIEW, Permissions::SHAREHOLDER_CREATE, Permissions::SHAREHOLDER_UPDATE, Permissions::SHAREHOLDER_DELETE,
+            Permissions::COMPANY_ASSET_VIEW, Permissions::COMPANY_ASSET_CREATE, Permissions::COMPANY_ASSET_UPDATE, Permissions::COMPANY_ASSET_DELETE, Permissions::COMPANY_ASSET_ASSIGN, Permissions::COMPANY_ASSET_DEPRECIATE,
+            Permissions::OPERATIONS_DASHBOARD_VIEW,
+            Permissions::PROJECT_MONITORING_VIEW,
+            Permissions::PROJECT_SUMMARY_REPORT_VIEW,
+            Permissions::WARRANTY_VIEW, Permissions::WARRANTY_CREATE, Permissions::WARRANTY_UPDATE, Permissions::WARRANTY_DELETE, Permissions::WARRANTY_APPROVE, Permissions::WARRANTY_REVERT,
         ];
 
         $permissionIds = Permission::whereIn('name', $permissions)->pluck('id');
@@ -269,11 +296,13 @@ class RolePermissionSeeder extends Seeder
             // Cost - View and approve
             Permissions::COST_VIEW,
             Permissions::COST_APPROVE_MANAGEMENT,
+            Permissions::COST_REJECT,
             Permissions::COST_REVERT,
 
             // Additional Cost
             Permissions::ADDITIONAL_COST_VIEW,
             Permissions::ADDITIONAL_COST_APPROVE,
+            Permissions::ADDITIONAL_COST_REJECT,
             Permissions::ADDITIONAL_COST_REVERT,
             Permissions::ADDITIONAL_COST_CONFIRM,
 
@@ -331,6 +360,10 @@ class RolePermissionSeeder extends Seeder
             Permissions::REVENUE_DASHBOARD,
             Permissions::REVENUE_EXPORT,
             Permissions::DASHBOARD_VIEW,
+            // Missing Modules for Project Owner
+            Permissions::PROJECT_MONITORING_VIEW, Permissions::PROJECT_SUMMARY_REPORT_VIEW,
+            Permissions::CHANGE_REQUEST_VIEW, Permissions::CHANGE_REQUEST_APPROVE, Permissions::CHANGE_REQUEST_REJECT, Permissions::CHANGE_REQUEST_REVERT,
+            Permissions::WARRANTY_VIEW, Permissions::WARRANTY_APPROVE, Permissions::WARRANTY_REVERT,
         ];
 
         $permissionIds = Permission::whereIn('name', $permissions)->pluck('id');
@@ -385,6 +418,7 @@ class RolePermissionSeeder extends Seeder
             Permissions::ADDITIONAL_COST_UPDATE,
             Permissions::ADDITIONAL_COST_DELETE,
             Permissions::ADDITIONAL_COST_APPROVE,
+            Permissions::ADDITIONAL_COST_REJECT,
             Permissions::ADDITIONAL_COST_REVERT,
             Permissions::ADDITIONAL_COST_MARK_AS_PAID_BY_CUSTOMER,
             Permissions::ADDITIONAL_COST_CONFIRM,
@@ -441,6 +475,7 @@ class RolePermissionSeeder extends Seeder
             Permissions::LOG_CREATE,
             Permissions::LOG_UPDATE,
             Permissions::LOG_DELETE,
+            Permissions::LOG_REVERT,
 
             // Project Task
             Permissions::PROJECT_TASK_VIEW,
@@ -481,6 +516,20 @@ class RolePermissionSeeder extends Seeder
             // Settings
             Permissions::SETTINGS_VIEW,
             Permissions::SETTINGS_MANAGE,
+            // Missing Modules for PM
+            Permissions::PROJECT_PHASE_VIEW, Permissions::PROJECT_PHASE_CREATE, Permissions::PROJECT_PHASE_UPDATE, Permissions::PROJECT_PHASE_DELETE,
+            Permissions::PROJECT_DOCUMENT_VIEW, Permissions::PROJECT_DOCUMENT_UPLOAD, Permissions::PROJECT_DOCUMENT_DELETE,
+            Permissions::SUPPLIER_VIEW, Permissions::SUPPLIER_CREATE, Permissions::SUPPLIER_UPDATE,
+            Permissions::SUPPLIER_CONTRACT_VIEW, Permissions::SUPPLIER_CONTRACT_CREATE, Permissions::SUPPLIER_CONTRACT_UPDATE, Permissions::SUPPLIER_CONTRACT_APPROVE,
+            Permissions::SUPPLIER_ACCEPTANCE_VIEW, Permissions::SUPPLIER_ACCEPTANCE_CREATE, Permissions::SUPPLIER_ACCEPTANCE_UPDATE,
+            Permissions::CHANGE_REQUEST_VIEW, Permissions::CHANGE_REQUEST_CREATE, Permissions::CHANGE_REQUEST_UPDATE, Permissions::CHANGE_REQUEST_DELETE, Permissions::CHANGE_REQUEST_APPROVE, Permissions::CHANGE_REQUEST_REJECT, Permissions::CHANGE_REQUEST_REVERT,
+            Permissions::PROJECT_RISK_VIEW, Permissions::PROJECT_RISK_CREATE, Permissions::PROJECT_RISK_UPDATE, Permissions::PROJECT_RISK_DELETE,
+            Permissions::ISSUE_VIEW, Permissions::ISSUE_CREATE, Permissions::ISSUE_UPDATE, Permissions::ISSUE_DELETE, Permissions::ISSUE_RESOLVE,
+            Permissions::GANTT_VIEW, Permissions::GANTT_UPDATE,
+            Permissions::LABOR_PRODUCTIVITY_VIEW, Permissions::LABOR_PRODUCTIVITY_CREATE, Permissions::LABOR_PRODUCTIVITY_UPDATE,
+            Permissions::EVM_VIEW, Permissions::PREDICTIVE_VIEW,
+            Permissions::PROJECT_MONITORING_VIEW, Permissions::PROJECT_SUMMARY_REPORT_VIEW,
+            Permissions::WARRANTY_VIEW, Permissions::WARRANTY_CREATE, Permissions::WARRANTY_UPDATE, Permissions::WARRANTY_APPROVE, Permissions::WARRANTY_REVERT,
         ];
 
         $permissionIds = Permission::whereIn('name', $permissions)->pluck('id');
@@ -549,6 +598,7 @@ class RolePermissionSeeder extends Seeder
             Permissions::LOG_CREATE,
             Permissions::LOG_UPDATE,
             Permissions::LOG_DELETE,
+            Permissions::LOG_REVERT,
 
             // Project Task
             Permissions::PROJECT_TASK_VIEW,
@@ -570,6 +620,14 @@ class RolePermissionSeeder extends Seeder
             Permissions::PERSONNEL_VIEW,
             Permissions::PERSONNEL_ASSIGN,
             Permissions::DASHBOARD_VIEW,
+
+            // Missing Modules for Site Supervisor
+            Permissions::ISSUE_VIEW, Permissions::ISSUE_CREATE, Permissions::ISSUE_UPDATE,
+            Permissions::LABOR_PRODUCTIVITY_VIEW, Permissions::LABOR_PRODUCTIVITY_CREATE, Permissions::LABOR_PRODUCTIVITY_UPDATE,
+            Permissions::ATTENDANCE_VIEW, Permissions::ATTENDANCE_CHECK_IN,
+            Permissions::PROJECT_PHASE_VIEW,
+            Permissions::GANTT_VIEW,
+            Permissions::PROJECT_DOCUMENT_VIEW, Permissions::PROJECT_DOCUMENT_UPLOAD,
         ];
 
         $permissionIds = Permission::whereIn('name', $permissions)->pluck('id');
@@ -647,6 +705,14 @@ class RolePermissionSeeder extends Seeder
             Permissions::REVENUE_DASHBOARD,
             Permissions::REVENUE_EXPORT,
             Permissions::DASHBOARD_VIEW,
+            // Missing Modules for Accountant
+            Permissions::BUDGET_VIEW,
+            Permissions::RECEIPT_VIEW, Permissions::RECEIPT_CREATE, Permissions::RECEIPT_UPDATE, Permissions::RECEIPT_VERIFY,
+            Permissions::SUPPLIER_CONTRACT_VIEW, Permissions::SUPPLIER_ACCEPTANCE_VIEW,
+            Permissions::FINANCE_VIEW, Permissions::FINANCE_MANAGE,
+            Permissions::COMPANY_FINANCIAL_VIEW,
+            Permissions::COMPANY_ASSET_VIEW, Permissions::COMPANY_ASSET_CREATE, Permissions::COMPANY_ASSET_UPDATE, Permissions::COMPANY_ASSET_DEPRECIATE,
+            Permissions::WARRANTY_VIEW,
         ];
 
         $permissionIds = Permission::whereIn('name', $permissions)->pluck('id');
