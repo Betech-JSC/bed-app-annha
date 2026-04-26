@@ -4954,13 +4954,13 @@
            <PaperClipOutlined /> Chứng từ đính kèm ({{ subPaymentDetail.attachments.length }})
          </div>
          <div class="grid grid-cols-2 gap-2">
-            <a-button v-for="file in subPaymentDetail.attachments" :key="file.id" type="dashed" class="h-auto py-2 flex items-center justify-start text-left hover:border-blue-300 hover:text-blue-500 transition-colors" @click="downloadFile(file)">
+            <a-button v-for="file in subPaymentDetail.attachments" :key="file.id" type="dashed" class="h-auto py-2 flex items-center justify-start text-left hover:border-blue-300 hover:text-blue-500 transition-colors" @click="openFilePreview(file)">
                <FileOutlined class="text-blue-400 text-lg mr-2" />
                <div class="flex-1 min-w-0">
                   <div class="text-xs font-medium truncate text-gray-700">{{ file.file_name }}</div>
                   <div class="text-[9px] text-gray-400 uppercase">{{ file.file_type || 'File' }}</div>
                </div>
-               <DownloadOutlined class="text-gray-300" />
+               <EyeOutlined class="text-gray-300" />
             </a-button>
          </div>
       </div>
