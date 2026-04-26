@@ -275,7 +275,7 @@ class CrmProjectsController extends Controller
 
             'monitorData' => [
                 'logs' => $project->constructionLogs()->with(['creator', 'task', 'attachments'])->orderByDesc('log_date')->get(),
-                'acceptances' => $project->acceptances()->with(['task.parent', 'supervisorApprover', 'customerApprover', 'rejector', 'submitter', 'defects.attachments', 'attachments'])->get(),
+                'acceptances' => $project->acceptances()->with(['task.parent', 'template.criteria', 'template.images', 'template.documents', 'supervisorApprover', 'customerApprover', 'rejector', 'submitter', 'defects.attachments', 'attachments'])->get(),
                 'defects' => $project->defects()->with('attachments')->get(),
                 'additional_costs' => $project->additionalCosts()->with(['proposer', 'attachments'])->latest()->get(),
                 'change_requests' => $project->changeRequests()->with(['requester', 'attachments'])->latest()->get(),
@@ -2683,6 +2683,13 @@ class CrmProjectsController extends Controller
         $user = auth('admin')->user();
         $this->crmRequire($user, Permissions::ACCEPTANCE_CREATE, $project);
 
+        // Cast string "null" from FormData to actual null
+        foreach (['description', 'acceptance_template_id'] as $field) {
+            if ($request->input($field) === 'null') {
+                $request->merge([$field => null]);
+            }
+        }
+
         $validated = $request->validate([
             'task_id' => 'required|exists:project_tasks,id',
             'acceptance_template_id' => 'nullable|exists:acceptance_templates,id',
@@ -2729,6 +2736,13 @@ class CrmProjectsController extends Controller
         $this->crmRequire($user, Permissions::ACCEPTANCE_UPDATE, $project);
 
         $acceptance = \App\Models\Acceptance::where('project_id', $project->id)->findOrFail($id);
+
+        // Cast string "null" from FormData to actual null
+        foreach (['description', 'notes', 'acceptance_template_id', 'task_id'] as $field) {
+            if ($request->input($field) === 'null') {
+                $request->merge([$field => null]);
+            }
+        }
 
         $validated = $request->validate([
             'name' => 'sometimes|string|max:255',

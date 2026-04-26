@@ -66,6 +66,11 @@ class Acceptance extends Model
         return $this->belongsTo(ProjectTask::class, 'task_id');
     }
 
+    public function template(): BelongsTo
+    {
+        return $this->belongsTo(AcceptanceTemplate::class, 'acceptance_template_id');
+    }
+
     public function submitter(): BelongsTo
     {
         return $this->belongsTo(User::class, 'submitted_by');

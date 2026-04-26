@@ -5670,6 +5670,66 @@
               <div class="text-[10px] text-gray-400 uppercase font-bold mb-1">📐 Hạng mục</div>
               <div class="text-sm font-medium text-gray-700 truncate">{{ acceptDetailStage.task.name }}</div>
             </div>
+            <div v-if="acceptDetailStage.template" class="col-span-2 mt-1">
+              <div class="p-3 bg-gray-50 border border-gray-100 rounded-xl">
+                <div class="flex items-start gap-2">
+                  <AuditOutlined class="text-blue-500 text-lg mt-0.5" />
+                  <div class="flex-1 min-w-0">
+                    <div class="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-0.5">Bộ tiêu chuẩn nghiệm thu</div>
+                    <div class="text-sm font-bold text-gray-800">{{ acceptDetailStage.template.name }}</div>
+                    <div v-if="acceptDetailStage.template.standard" class="text-xs font-medium text-gray-600 mt-1">
+                      <span class="px-1.5 py-0.5 bg-gray-200 text-gray-700 rounded mr-1 text-[10px] uppercase">Tiêu chuẩn</span>
+                      {{ acceptDetailStage.template.standard }}
+                    </div>
+                  </div>
+                </div>
+
+                <div v-if="acceptDetailStage.template.description" class="mt-3 text-xs text-gray-600 bg-white p-2.5 rounded-lg border border-gray-200/60 leading-relaxed">
+                  {{ acceptDetailStage.template.description }}
+                </div>
+
+                <!-- Criteria List -->
+                <div v-if="acceptDetailStage.template.criteria?.length" class="mt-4">
+                  <div class="text-[10px] text-gray-500 uppercase font-bold mb-2 flex items-center gap-1.5">
+                    <UnorderedListOutlined /> Danh sách tiêu chí ({{ acceptDetailStage.template.criteria.length }})
+                  </div>
+                  <div class="space-y-1.5 max-h-[180px] overflow-y-auto pr-1 custom-scrollbar">
+                    <div v-for="(criterion, idx) in acceptDetailStage.template.criteria" :key="criterion.id" 
+                         class="flex items-start gap-2 text-xs bg-white p-2 rounded-lg border border-gray-100 shadow-sm">
+                      <div class="w-4 h-4 rounded-full bg-emerald-50 text-emerald-500 flex items-center justify-center shrink-0 mt-0.5 text-[10px] font-bold">
+                        {{ idx + 1 }}
+                      </div>
+                      <div class="flex-1">
+                        <div class="font-bold text-gray-700">{{ criterion.name }}</div>
+                        <div v-if="criterion.requirement" class="text-gray-500 mt-0.5">{{ criterion.requirement }}</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Attached Documents & Images -->
+                <div v-if="acceptDetailStage.template.documents?.length || acceptDetailStage.template.images?.length" class="mt-4 pt-3 border-t border-gray-200">
+                  <div class="text-[10px] text-gray-500 uppercase font-bold mb-2 flex items-center gap-1.5">
+                    <PaperClipOutlined /> Tài liệu tham chiếu
+                  </div>
+                  <div class="flex flex-wrap gap-2">
+                    <a v-for="doc in acceptDetailStage.template.documents" :key="doc.id" :href="doc.file_url" target="_blank" 
+                       class="flex items-center gap-1.5 px-2.5 py-1.5 bg-white border border-gray-200 rounded-lg text-xs hover:border-blue-400 hover:bg-blue-50 transition-colors shadow-sm">
+                      <FilePdfOutlined v-if="doc.extension === 'pdf'" class="text-red-500" />
+                      <FileWordOutlined v-else-if="['doc','docx'].includes(doc.extension)" class="text-blue-600" />
+                      <FileExcelOutlined v-else-if="['xls','xlsx'].includes(doc.extension)" class="text-green-600" />
+                      <FileTextOutlined v-else class="text-gray-500" />
+                      <span class="truncate max-w-[150px] text-gray-700 font-medium">{{ doc.original_name }}</span>
+                    </a>
+                    <a v-for="img in acceptDetailStage.template.images" :key="img.id" :href="img.file_url" target="_blank" 
+                       class="flex items-center gap-1.5 px-2.5 py-1.5 bg-white border border-gray-200 rounded-lg text-xs hover:border-blue-400 hover:bg-blue-50 transition-colors shadow-sm">
+                      <PictureOutlined class="text-purple-500" />
+                      <span class="truncate max-w-[150px] text-gray-700 font-medium">{{ img.original_name || 'Hình ảnh đính kèm' }}</span>
+                    </a>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
 
           <div v-if="acceptDetailStage.next_action?.label" class="p-3 bg-blue-50 border border-blue-100 rounded-xl flex items-center gap-3">

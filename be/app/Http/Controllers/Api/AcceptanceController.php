@@ -67,6 +67,13 @@ class AcceptanceController extends Controller
             return $this->forbidden('Bạn không có quyền tạo nghiệm thu.');
         }
 
+        // Cast string "null" from FormData to actual null
+        foreach (['description', 'acceptance_template_id'] as $field) {
+            if ($request->input($field) === 'null') {
+                $request->merge([$field => null]);
+            }
+        }
+
         $validated = $request->validate([
             'task_id'                => 'required|exists:project_tasks,id',
             'name'                   => 'sometimes|string|max:255',
@@ -113,6 +120,13 @@ class AcceptanceController extends Controller
 
         if ($acceptance->workflow_status === 'customer_approved') {
             return response()->json(['success' => false, 'message' => 'Không thể chỉnh sửa nghiệm thu đã hoàn tất.'], 400);
+        }
+
+        // Cast string "null" from FormData to actual null
+        foreach (['description', 'notes', 'acceptance_template_id'] as $field) {
+            if ($request->input($field) === 'null') {
+                $request->merge([$field => null]);
+            }
         }
 
         $validated = $request->validate([

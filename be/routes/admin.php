@@ -376,11 +376,11 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         Route::delete('/{project}/invoices/{invoice}', [CrmProjectsController::class, 'destroyInvoice'])->name('invoices.destroy');
 
         // Acceptance Workflow
-        Route::get('/{project}/acceptance', fn($project) => redirect("/projects/{$project}?tab=acceptance"))->name('acceptance.index');
-        Route::post('/{project}/acceptance', [CrmProjectsController::class, 'storeAcceptance'])->name('acceptance.store');
-        Route::put('/{project}/acceptance/{id}', [CrmProjectsController::class, 'updateAcceptance'])->name('acceptance.update');
-        Route::post('/{project}/acceptance/{id}/approve', [CrmProjectsController::class, 'approveAcceptance'])->name('acceptance.approve');
-        Route::delete('/{project}/acceptance/{id}', [CrmProjectsController::class, 'destroyAcceptance'])->name('acceptance.destroy');
+        Route::get('/{project}/acceptances', fn($project) => redirect("/projects/{$project}?tab=acceptance"))->name('acceptance.index');
+        Route::post('/{project}/acceptances', [CrmProjectsController::class, 'storeAcceptance'])->name('acceptance.store');
+        Route::put('/{project}/acceptances/{id}', [CrmProjectsController::class, 'updateAcceptance'])->name('acceptance.update');
+        Route::post('/{project}/acceptances/{id}/approve', [CrmProjectsController::class, 'approveAcceptance'])->name('acceptance.approve');
+        Route::delete('/{project}/acceptances/{id}', [CrmProjectsController::class, 'destroyAcceptance'])->name('acceptance.destroy');
         
         // Match Vue frontend exact URLs
         Route::post('/{project}/acceptances/{id}/supervisor-approve', [CrmProjectsController::class, 'approveAcceptanceSupervisor'])->name('acceptances.supervisor-approve');

@@ -37,8 +37,8 @@
     <div class="crm-content-card__header" style="border-bottom: none; padding-bottom: 0;">
       <div class="flex flex-wrap items-center gap-3 w-full">
         <a-input-search
-          v-model:value="localFilters.search" placeholder="Tìm tên file..." style="width: 240px;"
-          size="large" class="rounded-xl" allow-clear @search="applyFilters" @pressEnter="applyFilters"
+          v-model:value="localFilters.search" placeholder="Tìm tài liệu..." style="width: 250px;"
+          size="large" allow-clear @search="applyFilters" @pressEnter="applyFilters"
         />
         <a-select v-model:value="localFilters.file_type" style="width: 150px;" size="large" @change="applyFilters" placeholder="Loại file">
           <a-select-option value="">Tất cả loại</a-select-option>
