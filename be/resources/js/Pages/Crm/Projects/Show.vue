@@ -661,29 +661,22 @@
         </div>
       </a-tab-pane>
 
-      <!-- ============ SUBCONTRACTORS TAB ============ -->
-      <a-tab-pane key="subcontractors" v-if="isTabVisible('subcontractors')">
-        <template #tab><a-tooltip title="Quản lý nhà thầu phụ: báo giá, tiến độ, thanh toán và đối soát" placement="bottom">Nhà thầu phụ ({{ counts.subcontractors || 0 }})</a-tooltip></template>
+      <!-- ============ SUBCONTRACTOR INFO MAIN TAB ============ -->
+      <a-tab-pane key="subcontractor_info" v-if="isTabVisible('subcontractor_info')">
+        <template #tab><a-tooltip title="Quản lý thông tin chung nhà thầu phụ" placement="bottom">Thông tin chung</a-tooltip></template>
         <div class="p-4">
           <div class="flex justify-end mb-3">
             <a-button v-if="can('subcontractor.create')" type="primary" size="small" @click="openSubModal(null)">
               <template #icon><PlusOutlined /></template>Thêm NTP
             </a-button>
           </div>
-          <a-table :columns="subCols" :data-source="project.subcontractors || []" :pagination="{ pageSize: 10 }" row-key="id" size="small" class="crm-table" :custom-row="(r) => ({ onClick: () => openSubDetail(r), style: 'cursor: pointer' })">
+          <a-table :columns="subInfoCols" :data-source="project.subcontractors || []" :pagination="{ pageSize: 10 }" row-key="id" size="small" class="crm-table" :custom-row="(r) => ({ onClick: () => openSubDetail(r), style: 'cursor: pointer' })">
             <template #bodyCell="{ column, record }">
               <template v-if="column.key === 'name'">
                 <div class="flex items-center gap-2">
                   <span class="font-semibold text-gray-800">{{ record.name }}</span>
                   <a-tag v-if="record.approved_at" color="green" class="rounded-full text-[10px]">Đã duyệt</a-tag>
                 </div>
-              </template>
-              <template v-else-if="column.key === 'quote'"><span class="font-semibold">{{ fmt(record.total_quote) }}</span></template>
-              <template v-else-if="column.key === 'paid'">
-                <span class="font-semibold text-green-600">{{ fmt(record.total_paid || 0) }}</span>
-              </template>
-              <template v-else-if="column.key === 'paidPercent'">
-                <a-progress :percent="record.total_quote > 0 ? Math.round((record.total_paid || 0) / record.total_quote * 100) : 0" :size="'small'" :stroke-color="record.total_quote > 0 && (record.total_paid || 0) >= record.total_quote ? '#10B981' : '#3B82F6'" />
               </template>
               <template v-else-if="column.key === 'progress'">
                 <a-tag :color="subProgressColors[record.progress_status]" class="rounded-full text-xs">{{ subProgressLabels[record.progress_status] || record.progress_status }}</a-tag>
@@ -697,6 +690,33 @@
             </template>
           </a-table>
           <a-empty v-if="!project.subcontractors?.length" description="Chưa có nhà thầu phụ" />
+        </div>
+      </a-tab-pane>
+
+      <!-- ============ SUBCONTRACTORS COSTS TAB ============ -->
+      <a-tab-pane key="subcontractors" v-if="isTabVisible('subcontractors')">
+        <template #tab><a-tooltip title="Theo dõi chi phí, thanh toán nhà thầu phụ" placement="bottom">Nhà thầu phụ ({{ allSubcontractorPayments.length || 0 }})</a-tooltip></template>
+        <div class="p-4">
+          <a-table :columns="allSubPayCols" :data-source="allSubcontractorPayments" :pagination="{ pageSize: 10 }" row-key="id" size="small" class="crm-table hover-row" :custom-row="(r) => ({ onClick: () => openSubPaymentDetail(r), style: 'cursor: pointer' })">
+            <template #bodyCell="{ column, record }">
+              <template v-if="column.key === 'subcontractor_name'">
+                <span class="font-semibold text-gray-800">{{ record.subcontractor_name }}</span>
+              </template>
+              <template v-else-if="column.key === 'payment_stage'">
+                <span class="text-gray-700">{{ record.payment_stage || 'Thanh toán' }}</span>
+              </template>
+              <template v-else-if="column.key === 'amount'">
+                <span class="font-semibold text-red-500">{{ fmt(record.amount) }}</span>
+              </template>
+              <template v-else-if="column.key === 'status'">
+                <a-tag :color="subPayStatusColors[record.status]" class="rounded-full text-[10px]">{{ subPayStatusLabels[record.status] || record.status }}</a-tag>
+              </template>
+              <template v-else-if="column.key === 'payment_date'">
+                <span class="text-xs text-gray-500">{{ record.payment_date ? fmtDate(record.payment_date) : '—' }}</span>
+              </template>
+            </template>
+          </a-table>
+          <a-empty v-if="!allSubcontractorPayments?.length" description="Chưa có chi phí thanh toán nào" />
         </div>
       </a-tab-pane>
 
@@ -3071,63 +3091,19 @@
         <!-- Payment List -->
         <div v-if="subDetail.payments?.length" class="space-y-2">
           <div v-for="p in subDetail.payments" :key="p.id"
-               class="bg-gray-50 rounded-xl p-3 border border-gray-100 hover:border-blue-200 transition-all">
+               class="bg-gray-50 rounded-xl p-3 border border-gray-100 hover:border-blue-200 transition-all cursor-pointer"
+               @click="openSubPaymentDetail(p, subDetail)">
             <div class="flex items-start justify-between">
               <div class="flex-1 min-w-0">
                 <div class="text-sm font-semibold text-gray-800">{{ p.payment_stage || 'Thanh toán' }}</div>
                 <div class="text-xs text-gray-400 mt-0.5">
                   {{ p.payment_date ? fmtDate(p.payment_date) : '—' }} · {{ subPayMethodLabels[p.payment_method] || p.payment_method }}
                 </div>
-                <div class="text-[10px] text-gray-400 mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
-                  <span v-if="p.creator">👤 {{ p.creator.name }}</span>
-                  <span v-if="p.approver" class="text-green-600">✅ {{ p.approver.name }}</span>
-                  <span v-if="p.payer" class="text-blue-600">💰 {{ p.payer.name }}</span>
-                  <span v-if="p.rejector" class="text-red-500">❌ {{ p.rejector.name }}</span>
-                </div>
-                <!-- Attachments display in list -->
-                <div v-if="p.attachments?.length" class="mt-2 flex flex-wrap gap-1">
-                  <div v-for="file in p.attachments" :key="file.id" class="flex items-center gap-1 px-1.5 py-0.5 bg-blue-50/50 text-blue-500 rounded border border-blue-100/50 text-[9px] hover:bg-blue-100 transition-colors cursor-default">
-                    <PaperClipOutlined class="text-[8px]" />
-                    <span class="truncate max-w-[80px]">{{ file.file_name }}</span>
-                  </div>
-                </div>
               </div>
               <div class="text-right shrink-0 ml-3">
                 <div class="font-bold text-sm text-gray-800">{{ fmt(p.amount) }}</div>
                 <a-tag :color="subPayStatusColors[p.status]" class="text-[10px] rounded-full mt-1">{{ subPayStatusLabels[p.status] || p.status }}</a-tag>
               </div>
-            </div>
-            <!-- Action Buttons -->
-            <div class="flex items-center justify-end gap-1 mt-2 pt-2 border-t border-gray-100">
-              <!-- Draft: Edit + Delete + Submit -->
-              <template v-if="p.status === 'draft'">
-                <a-button v-if="can('subcontractor_payment.update')" type="text" size="small" class="text-gray-500" @click="editSubPayment(subDetail, p)">
-                  <EditOutlined /> Sửa
-                </a-button>
-                <a-popconfirm v-if="can('subcontractor_payment.delete')" title="Xóa phiếu thanh toán?" @confirm="deleteSubPayment(subDetail, p)">
-                  <a-button type="text" size="small" danger><DeleteOutlined /> Xóa</a-button>
-                </a-popconfirm>
-                <a-popconfirm title="Gửi duyệt phiếu này?" @confirm="submitSubPayment(subDetail, p)">
-                  <a-button type="primary" size="small"><SendOutlined /> Gửi duyệt</a-button>
-                </a-popconfirm>
-              </template>
-              <!-- Pending Management: Approve -->
-              <template v-if="p.status === 'pending_management_approval' && can('subcontractor_payment.approve')">
-                <a-popconfirm title="BĐH duyệt phiếu này?" @confirm="approveSubPayment(subDetail, p)" ok-text="Duyệt">
-                  <a-button type="primary" size="small" class="!bg-green-500 !border-green-500"><CheckCircleOutlined /> BĐH Duyệt</a-button>
-                </a-popconfirm>
-              </template>
-              <!-- Pending Accountant: Confirm -->
-              <template v-if="p.status === 'pending_accountant_confirmation' && can('subcontractor_payment.mark_paid')">
-                <a-popconfirm title="KT xác nhận đã thanh toán?" @confirm="confirmSubPayment(subDetail, p)" ok-text="Xác nhận">
-                  <a-button type="primary" size="small"><CheckOutlined /> KT Xác nhận</a-button>
-                </a-popconfirm>
-              </template>
-              <!-- Revert: For any non-draft status except paid -->
-              <a-popconfirm v-if="['pending_management_approval', 'pending_accountant_confirmation', 'rejected'].includes(p.status) && can('subcontractor_payment.revert')"
-                title="Hoàn duyệt phiếu về Nháp?" @confirm="revertSubPayment(subDetail, p)" ok-text="Hoàn duyệt">
-                <a-button size="small" danger ghost><ReloadOutlined /> Hoàn duyệt</a-button>
-              </a-popconfirm>
             </div>
           </div>
         </div>
@@ -4906,40 +4882,153 @@
           <a-button v-if="can('subcontractor_payment.create')" type="primary" size="small" @click="openSubPaymentDrawer(subDetail)"><PlusOutlined /> Tạo phiếu TT</a-button>
         </div>
         <div v-if="subDetail.payments?.length" class="space-y-3">
-          <div v-for="p in subDetail.payments" :key="p.id" class="flex items-center justify-between py-2 border-b border-gray-50 last:border-b-0">
+          <div v-for="p in subDetail.payments" :key="p.id" class="flex items-center justify-between py-2 border-b border-gray-50 last:border-b-0 cursor-pointer hover:bg-gray-50 transition-colors px-2 rounded" @click="openSubPaymentDetail(p, subDetail)">
             <div>
               <div class="text-sm font-medium">{{ p.payment_stage || 'Thanh toán' }}</div>
               <div class="text-xs text-gray-400">{{ p.payment_date ? fmtDate(p.payment_date) : '—' }} · {{ subPayMethodLabels[p.payment_method] || p.payment_method }}</div>
-              <div class="text-[10px] text-gray-400 mt-1 flex flex-wrap gap-x-3 gap-y-1">
-                <span v-if="p.creator">👤 Tạo: {{ p.creator.name }}</span>
-                <span v-if="p.approver" class="text-green-600">✅ Duyệt: {{ p.approver.name }}</span>
-                <span v-if="p.payer" class="text-blue-600">💰 Chi: {{ p.payer.name }}</span>
-                <span v-if="p.rejector" class="text-red-500">❌ Từ chối: {{ p.rejector.name }}</span>
-              </div>
             </div>
             <div class="text-right">
               <div class="font-semibold text-sm">{{ fmt(p.amount) }}</div>
               <a-tag :color="subPayStatusColors[p.status]" class="text-[10px] rounded-full">{{ subPayStatusLabels[p.status] || p.status }}</a-tag>
             </div>
-            <div class="flex gap-1 ml-2" @click.stop>
-              <a-popconfirm v-if="p.status === 'draft' && can('subcontractor_payment.create')" title="Gửi duyệt phiếu này?" @confirm="submitSubPayment(subDetail, p)">
-                <a-button type="text" size="small" class="text-blue-500"><SendOutlined /></a-button>
-              </a-popconfirm>
-              <a-popconfirm v-if="p.status === 'pending_management_approval' && can('subcontractor_payment.approve')" title="BĐH duyệt phiếu này?" @confirm="approveSubPayment(subDetail, p)" ok-text="Duyệt">
-                <a-button type="text" size="small" class="text-green-500"><CheckCircleOutlined /></a-button>
-              </a-popconfirm>
-              <a-popconfirm v-if="p.status === 'pending_accountant_confirmation' && can('subcontractor_payment.mark_paid')" title="KT xác nhận đã thanh toán?" @confirm="confirmSubPayment(subDetail, p)" ok-text="Xác nhận">
-                <a-button type="text" size="small" class="text-green-600"><CheckOutlined /></a-button>
-              </a-popconfirm>
-
-              <a-button v-if="['pending_management_approval', 'pending_accountant_confirmation', 'paid', 'rejected'].includes(p.status) && can('subcontractor_payment.revert')" type="text" size="small" danger @click="revertSubPayment(subDetail, p)">
-                <template #icon><ReloadOutlined /></template>
-              </a-button>
-            </div>
           </div>
         </div>
         <div v-else class="text-center py-8 text-gray-400 italic">Chưa có lịch sử thanh toán</div>
      </div>
+  </a-drawer>
+
+  <!-- ================= SUB PAYMENT DETAIL DRAWER ================= -->
+  <a-drawer v-model:open="showSubPaymentDetailDrawer" title="Chi tiết Phiếu thanh toán" :width="560" @close="subPaymentDetail = null" destroy-on-close class="crm-drawer">
+    <div v-if="subPaymentDetail" class="px-2">
+      <!-- Status Badge -->
+      <div class="flex justify-between items-start mb-6">
+        <div>
+          <div class="text-xs text-gray-500 font-medium mb-1">Mã tham chiếu: {{ subPaymentDetail.reference_number || '—' }}</div>
+          <div class="text-2xl font-bold text-gray-800">{{ subPaymentDetail.payment_stage || 'Thanh toán' }}</div>
+        </div>
+        <a-tag :color="subPayStatusColors[subPaymentDetail.status]" class="px-3 py-1 rounded-full text-sm font-semibold border-0">{{ subPayStatusLabels[subPaymentDetail.status] || subPaymentDetail.status }}</a-tag>
+      </div>
+
+      <!-- Amount Box -->
+      <div class="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-2xl p-5 mb-6 flex items-center justify-between shadow-sm">
+        <div>
+          <div class="text-xs font-bold text-blue-500 uppercase tracking-wider mb-1">Số tiền thanh toán</div>
+          <div class="text-3xl font-black text-blue-700">{{ fmt(subPaymentDetail.amount) }}</div>
+        </div>
+        <div class="w-12 h-12 bg-white rounded-xl shadow-sm flex items-center justify-center text-blue-500 text-xl">
+          💰
+        </div>
+      </div>
+
+      <!-- Detail Grid -->
+      <div class="grid grid-cols-2 gap-4 mb-6">
+        <div class="bg-gray-50 rounded-xl p-3">
+          <div class="text-[10px] text-gray-400 uppercase font-bold mb-1">Nhà thầu phụ</div>
+          <div class="text-sm font-semibold text-gray-800">{{ subPaymentDetail.subcontractor?.name || subDetail?.name || '—' }}</div>
+        </div>
+        <div class="bg-gray-50 rounded-xl p-3">
+          <div class="text-[10px] text-gray-400 uppercase font-bold mb-1">Phương thức</div>
+          <div class="text-sm font-semibold text-gray-800">{{ subPayMethodLabels[subPaymentDetail.payment_method] || subPaymentDetail.payment_method }}</div>
+        </div>
+        <div class="bg-gray-50 rounded-xl p-3">
+          <div class="text-[10px] text-gray-400 uppercase font-bold mb-1">Ngày thanh toán</div>
+          <div class="text-sm font-semibold text-gray-800">{{ subPaymentDetail.payment_date ? fmtDate(subPaymentDetail.payment_date) : '—' }}</div>
+        </div>
+        <div class="bg-gray-50 rounded-xl p-3">
+          <div class="text-[10px] text-gray-400 uppercase font-bold mb-1">Ngày tạo</div>
+          <div class="text-sm font-semibold text-gray-800">{{ fmtDate(subPaymentDetail.created_at) }}</div>
+        </div>
+      </div>
+
+      <!-- Notes -->
+      <div v-if="subPaymentDetail.description" class="mb-6">
+        <div class="text-xs font-bold text-gray-500 uppercase mb-2">Ghi chú / Diễn giải</div>
+        <div class="bg-yellow-50/50 border border-yellow-100 rounded-xl p-3 text-sm text-gray-700">
+          {{ subPaymentDetail.description }}
+        </div>
+      </div>
+
+      <!-- Attachments -->
+      <div v-if="subPaymentDetail.attachments?.length" class="mb-6">
+         <div class="text-xs font-bold text-gray-500 uppercase mb-2 flex items-center gap-2">
+           <PaperClipOutlined /> Chứng từ đính kèm ({{ subPaymentDetail.attachments.length }})
+         </div>
+         <div class="grid grid-cols-2 gap-2">
+            <a-button v-for="file in subPaymentDetail.attachments" :key="file.id" type="dashed" class="h-auto py-2 flex items-center justify-start text-left hover:border-blue-300 hover:text-blue-500 transition-colors" @click="downloadFile(file)">
+               <FileOutlined class="text-blue-400 text-lg mr-2" />
+               <div class="flex-1 min-w-0">
+                  <div class="text-xs font-medium truncate text-gray-700">{{ file.file_name }}</div>
+                  <div class="text-[9px] text-gray-400 uppercase">{{ file.file_type || 'File' }}</div>
+               </div>
+               <DownloadOutlined class="text-gray-300" />
+            </a-button>
+         </div>
+      </div>
+
+      <!-- Workflow Timeline -->
+      <div class="mt-6 border-t border-gray-100 pt-6">
+        <div class="text-xs font-bold text-gray-500 uppercase mb-4">Luồng phê duyệt</div>
+        <a-steps direction="vertical" size="small" :current="getSubPayStepCurrent(subPaymentDetail.status)">
+          <a-step title="Khởi tạo">
+            <template #description>
+              <div class="text-xs mt-1">
+                <span v-if="subPaymentDetail.creator">Tạo bởi: <b>{{ subPaymentDetail.creator.name }}</b></span>
+                <span v-else>Đã tạo phiếu</span>
+              </div>
+            </template>
+          </a-step>
+          <a-step title="Chờ BĐH duyệt" :status="subPaymentDetail.status === 'rejected' ? 'error' : (['pending_accountant_confirmation', 'paid'].includes(subPaymentDetail.status) ? 'finish' : (subPaymentDetail.status === 'pending_management_approval' ? 'process' : 'wait'))">
+            <template #description>
+               <div class="text-xs mt-1" v-if="subPaymentDetail.approver">
+                  Duyệt bởi: <b>{{ subPaymentDetail.approver.name }}</b>
+               </div>
+               <div class="text-xs mt-1 text-red-500" v-if="subPaymentDetail.status === 'rejected' && subPaymentDetail.rejector">
+                  Từ chối bởi: <b>{{ subPaymentDetail.rejector.name }}</b>
+               </div>
+            </template>
+          </a-step>
+          <a-step title="KT Xác nhận đã chi" :status="subPaymentDetail.status === 'paid' ? 'finish' : (subPaymentDetail.status === 'pending_accountant_confirmation' ? 'process' : 'wait')">
+            <template #description>
+               <div class="text-xs mt-1" v-if="subPaymentDetail.payer">
+                  Chi bởi: <b>{{ subPaymentDetail.payer.name }}</b>
+               </div>
+            </template>
+          </a-step>
+        </a-steps>
+      </div>
+
+    </div>
+
+    <!-- Action Footer -->
+    <template #footer v-if="subPaymentDetail">
+       <div class="flex justify-between items-center w-full">
+          <!-- Left side actions (Revert, Delete) -->
+          <div class="flex gap-2">
+            <a-popconfirm v-if="subPaymentDetail.status === 'draft' && can('subcontractor_payment.delete')" title="Xóa phiếu này?" @confirm="deleteSubPayment(subPaymentDetail.subcontractor || subDetail, subPaymentDetail); showSubPaymentDetailDrawer = false">
+               <a-button type="text" danger class="rounded-lg"><DeleteOutlined /> Xóa</a-button>
+            </a-popconfirm>
+            <a-button v-if="['pending_management_approval', 'pending_accountant_confirmation', 'rejected'].includes(subPaymentDetail.status) && can('subcontractor_payment.revert')" type="text" danger class="rounded-lg" @click="revertSubPayment(subPaymentDetail.subcontractor || subDetail, subPaymentDetail); showSubPaymentDetailDrawer = false">
+               <ReloadOutlined /> Hoàn duyệt
+            </a-button>
+          </div>
+
+          <!-- Right side actions (Approve, Submit) -->
+          <div class="flex gap-2">
+            <a-button v-if="subPaymentDetail.status === 'draft' && can('subcontractor_payment.update')" @click="editSubPayment(subPaymentDetail.subcontractor || subDetail, subPaymentDetail); showSubPaymentDetailDrawer = false" class="rounded-lg">Sửa</a-button>
+            <a-popconfirm v-if="subPaymentDetail.status === 'draft' && can('subcontractor_payment.create')" title="Gửi duyệt phiếu này?" @confirm="submitSubPayment(subPaymentDetail.subcontractor || subDetail, subPaymentDetail); showSubPaymentDetailDrawer = false">
+               <a-button type="primary" class="rounded-lg shadow-sm">Gửi duyệt</a-button>
+            </a-popconfirm>
+            
+            <a-popconfirm v-if="subPaymentDetail.status === 'pending_management_approval' && can('subcontractor_payment.approve')" title="BĐH duyệt phiếu này?" @confirm="approveSubPayment(subPaymentDetail.subcontractor || subDetail, subPaymentDetail); showSubPaymentDetailDrawer = false" ok-text="Duyệt">
+               <a-button type="primary" class="rounded-lg !bg-green-500 !border-green-500 shadow-sm shadow-green-500/20"><CheckCircleOutlined /> Duyệt phiếu</a-button>
+            </a-popconfirm>
+            
+            <a-popconfirm v-if="subPaymentDetail.status === 'pending_accountant_confirmation' && can('subcontractor_payment.mark_paid')" title="Kế toán xác nhận đã chi?" @confirm="confirmSubPayment(subPaymentDetail.subcontractor || subDetail, subPaymentDetail); showSubPaymentDetailDrawer = false" ok-text="Xác nhận">
+               <a-button type="primary" class="rounded-lg !bg-blue-600 !border-blue-600 shadow-sm shadow-blue-600/20"><CheckOutlined /> KT Xác nhận chi</a-button>
+            </a-popconfirm>
+          </div>
+       </div>
+    </template>
   </a-drawer>
 
   <a-drawer v-model:open="showSubPayCreateDrawer" title="Tạo phiếu thanh toán NTP" :width="500" @close="showSubPayCreateDrawer = false" destroy-on-close class="crm-drawer">
@@ -6826,6 +6915,18 @@ const additionalCosts = computed(() => props.monitorData?.additional_costs || pr
 const changeRequests = computed(() => props.monitorData?.change_requests || props.project.change_requests || [])
 const personnel = computed(() => props.teamData?.personnel || props.project.personnel || [])
 const subcontractors = computed(() => props.teamData?.subcontractors || props.project.subcontractors || [])
+
+const allSubcontractorPayments = computed(() => {
+  const payments = [];
+  subcontractors.value.forEach(sub => {
+    if (sub.payments) {
+      sub.payments.forEach(p => {
+        payments.push({ ...p, subcontractor_name: sub.name, subcontractor: sub });
+      });
+    }
+  });
+  return payments.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).reverse();
+});
 const equipmentRentals = computed(() => props.equipmentData?.rentals || [])
 const equipmentPurchases = computed(() => props.equipmentData?.purchases || [])
 const assetUsages = computed(() => props.equipmentData?.usages || [])
@@ -6891,6 +6992,7 @@ const can = (perm) => {
 // Tab group → sub-tab mapping
 const tabGroupTabs = {
   overview: ['overview'],
+  subcontractor_main: ['subcontractor_info'],
   finance: ['contract', 'costs', 'payments', 'additional_costs', 'budgets', 'finance', 'invoices'],
   expense: ['subcontractors', 'materials', 'equipment'],
   monitor: ['gantt', 'progress', 'logs', 'acceptance', 'defects', 'change_requests', 'comments', 'risks'],
@@ -6908,6 +7010,7 @@ const tabPermissions = {
   invoices: 'invoice.view',
   budgets: 'budgets.view',
   finance: 'finance.view',
+  subcontractor_info: 'subcontractor.view',
   subcontractors: 'subcontractor.view',
   materials: 'material.view',
   equipment: 'equipment.view',
@@ -7046,6 +7149,7 @@ const getInitialTab = () => {
 const getGroupForTab = (tab) => {
   const groupMap = {
     overview: 'overview',
+    subcontractor_info: 'subcontractor_main',
     gantt: 'monitor', progress: 'monitor',
     contract: 'finance', costs: 'finance', payments: 'finance', additional_costs: 'finance', budgets: 'finance', finance: 'finance', invoices: 'finance',
     subcontractors: 'expense', materials: 'expense', equipment: 'expense',
@@ -7078,6 +7182,8 @@ const costDetailRecord = ref(null)
 const showPaymentDetail = ref(false)
 const paymentDetailRecord = ref(null)
 const showSubDetailDrawer = ref(false)
+const showSubPaymentDetailDrawer = ref(false)
+const subPaymentDetail = ref(null)
 const subDetail = ref(null)
 const showMaterialDetailDrawer = ref(false)
 const materialDetail = ref(null)
@@ -7304,6 +7410,7 @@ const isLoading = (key) => !!actionLoading[key]
 const tabGroups = computed(() => {
   const groups = [
     { key: 'monitor', icon: '📋', label: 'Giám sát', defaultTab: 'gantt', badge: (props.counts?.tasks || 0) + (props.counts?.construction_logs || 0) + (props.counts?.acceptance_stages || 0) + (props.counts?.defects || 0) + (props.counts?.additional_costs || 0) + (props.counts?.change_requests || 0), perms: ['gantt.view', 'project.task.view', 'log.view', 'acceptance.view', 'defect.view', 'change_request.view', 'additional_cost.view', 'project.comment.view', 'project.risk.view'] },
+    { key: 'subcontractor_main', icon: '👷', label: 'Nhà thầu phụ', defaultTab: 'subcontractor_info', badge: props.counts?.subcontractors || 0, perms: ['subcontractor.view'] },
     { key: 'finance', icon: '💰', label: 'Tài chính', defaultTab: 'contract', badge: (props.counts?.costs || 0) + (props.counts?.payments || 0) + (props.counts?.budgets || 0), perms: ['contract.view', 'payment.view', 'invoice.view', 'cost.view', 'budgets.view', 'finance.view'] },
     { key: 'expense', icon: '🏗️', label: 'Chi phí', defaultTab: 'subcontractors', badge: (props.counts?.subcontractors || 0) + (props.counts?.material_bills || 0) + (props.counts?.equipment || 0), perms: ['subcontractor.view', 'material.view', 'equipment.view'] },
     { key: 'hr', icon: '👥', label: 'Nhân sự', defaultTab: 'personnel', badge: props.counts?.personnel || 0, perms: ['personnel.view', 'attendance.view', 'labor_productivity.view'] },
@@ -7775,6 +7882,22 @@ const subCols = [
   { title: '% TT', key: 'paidPercent', width: 110 },
   { title: 'Tiến độ', key: 'progress', width: 120 },
   { title: 'Thời gian', key: 'dates', width: 120 },
+]
+
+const subInfoCols = [
+  { title: 'Tên NTP', key: 'name', ellipsis: true },
+  { title: 'Danh mục', dataIndex: 'category', width: 120 },
+  { title: 'Ngân hàng', dataIndex: 'bank_name', width: 150 },
+  { title: 'Tiến độ', key: 'progress', width: 120 },
+  { title: 'Thời gian', key: 'dates', width: 150 },
+]
+
+const allSubPayCols = [
+  { title: 'Nhà thầu phụ', key: 'subcontractor_name', ellipsis: true },
+  { title: 'Nội dung TT', key: 'payment_stage', ellipsis: true },
+  { title: 'Số tiền', key: 'amount', align: 'right', width: 130 },
+  { title: 'Trạng thái', key: 'status', width: 140 },
+  { title: 'Ngày TT', key: 'payment_date', width: 110 },
 ]
 
 const acCols = [
@@ -8287,6 +8410,20 @@ const editingLog = ref(null)
 const logForm = ref({ log_date: null, task_id: null, weather: null, personnel_count: null, completion_percentage: 0, notes: '', deleted_attachment_ids: [] })
 
 // Log Detail Drawer
+const openSubPaymentDetail = (payment, subcontractor = null) => {
+  subPaymentDetail.value = { ...payment, subcontractor: subcontractor || payment.subcontractor };
+  showSubPaymentDetailDrawer.value = true;
+}
+
+const getSubPayStepCurrent = (status) => {
+  if (status === 'draft') return 0;
+  if (status === 'pending_management_approval') return 1;
+  if (status === 'rejected') return 1;
+  if (status === 'pending_accountant_confirmation') return 2;
+  if (status === 'paid') return 3;
+  return 0;
+}
+
 const showLogDetailDrawer = ref(false)
 const logDetailRecord = ref(null)
 const openLogDetailDrawer = (log) => {
