@@ -18,16 +18,27 @@
   </div>
 
   <div class="crm-content-card">
-    <div class="p-4 border-b border-gray-100 flex items-center gap-4 flex-wrap">
+    <!-- Tabs Header -->
+    <a-tabs v-model:activeKey="filters.tab" @change="handleTabChange" class="px-4 pt-2 border-b border-gray-100" :tabBarGutter="32">
+      <a-tab-pane key="approvals" tab="Phiếu duyệt mua" />
+      <a-tab-pane key="assets" tab="Danh sách tài sản" />
+    </a-tabs>
+
+    <div class="px-4 py-3 border-b border-gray-100 flex items-center gap-4 flex-wrap bg-gray-50/30">
       <a-input-search v-model:value="filters.search" placeholder="Tìm thiết bị..." class="max-w-xs" allow-clear @search="applyFilters" @change="debounceSearch" />
-      <a-select v-model:value="filters.status" placeholder="Trạng thái" allow-clear style="width: 180px" @change="applyFilters">
-        <a-select-option value="draft">Nháp</a-select-option>
-        <a-select-option value="pending_management">Chờ BĐH</a-select-option>
-        <a-select-option value="pending_accountant">Chờ KT</a-select-option>
-        <a-select-option value="available">Trong kho</a-select-option>
-        <a-select-option value="in_use">Đang sử dụng</a-select-option>
-        <a-select-option value="maintenance">Bảo trì</a-select-option>
-        <a-select-option value="rejected">Từ chối</a-select-option>
+      <a-select v-model:value="filters.status" placeholder="Tất cả trạng thái" allow-clear style="width: 180px" @change="applyFilters">
+        <template v-if="filters.tab === 'approvals'">
+          <a-select-option value="draft">Nháp</a-select-option>
+          <a-select-option value="pending_management">Chờ BĐH</a-select-option>
+          <a-select-option value="pending_accountant">Chờ KT</a-select-option>
+          <a-select-option value="rejected">Từ chối</a-select-option>
+        </template>
+        <template v-else>
+          <a-select-option value="available">Trong kho</a-select-option>
+          <a-select-option value="in_use">Đang sử dụng</a-select-option>
+          <a-select-option value="maintenance">Bảo trì</a-select-option>
+          <a-select-option value="retired">Thanh lý</a-select-option>
+        </template>
       </a-select>
     </div>
 
@@ -247,7 +258,11 @@ const rejectReason = ref('')
 const fileList = ref([])
 const imagePreviewVisible = ref(false)
 const imagePreviewUrl = ref('')
-const filters = ref({ search: props.filters?.search || '', status: props.filters?.status || undefined })
+const filters = ref({ 
+  search: props.filters?.search || '', 
+  status: props.filters?.status || undefined,
+  tab: props.filters?.tab || 'approvals' 
+})
 
 const columns = [
   { title: 'Tài sản', key: 'name', width: 260 },
@@ -280,8 +295,12 @@ const stepperCurrent = (item) => {
 
 let searchTimeout = null
 const debounceSearch = () => { clearTimeout(searchTimeout); searchTimeout = setTimeout(() => applyFilters(), 400) }
-const applyFilters = () => { loading.value = true; router.get('/equipment', { search: filters.value.search || undefined, status: filters.value.status || undefined }, { preserveState: true, replace: true, onFinish: () => loading.value = false }) }
+const applyFilters = () => { loading.value = true; router.get('/equipment', { search: filters.value.search || undefined, status: filters.value.status || undefined, tab: filters.value.tab }, { preserveState: true, replace: true, onFinish: () => loading.value = false }) }
 const handleTableChange = (p) => { loading.value = true; router.get('/equipment', { page: p.current, ...filters.value }, { preserveState: true, replace: true, onFinish: () => loading.value = false }) }
+const handleTabChange = () => {
+  filters.value.status = undefined; // Reset status filter when switching tabs
+  applyFilters();
+}
 
 // Form
 const form = useForm({ name: '', code: '', category: '', brand: '', model: '', quantity: 1, purchase_price: null, notes: '' })

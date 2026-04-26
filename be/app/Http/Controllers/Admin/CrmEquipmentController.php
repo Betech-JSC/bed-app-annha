@@ -36,6 +36,13 @@ class CrmEquipmentController extends Controller
             $query->where('status', $status);
         }
 
+        $tab = $request->query('tab', 'approvals');
+        if ($tab === 'approvals') {
+            $query->whereIn('status', ['draft', 'pending_management', 'pending_accountant', 'rejected']);
+        } elseif ($tab === 'assets') {
+            $query->whereIn('status', ['available', 'in_use', 'maintenance', 'retired']);
+        }
+
         $equipment = $query->orderByDesc('created_at')->paginate(20)->withQueryString();
 
         $stats = [
@@ -50,7 +57,7 @@ class CrmEquipmentController extends Controller
         return Inertia::render('Crm/Equipment/Index', [
             'equipment' => $equipment,
             'stats'     => $stats,
-            'filters'   => $request->only(['search', 'status']),
+            'filters'   => $request->only(['search', 'status', 'tab']),
         ]);
     }
 
