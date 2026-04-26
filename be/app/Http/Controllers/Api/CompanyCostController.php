@@ -312,6 +312,13 @@ class CompanyCostController extends Controller
             ], 403);
         }
 
+        if ($cost->attachments()->count() === 0) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bắt buộc phải có ít nhất một chứng từ trước khi Kế toán duyệt.',
+            ], 422);
+        }
+
         if (!$cost->approveByAccountant($user)) {
             return response()->json([
                 'success' => false,

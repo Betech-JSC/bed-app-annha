@@ -241,7 +241,7 @@ class CrmEquipmentController extends Controller
             $user = auth('admin')->user();
         }
 
-        if (!$user || !$user->hasPermission(Permissions::EQUIPMENT_APPROVE)) {
+        if (!$user || !$user->hasPermission(Permissions::COST_APPROVE_ACCOUNTANT)) {
             $msg = 'Bạn không có quyền xác nhận.';
             return request()->wantsJson() 
                 ? response()->json(['success' => false, 'message' => $msg], 403)

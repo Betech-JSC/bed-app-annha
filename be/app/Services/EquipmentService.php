@@ -211,6 +211,10 @@ class EquipmentService
 
     public function confirmRentalByAccountant(EquipmentRental $rental, User $user): bool
     {
+        if ($rental->attachments()->count() === 0) {
+            throw new \Exception('Bắt buộc phải có ít nhất một chứng từ trước khi Kế toán duyệt.');
+        }
+
         return $rental->confirmByAccountant($user);
     }
 
@@ -297,6 +301,10 @@ class EquipmentService
     public function confirmPurchaseByAccountant(EquipmentPurchase $purchase, User $user): bool
     {
         if ($purchase->status !== 'pending_accountant') return false;
+
+        if ($purchase->attachments()->count() === 0) {
+            throw new \Exception('Bắt buộc phải có ít nhất một chứng từ trước khi Kế toán duyệt.');
+        }
 
         return DB::transaction(function () use ($purchase, $user) {
             $purchase->update([

@@ -131,6 +131,10 @@ class FinancialService
             throw new \Exception('Chi phí không ở trạng thái chờ Kế toán xác nhận.');
         }
 
+        if ($cost->attachments()->count() === 0) {
+            throw new \Exception('Bắt buộc phải có ít nhất một chứng từ trước khi Kế toán duyệt.');
+        }
+
         return DB::transaction(function () use ($cost, $data, $user) {
             // Optional: attach more files during confirmation
             if (!empty($data['attachment_ids'])) {
@@ -316,6 +320,10 @@ class FinancialService
     {
         if ($payment->status !== 'pending_accountant_confirmation') {
             throw new \Exception('Phiếu thanh toán chưa được duyệt bởi Ban điều hành.');
+        }
+
+        if ($payment->attachments()->count() === 0) {
+            throw new \Exception('Bắt buộc phải có ít nhất một chứng từ trước khi Kế toán duyệt.');
         }
 
         return DB::transaction(function () use ($payment, $data, $user) {

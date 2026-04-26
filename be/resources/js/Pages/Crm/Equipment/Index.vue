@@ -217,7 +217,7 @@
           <a-button v-if="selectedItem.status === 'draft'" @click="openEditModal(selectedItem)"><EditOutlined /> Sửa</a-button>
           <a-button v-if="selectedItem.status === 'draft'" type="primary" @click="submitItem(selectedItem)"><SendOutlined /> Gửi duyệt</a-button>
           <a-button v-if="selectedItem.status === 'pending_management' && can('equipment.approve')" type="primary" class="!bg-green-500 !border-green-500 hover:!bg-green-600" @click="approveItem(selectedItem)"><CheckCircleOutlined /> BĐH Duyệt</a-button>
-          <a-button v-if="selectedItem.status === 'pending_accountant' && can('equipment.approve')" type="primary" @click="confirmItem(selectedItem)"><CheckSquareOutlined /> KT Xác nhận & Nhập kho</a-button>
+          <a-button v-if="selectedItem.status === 'pending_accountant' && can('cost.approve.accountant')" type="primary" @click="confirmItem(selectedItem)"><CheckSquareOutlined /> KT Xác nhận & Nhập kho</a-button>
           <a-popconfirm v-if="['pending_management','pending_accountant'].includes(selectedItem.status)" title="Từ chối tài sản này?" @confirm="rejectItem(selectedItem)">
             <template #description>
               <a-input v-model:value="rejectReason" placeholder="Nhập lý do từ chối..." class="mt-2" />

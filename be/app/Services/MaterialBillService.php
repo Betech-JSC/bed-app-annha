@@ -126,11 +126,15 @@ class MaterialBillService
             $bill->approveByManagement($user);
             $bill->notifyEvent('approved_management', $user);
         } elseif ($bill->status === 'pending_accountant') {
+            if ($bill->attachments()->count() === 0) {
+                throw new \Exception('Bắt buộc phải có ít nhất một chứng từ trước khi Kế toán duyệt.');
+            }
+
             // accountant approval might require budget_item_id
             if (isset($extraData['budget_item_id'])) {
                 $bill->update(['budget_item_id' => $extraData['budget_item_id']]);
             }
-            
+
             $bill->approveByAccountant($user);
             $bill->triggerApprovalSideEffects();
             $bill->notifyEvent('approved_accountant', $user);
