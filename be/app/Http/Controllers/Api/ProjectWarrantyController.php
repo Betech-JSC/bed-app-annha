@@ -19,7 +19,7 @@ class ProjectWarrantyController extends Controller
     protected $attachmentService;
 
     public function __construct(
-        AuthorizationService $authService,
+        \App\Services\AuthorizationService $authService,
         \App\Services\ProjectWarrantyService $warrantyService,
         \App\Services\AttachmentService $attachmentService
     ) {

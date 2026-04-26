@@ -4,7 +4,7 @@ namespace App\Services;
 
 use App\Models\ProjectTask;
 use App\Models\ConstructionLog;
-use App\Models\AcceptanceStage;
+use App\Models\Acceptance;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -73,35 +73,33 @@ class TaskProgressService
                 return 'in_progress'; // Children not all at 100% yet
             }
 
-            // ROOT TASK (Category A): check linked AcceptanceStage
+            // ROOT TASK (Category A): all children must be customer_approved
             if (!$task->parent_id) {
-                $stage = AcceptanceStage::where('task_id', $task->id)
-                    ->where('project_id', $task->project_id)
-                    ->orderByDesc('id')
-                    ->first();
-                
-                if ($stage) {
-                    // AcceptanceStage exists — check if fully approved
-                    // We check for customer_approved and any subsequent statuses
-                    if (in_array($stage->status, ['customer_approved', 'owner_approved', 'design_approved'])) {
-                        return 'completed'; // Fully accepted → done
+                $childIds = ProjectTask::where('parent_id', $task->id)
+                    ->whereNull('deleted_at')
+                    ->pluck('id');
+
+                if ($childIds->isNotEmpty()) {
+                    $approvedCount = Acceptance::whereIn('task_id', $childIds)
+                        ->where('workflow_status', 'customer_approved')
+                        ->count();
+                    if ($approvedCount < $childIds->count()) {
+                        return 'pending_acceptance'; // Some children still in acceptance
                     }
-                    return 'pending_acceptance'; // Still in acceptance workflow
                 }
-                // No AcceptanceStage yet → completed (will trigger auto-creation)
                 return 'completed';
             }
 
-            // CHILD TASK (Category B): check linked AcceptanceItem
-            $acceptanceItem = \App\Models\AcceptanceItem::where('task_id', $task->id)->first();
-            if ($acceptanceItem) {
-                if (in_array($acceptanceItem->workflow_status, ['customer_approved', 'owner_approved', 'design_approved'])) {
-                    return 'completed'; // Fully accepted
+            // CHILD TASK (Category B): check its own Acceptance record
+            $acceptance = Acceptance::where('task_id', $task->id)->first();
+            if ($acceptance) {
+                if ($acceptance->workflow_status === 'customer_approved') {
+                    return 'completed';
                 }
-                return 'pending_acceptance'; // Still in acceptance workflow
+                return 'pending_acceptance';
             }
 
-            // No AcceptanceItem yet — task is completed (waiting for stage creation)
+            // No Acceptance record yet — will be created by pushFromTask()
             return 'completed';
         }
 
@@ -234,27 +232,25 @@ class TaskProgressService
      */
     public function isTaskAccepted(ProjectTask $task): bool
     {
-        // A. Root Task (Category A) check
+        // Root task (Category A): all children must be customer_approved
         if (!$task->parent_id) {
-            $stage = \App\Models\AcceptanceStage::where('task_id', $task->id)->orderByDesc('id')->first();
-            if ($stage) {
-                return in_array($stage->status, ['customer_approved', 'owner_approved', 'design_approved']);
+            $childIds = ProjectTask::where('parent_id', $task->id)->whereNull('deleted_at')->pluck('id');
+            if ($childIds->isEmpty()) {
+                return true;
             }
-            // MATCH FRONTEND: Default to true if no stages defined for root task
-            // This allows the task to become 'completed' so an AcceptanceStage can be auto-created.
-            return true;
+            $approvedCount = Acceptance::whereIn('task_id', $childIds)
+                ->where('workflow_status', 'customer_approved')
+                ->count();
+            return $approvedCount >= $childIds->count();
         }
 
-        // B. Sub-task (Category B) check
-        // Check if there's an AcceptanceItem linked to this task (Get latest)
-        $item = \App\Models\AcceptanceItem::where('task_id', $task->id)->orderByDesc('id')->first();
-        if ($item) {
-            return in_array($item->workflow_status, ['customer_approved', 'owner_approved', 'design_approved']);
+        // Child task (Category B): check its own Acceptance record
+        $acceptance = Acceptance::where('task_id', $task->id)->first();
+        if ($acceptance) {
+            return $acceptance->workflow_status === 'customer_approved';
         }
 
-        // If no direct link found, it's considered "accepted" by default 
-        // IF it has no acceptance requirements defined for it.
-        return true; 
+        return true;
     }
 
     /**
@@ -289,19 +285,11 @@ class TaskProgressService
                 $progress = max($logProgress, $storedProgress);
             }
 
-            // STEP 1: Auto-create acceptance stage BEFORE status calculation
-            // This ensures calculateStatus() can see the newly created stage
-            // and return 'pending_acceptance' instead of 'completed'
-            //
-            // BUSINESS RULE: Push individual child to acceptance the moment it hits 100%.
-            // Stage is created on the parent (resolves recursively if child has parent),
-            // and the corresponding item flips draft → submitted ("Đang nghiệm thu").
-            if ($progress >= 99.9) {
-                if (!$task->parent_id) {
-                    $this->autoCreateAcceptanceStage($task);
-                } else {
-                    $this->pushChildToAcceptance($task);
-                }
+            // STEP 1: Push child task into acceptance when it hits 100%.
+            // Root tasks have no direct acceptance record — their status is derived
+            // from all children's acceptance records in calculateStatus().
+            if ($progress >= 99.9 && $task->parent_id !== null) {
+                app(AcceptanceService::class)->pushFromTask($task);
             }
 
             // STEP 2: Calculate status (now aware of acceptance state)
@@ -398,191 +386,5 @@ class TaskProgressService
         }
     }
 
-    /**
-     * Auto-create acceptance stage on the parent (root) task.
-     *
-     * BUSINESS RULE:
-     * - Stage always lives on a root task (parent_id = null).
-     * - If a child is passed in, walk up to the root and create stage there.
-     * - Items are created (draft) for all immediate children of the root.
-     * - Idempotent: skips if stage already exists.
-     *
-     * @param ProjectTask $task
-     * @return AcceptanceStage|null
-     */
-    protected function autoCreateAcceptanceStage(ProjectTask $task): ?AcceptanceStage
-    {
-        try {
-            // Resolve up to root if a child was passed in
-            while ($task->parent_id !== null) {
-                $parent = ProjectTask::find($task->parent_id);
-                if (!$parent) {
-                    return null;
-                }
-                $task = $parent;
-            }
-
-            // Check if acceptance stage already exists for this task
-            $existingStage = AcceptanceStage::where('task_id', $task->id)
-                ->where('project_id', $task->project_id)
-                ->first();
-
-            if ($existingStage) {
-                // Already exists, don't create duplicate
-                return null;
-            }
-
-            // Auto-calculate order (max order + 1)
-            $maxOrder = AcceptanceStage::where('project_id', $task->project_id)
-                ->max('order') ?? 0;
-
-            // Create acceptance stage
-            $stage = AcceptanceStage::create([
-                'project_id' => $task->project_id,
-                'task_id' => $task->id, // BUSINESS RULE: Link to parent task (A)
-                'name' => $task->name . ' - Nghiệm thu', // Auto-generated name
-                'description' => $task->description 
-                    ? $task->description . "\n\n[Giai đoạn nghiệm thu được tự động tạo khi công việc đạt 100%]"
-                    : '[Giai đoạn nghiệm thu được tự động tạo khi công việc đạt 100%]',
-                'order' => $maxOrder + 1,
-                'is_custom' => false, // Auto-generated, not custom
-                'status' => 'pending', // Start with pending status
-            ]);
-
-            // AUTO-CREATE acceptance items for each child task (Category B)
-            $children = ProjectTask::where('parent_id', $task->id)
-                ->whereNull('deleted_at')
-                ->orderBy('order')
-                ->get();
-
-            $itemOrder = 0;
-            foreach ($children as $child) {
-                $itemOrder++;
-                \App\Models\AcceptanceItem::create([
-                    'acceptance_stage_id' => $stage->id,
-                    'task_id' => $child->id,
-                    'name' => $child->name,
-                    'description' => $child->description,
-                    'order' => $itemOrder,
-                    'workflow_status' => 'draft',
-                    'acceptance_status' => 'not_started',
-                    'start_date' => $child->start_date ?? $task->start_date ?? now(),
-                    'end_date' => $child->end_date ?? $task->end_date ?? now(),
-                    'created_by' => $child->created_by,
-                ]);
-            }
-
-            Log::info('Auto-created acceptance stage for completed task', [
-                'task_id' => $task->id,
-                'task_name' => $task->name,
-                'stage_id' => $stage->id,
-                'project_id' => $task->project_id,
-                'items_created' => $itemOrder,
-            ]);
-
-            return $stage;
-        } catch (\Exception $e) {
-            Log::error('Error auto-creating acceptance stage', [
-                'task_id' => $task->id,
-                'error' => $e->getMessage()
-            ]);
-            // Don't throw - acceptance stage creation is not critical for task progress
-            return null;
-        }
-    }
-
-    /**
-     * Public wrapper for autoCreateAcceptanceStage
-     * Used by ProjectTaskService for manual override path
-     */
-    public function autoCreateAcceptanceStagePublic(ProjectTask $task): ?AcceptanceStage
-    {
-        return $this->autoCreateAcceptanceStage($task);
-    }
-
-    /**
-     * Push a single child task into the acceptance flow when it hits 100%.
-     *
-     * BUSINESS RULE:
-     * - Walk up to the root parent and ensure a stage exists.
-     * - Find the AcceptanceItem linked to this child; if missing, create it
-     *   (covers cases where the child was added after the stage was created).
-     * - If item is in 'draft', flip to 'submitted' ("Đang nghiệm thu").
-     * - Re-sync stage status via checkCompletion().
-     */
-    protected function pushChildToAcceptance(ProjectTask $child): void
-    {
-        try {
-            if ($child->parent_id === null) {
-                return;
-            }
-
-            // Resolve root parent
-            $root = $child;
-            while ($root->parent_id !== null) {
-                $parent = ProjectTask::find($root->parent_id);
-                if (!$parent) {
-                    return;
-                }
-                $root = $parent;
-            }
-
-            // Ensure stage exists on root
-            $stage = AcceptanceStage::where('task_id', $root->id)
-                ->where('project_id', $root->project_id)
-                ->first();
-            if (!$stage) {
-                $stage = $this->autoCreateAcceptanceStage($root);
-                if (!$stage) {
-                    return;
-                }
-            }
-
-            // Find item for this child
-            $item = \App\Models\AcceptanceItem::where('acceptance_stage_id', $stage->id)
-                ->where('task_id', $child->id)
-                ->first();
-
-            // If item doesn't exist (child added after stage creation), create it
-            if (!$item) {
-                $maxOrder = (int) (\App\Models\AcceptanceItem::where('acceptance_stage_id', $stage->id)->max('order') ?? 0);
-                $item = \App\Models\AcceptanceItem::create([
-                    'acceptance_stage_id' => $stage->id,
-                    'task_id' => $child->id,
-                    'name' => $child->name,
-                    'description' => $child->description,
-                    'order' => $maxOrder + 1,
-                    'workflow_status' => 'draft',
-                    'acceptance_status' => 'not_started',
-                    'start_date' => $child->start_date ?? $root->start_date ?? now(),
-                    'end_date' => $child->end_date ?? $root->end_date ?? now(),
-                    'created_by' => $child->created_by,
-                ]);
-            }
-
-            // Flip draft → submitted ("Đang nghiệm thu")
-            if ($item->workflow_status === 'draft') {
-                $item->workflow_status = 'submitted';
-                $item->submitted_at = now();
-                $item->submitted_by = auth()->id() ?? $child->updated_by ?? $child->created_by;
-                $item->save();
-
-                $stage->checkCompletion();
-
-                Log::info('Child task auto-pushed to acceptance (submitted)', [
-                    'child_task_id' => $child->id,
-                    'root_task_id' => $root->id,
-                    'stage_id' => $stage->id,
-                    'item_id' => $item->id,
-                ]);
-            }
-        } catch (\Exception $e) {
-            Log::error('Error pushing child to acceptance', [
-                'child_task_id' => $child->id,
-                'error' => $e->getMessage(),
-            ]);
-            // Don't throw — push to acceptance must not break progress recalculation
-        }
-    }
 }
 

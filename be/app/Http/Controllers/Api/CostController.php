@@ -17,7 +17,7 @@ class CostController extends Controller
     protected $authService;
     protected $financialService;
 
-    public function __construct(AuthorizationService $authService, \App\Services\FinancialService $financialService)
+    public function __construct(\App\Services\AuthorizationService $authService, \App\Services\FinancialService $financialService)
     {
         $this->authService = $authService;
         $this->financialService = $financialService;

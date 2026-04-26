@@ -16,7 +16,7 @@ class ProjectPersonnelController extends Controller
     protected $personnelService;
 
     public function __construct(
-        AuthorizationService $authService,
+        \App\Services\AuthorizationService $authService,
         \App\Services\ProjectPersonnelService $personnelService
     ) {
         $this->authService = $authService;

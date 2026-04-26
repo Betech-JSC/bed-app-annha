@@ -16,7 +16,13 @@ import {
 import { useSelector } from "react-redux";
 import type { RootState } from "@/reducers/index";
 import { Ionicons } from "@expo/vector-icons";
-import { AcceptanceItem, AcceptanceStage, acceptanceApi } from "@/api/acceptanceApi";
+import { Acceptance, acceptanceApi } from "@/api/acceptanceApi";
+
+// DEPRECATED: This component is legacy dead code. 
+// Use AcceptanceChecklist.tsx instead (uses new flat Acceptance model).
+// These type aliases exist only to prevent TS build errors:
+type AcceptanceItem = Acceptance & { acceptance_status?: string; can_accept?: boolean; start_date?: string; end_date?: string; template?: any; acceptance_template_id?: number; };
+type AcceptanceStage = { id: number; completion_percentage?: number; [key: string]: any };
 import AcceptanceItemForm from "./AcceptanceItemForm";
 import { PermissionGuard } from "./PermissionGuard";
 import { Permissions } from "@/constants/Permissions";

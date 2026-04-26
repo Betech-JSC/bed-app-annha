@@ -19,7 +19,7 @@ class ProjectTaskController extends Controller
     protected $taskService;
 
     public function __construct(
-        AuthorizationService $authService,
+        \App\Services\AuthorizationService $authService,
         \App\Services\ProjectTaskService $taskService
     ) {
         $this->authService = $authService;

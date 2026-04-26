@@ -23,7 +23,7 @@ class ConstructionLogController extends Controller
     protected $authService;
     protected $logService;
 
-    public function __construct(AuthorizationService $authService, \App\Services\ConstructionLogService $logService)
+    public function __construct(\App\Services\AuthorizationService $authService, \App\Services\ConstructionLogService $logService)
     {
         $this->authService = $authService;
         $this->logService = $logService;

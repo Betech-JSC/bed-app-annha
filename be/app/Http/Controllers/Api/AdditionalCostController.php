@@ -20,7 +20,7 @@ class AdditionalCostController extends Controller
 
     public function __construct(
         NotificationService $notificationService, 
-        AuthorizationService $authService,
+        \App\Services\AuthorizationService $authService,
         \App\Services\ProjectAnalysisService $analysisService
     ) {
         $this->notificationService = $notificationService;

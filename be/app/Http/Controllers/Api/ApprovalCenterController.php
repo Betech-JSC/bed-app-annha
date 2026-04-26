@@ -3,9 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Acceptance;
 use App\Models\Cost;
-use App\Models\AcceptanceStage;
-use App\Models\AcceptanceItem;
 use App\Models\ConstructionLog;
 use App\Models\ScheduleAdjustment;
 use App\Models\ChangeRequest;
@@ -36,7 +35,7 @@ class ApprovalCenterController extends Controller
     public function __construct(
         ApprovalQueryService $approvalQueryService,
         ApprovalActionService $approvalActionService,
-        AuthorizationService $authService
+        \App\Services\AuthorizationService $authService
     ) {
         $this->approvalQueryService = $approvalQueryService;
         $this->approvalActionService = $approvalActionService;
@@ -159,15 +158,14 @@ class ApprovalCenterController extends Controller
             return ($cost->status === 'pending_accountant_approval') ? 'accountant' : 'management';
         }
 
-        // ACCEPTANCE: Route to the correct approval level based on current stage status
+        // ACCEPTANCE: Route to the correct approval level based on workflow_status
         if ($type === 'acceptance') {
-            if ($isReject) return 'acceptance'; // reject handler uses model detection
-            $stage = AcceptanceStage::findOrFail($id);
-            // 2-cấp flow: pending/rejected → GS xác nhận; supervisor_approved → KH duyệt.
-            return match ($stage->status) {
-                'pending', 'rejected' => 'acceptance_supervisor',
+            if ($isReject) return 'acceptance';
+            $acceptance = Acceptance::findOrFail($id);
+            return match ($acceptance->workflow_status) {
+                'submitted'           => 'acceptance_supervisor',
                 'supervisor_approved' => 'acceptance_customer',
-                default => 'acceptance',
+                default               => 'acceptance_supervisor',
             };
         }
         
@@ -247,7 +245,7 @@ class ApprovalCenterController extends Controller
         $modelMap = [
             'project_cost' => Cost::class,
             'material_bill' => 'App\\Models\\MaterialBill',
-            'acceptance' => AcceptanceStage::class,
+            'acceptance' => Acceptance::class,
             'change_request' => ChangeRequest::class,
             'additional_cost' => AdditionalCost::class,
             'sub_payment' => SubcontractorPayment::class,
@@ -314,18 +312,14 @@ class ApprovalCenterController extends Controller
             : Permissions::COST_APPROVE_MANAGEMENT;
     }
 
-    /**
-     * Determine acceptance permission based on current stage status.
-     */
     private function getAcceptancePermission(int $id): ?string
     {
-        $stage = AcceptanceStage::find($id);
-        if (!$stage) return null;
-        // 2-cấp flow: pending/rejected → GS (level 1); supervisor_approved → KH (level 3).
-        return match ($stage->status) {
-            'pending', 'rejected' => Permissions::ACCEPTANCE_APPROVE_LEVEL_1,
+        $acceptance = Acceptance::find($id);
+        if (!$acceptance) return null;
+        return match ($acceptance->workflow_status) {
+            'submitted'           => Permissions::ACCEPTANCE_APPROVE_LEVEL_1,
             'supervisor_approved' => Permissions::ACCEPTANCE_APPROVE_LEVEL_3,
-            default => Permissions::ACCEPTANCE_APPROVE_LEVEL_3,
+            default               => Permissions::ACCEPTANCE_APPROVE_LEVEL_3,
         };
     }
 }

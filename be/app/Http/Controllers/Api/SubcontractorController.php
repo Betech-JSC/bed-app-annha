@@ -17,7 +17,7 @@ class SubcontractorController extends Controller
     protected $authService;
     protected $subcontractorService;
 
-    public function __construct(AuthorizationService $authService, \App\Services\SubcontractorService $subcontractorService)
+    public function __construct(\App\Services\AuthorizationService $authService, \App\Services\SubcontractorService $subcontractorService)
     {
         $this->authService = $authService;
         $this->subcontractorService = $subcontractorService;

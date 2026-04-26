@@ -103,13 +103,7 @@ class ProjectTaskService
                     }
                 }
 
-                // BUSINESS RULE: Auto-create Acceptance Stage when ROOT task reaches 100%
-                // Triggered by PROGRESS only (not status), so the stage is created
-                // before calculateStatus evaluates acceptance state
                 $finalProgress = (float) ($updateFields['progress_percentage'] ?? $task->progress_percentage ?? 0);
-                if ($finalProgress >= 99.9 && !$task->parent_id) {
-                    $this->progressService->autoCreateAcceptanceStagePublic($task);
-                }
 
                 // After creating acceptance stage, recalculate status to reflect acceptance state
                 // This ensures status shows 'pending_acceptance' instead of 'completed'

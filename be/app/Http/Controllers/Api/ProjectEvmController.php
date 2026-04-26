@@ -8,6 +8,7 @@ use App\Services\EvmCalculationService;
 use App\Constants\Permissions;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
+use App\Services\AuthorizationService;
 
 class ProjectEvmController extends Controller
 {

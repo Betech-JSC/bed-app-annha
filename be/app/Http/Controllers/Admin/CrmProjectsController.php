@@ -201,7 +201,7 @@ class CrmProjectsController extends Controller
             'personnel' => \App\Models\ProjectPersonnel::where('project_id', $id)->count(),
             'subcontractors' => \App\Models\Subcontractor::where('project_id', $id)->count(),
             'construction_logs' => \App\Models\ConstructionLog::where('project_id', $id)->count(),
-            'acceptance_stages' => \App\Models\AcceptanceStage::where('project_id', $id)->count(),
+            'acceptance_stages' => \App\Models\Acceptance::where('project_id', $id)->count(),
             'defects' => \App\Models\Defect::where('project_id', $id)->count(),
             'change_requests' => \App\Models\ChangeRequest::where('project_id', $id)->count(),
             'additional_costs' => \App\Models\AdditionalCost::where('project_id', $id)->count(),
@@ -266,18 +266,16 @@ class CrmProjectsController extends Controller
                 'allTasks' => \App\Models\ProjectTask::where('project_id', $id)->whereNull('deleted_at')->orderBy('order')
                     ->with([
                         'assignedUser:id,name',
-                        'acceptanceStages:id,task_id,status',
-                        'acceptanceItem:id,task_id,workflow_status',
+                        'acceptance:id,task_id,workflow_status',
                         'children.assignedUser:id,name',
-                        'children.acceptanceStages:id,task_id,status',
-                        'children.acceptanceItem:id,task_id,workflow_status'
+                        'children.acceptance:id,task_id,workflow_status'
                     ])->get(),
                 'materialBills' => \App\Models\MaterialBill::where('project_id', $id)->with(['items.material.costGroup', 'supplier', 'creator', 'attachments', 'costGroup'])->get(),
             ],
 
             'monitorData' => [
                 'logs' => $project->constructionLogs()->with(['creator', 'task', 'attachments'])->orderByDesc('log_date')->get(),
-                'acceptanceStages' => $project->acceptanceStages()->with(['items.task', 'items.attachments', 'task', 'acceptanceTemplate.documents', 'acceptanceTemplate.images', 'acceptanceTemplate.criteria', 'defects.attachments', 'attachments', 'costs', 'invoices'])->get(),
+                'acceptances' => $project->acceptances()->with(['task.parent', 'supervisorApprover', 'customerApprover', 'rejector', 'submitter', 'defects.attachments', 'attachments'])->get(),
                 'defects' => $project->defects()->with('attachments')->get(),
                 'additional_costs' => $project->additionalCosts()->with(['proposer', 'attachments'])->latest()->get(),
                 'change_requests' => $project->changeRequests()->with(['requester', 'attachments'])->latest()->get(),
@@ -1080,18 +1078,18 @@ class CrmProjectsController extends Controller
     /**
      * CRM: Đính kèm file vào Nghiệm thu (matching APP)
      */
-    public function attachFilesToAcceptance(Request $request, string $projectId, string $stageId)
+    public function attachFilesToAcceptance(Request $request, string $projectId, string $id)
     {
         $project = Project::findOrFail($projectId);
         $user = auth('admin')->user();
 
-        $stage = AcceptanceStage::where('project_id', $project->id)->findOrFail($stageId);
+        $acceptance = \App\Models\Acceptance::where('project_id', $project->id)->findOrFail($id);
 
-        if (in_array($stage->status, ['customer_approved', 'owner_approved'])) {
+        if (in_array($acceptance->workflow_status, ['customer_approved'])) {
             return back()->with('error', 'Không thể đính kèm file — Nghiệm thu đã hoàn tất.');
         }
 
-        $count = $this->attachFilesToEntity($request, $stage, "acceptance/{$project->id}/{$stageId}");
+        $count = $this->attachFilesToEntity($request, $acceptance, "acceptances/{$project->id}/{$id}");
         return back()->with('success', "Đã đính kèm {$count} file vào nghiệm thu.");
     }
 
@@ -2686,105 +2684,121 @@ class CrmProjectsController extends Controller
         $this->crmRequire($user, Permissions::ACCEPTANCE_CREATE, $project);
 
         $validated = $request->validate([
-            'name' => 'required|string|max:255',
-            'description' => 'nullable|string',
-            'task_id' => 'nullable|exists:project_tasks,id',
+            'task_id' => 'required|exists:project_tasks,id',
             'acceptance_template_id' => 'nullable|exists:acceptance_templates,id',
-            'order' => 'nullable|integer|min:0',
-            'is_custom' => 'nullable|boolean',
+            'name' => 'nullable|string|max:255',
+            'description' => 'nullable|string',
         ]);
+
+        $task = \App\Models\ProjectTask::where('project_id', $project->id)->findOrFail($validated['task_id']);
+
+        if (\App\Models\Acceptance::where('task_id', $task->id)->exists()) {
+            return back()->with('error', 'Hạng mục này đã có phiếu nghiệm thu.');
+        }
+
+        if (empty($validated['name'])) {
+            $validated['name'] = $task->name;
+        }
 
         DB::beginTransaction();
         try {
-            // Auto order logic handled in service or manually
-            if (!isset($validated['order'])) {
-                $maxOrder = $project->acceptanceStages()->max('order') ?? 0;
-                $validated['order'] = $maxOrder + 1;
-            }
-
-            $stage = $this->acceptanceService->upsertStage(array_merge($validated, [
+            $acceptance = \App\Models\Acceptance::create([
+                'uuid' => \Illuminate\Support\Str::uuid()->toString(),
                 'project_id' => $project->id,
-            ]), null, $user);
+                'task_id' => $task->id,
+                'acceptance_template_id' => $validated['acceptance_template_id'] ?? null,
+                'name' => $validated['name'],
+                'description' => $validated['description'] ?? null,
+                'order' => $project->acceptances()->max('order') + 1,
+            ]);
 
-            // Handle file uploads
-            $this->attachFilesToEntity($request, $stage, "acceptance/{$project->id}/{$stage->id}", false);
+            $this->attachFilesToEntity($request, $acceptance, "acceptances/{$project->id}/{$acceptance->id}", false);
 
             DB::commit();
-            return back()->with('success', 'Đã tạo giai đoạn nghiệm thu.');
+            return back()->with('success', 'Đã tạo phiếu nghiệm thu.');
         } catch (\Exception $e) {
             DB::rollBack();
-            return back()->with('error', 'Lỗi khi tạo giai đoạn nghiệm thu: ' . $e->getMessage());
+            return back()->with('error', 'Lỗi khi tạo phiếu nghiệm thu: ' . $e->getMessage());
         }
     }
 
-
-    public function updateAcceptance(Request $request, string $projectId, string $stageId)
+    public function updateAcceptance(Request $request, string $projectId, string $id)
     {
         $project = Project::findOrFail($projectId);
         $user = auth('admin')->user();
         $this->crmRequire($user, Permissions::ACCEPTANCE_UPDATE, $project);
 
-        $stage = AcceptanceStage::where('project_id', $project->id)->findOrFail($stageId);
+        $acceptance = \App\Models\Acceptance::where('project_id', $project->id)->findOrFail($id);
 
         $validated = $request->validate([
             'name' => 'sometimes|string|max:255',
             'description' => 'nullable|string',
-            'task_id' => 'nullable|exists:project_tasks,id',
+            'notes' => 'nullable|string',
             'acceptance_template_id' => 'nullable|exists:acceptance_templates,id',
-            'order' => 'nullable|integer|min:0',
-            'status' => 'nullable|in:pending,internal_approved,customer_approved,design_approved,owner_approved,rejected',
-            'is_custom' => 'nullable|boolean',
+            'task_id' => 'nullable|exists:project_tasks,id',
         ]);
 
         DB::beginTransaction();
         try {
-            $this->acceptanceService->upsertStage($validated, $stage, $user);
-
-            $this->attachmentService->handleDeletedRequest($request, $stage);
-
-            // Handle categorized file uploads during update
-            // 1. General files (no specific type)
-            $this->attachFilesToEntity($request, $stage, "acceptance/{$project->id}/{$stage->id}", false);
+            $acceptance->update($validated);
             
-            // 2. Before photos
-            if ($request->hasFile('files_before')) {
-                $request->merge(['type' => 'before']);
-                $this->attachmentService->handleCrmUpload($request, $stage, "acceptance/{$project->id}/{$stage->id}", false, 'files_before');
-            }
-
-            // 3. After photos
-            if ($request->hasFile('files_after')) {
-                $request->merge(['type' => 'after']);
-                $this->attachmentService->handleCrmUpload($request, $stage, "acceptance/{$project->id}/{$stage->id}", false, 'files_after');
-            }
+            $this->attachmentService->handleDeletedRequest($request, $acceptance);
+            $this->attachFilesToEntity($request, $acceptance, "acceptances/{$project->id}/{$acceptance->id}", false);
 
             DB::commit();
-            return back()->with('success', 'Đã cập nhật giai đoạn nghiệm thu.');
+            return back()->with('success', 'Đã cập nhật phiếu nghiệm thu.');
         } catch (\Exception $e) {
             DB::rollBack();
-            return back()->with('error', 'Lỗi khi cập nhật giai đoạn nghiệm thu: ' . $e->getMessage());
+            return back()->with('error', 'Lỗi khi cập nhật phiếu nghiệm thu: ' . $e->getMessage());
         }
     }
 
-    public function approveAcceptance(Request $request, string $projectId, string $id)
+    public function approveAcceptanceSupervisor(Request $request, string $projectId, string $id)
     {
         $project = Project::findOrFail($projectId);
         $admin = auth('admin')->user();
+        $this->crmRequire($admin, Permissions::ACCEPTANCE_APPROVE_LEVEL_1, $project);
 
-        $validated = $request->validate([
-            'level' => 'required|in:1,3',
-        ]);
-
-        $stage = AcceptanceStage::where('project_id', $project->id)->findOrFail($id);
+        $acceptance = \App\Models\Acceptance::where('project_id', $project->id)->findOrFail($id);
 
         try {
-            // Permission check handled within approveStage using this->hasPermission
-            // but we can also crmRequire here for explicit Web-side security
-            $permConstant = "ACCEPTANCE_APPROVE_LEVEL_" . $validated['level'];
-            $this->crmRequire($admin, constant(Permissions::class . "::" . $permConstant), $project);
+            $this->acceptanceService->approve($acceptance, $admin, 1);
+            return back()->with('success', 'Giám sát đã xác nhận nghiệm thu.');
+        } catch (\Exception $e) {
+            return back()->with('error', $e->getMessage());
+        }
+    }
 
-            $this->acceptanceService->approveStage($stage, $admin, (int) $validated['level']);
-            return back()->with('success', 'Đã duyệt nghiệm thu cấp ' . $validated['level'] . '.');
+    public function approveAcceptanceCustomer(Request $request, string $projectId, string $id)
+    {
+        $project = Project::findOrFail($projectId);
+        $admin = auth('admin')->user();
+        $this->crmRequire($admin, Permissions::ACCEPTANCE_APPROVE_LEVEL_3, $project);
+
+        $acceptance = \App\Models\Acceptance::where('project_id', $project->id)->findOrFail($id);
+
+        try {
+            $this->acceptanceService->approve($acceptance, $admin, 3);
+            return back()->with('success', 'Khách hàng đã duyệt nghiệm thu.');
+        } catch (\Exception $e) {
+            return back()->with('error', $e->getMessage());
+        }
+    }
+
+    public function rejectAcceptance(Request $request, string $projectId, string $id)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+
+        $acceptance = \App\Models\Acceptance::where('project_id', $project->id)->findOrFail($id);
+
+        $validated = $request->validate([
+            'reason' => 'required|string|max:1000',
+        ]);
+
+        try {
+            $this->acceptanceService->reject($acceptance, $user, $validated['reason']);
+            return back()->with('success', 'Đã từ chối phiếu nghiệm thu. Lỗi ghi nhận đã được tự động tạo.');
         } catch (\Exception $e) {
             return back()->with('error', $e->getMessage());
         }
@@ -2796,13 +2810,15 @@ class CrmProjectsController extends Controller
         $user = auth('admin')->user();
         $this->crmRequire($user, Permissions::ACCEPTANCE_DELETE, $project);
 
-        try {
-            $stage = AcceptanceStage::where('project_id', $project->id)->findOrFail($id);
-            $this->acceptanceService->deleteStage($stage);
-            return back()->with('success', 'Đã xóa giai đoạn nghiệm thu.');
-        } catch (\Exception $e) {
-            return back()->with('error', $e->getMessage());
+        $acceptance = \App\Models\Acceptance::where('project_id', $project->id)->findOrFail($id);
+
+        if ($acceptance->workflow_status !== 'draft' && $acceptance->workflow_status !== 'rejected') {
+            return back()->with('error', 'Chỉ có thể xóa phiếu nghiệm thu ở trạng thái Nháp hoặc Từ chối.');
         }
+
+        $acceptance->delete();
+
+        return back()->with('success', 'Đã xóa phiếu nghiệm thu.');
     }
 
     // ============ DOCUMENT CRUD ============
@@ -3687,20 +3703,36 @@ class CrmProjectsController extends Controller
         return back()->with('error', 'Cấp duyệt QLDA đã bị bãi bỏ. Vui lòng dùng quy trình GS → KH.');
     }
 
-    public function revertAcceptanceItemToDraft(string $projectId, string $stageId, string $itemId)
+    public function submitAcceptance(string $projectId, string $id)
     {
         $project = Project::findOrFail($projectId);
         $user = auth('admin')->user();
         
-        $stage = AcceptanceStage::where('project_id', $project->id)->findOrFail($stageId);
-        $item = AcceptanceItem::where('acceptance_stage_id', $stage->id)->findOrFail($itemId);
+        $acceptance = \App\Models\Acceptance::where('project_id', $project->id)->findOrFail($id);
+
+        $this->crmRequire($user, Permissions::ACCEPTANCE_UPDATE, $project);
+
+        try {
+            $this->acceptanceService->submit($acceptance, $user);
+            return back()->with('success', 'Đã gửi phiếu nghiệm thu để duyệt.');
+        } catch (\Exception $e) {
+            return back()->with('error', 'Lỗi: ' . $e->getMessage());
+        }
+    }
+
+    public function revertAcceptanceToDraft(string $projectId, string $id)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        
+        $acceptance = \App\Models\Acceptance::where('project_id', $project->id)->findOrFail($id);
 
         // Permission: Dedicated revert permission
         $this->crmRequire($user, Permissions::ACCEPTANCE_REVERT, $project);
 
         try {
-            $this->acceptanceService->revertItemToDraft($item, $user);
-            return back()->with('success', 'Đã đưa hạng mục về trạng thái nháp.');
+            $this->acceptanceService->revertToDraft($acceptance, $user);
+            return back()->with('success', 'Đã đưa phiếu nghiệm thu về trạng thái nháp.');
         } catch (\Exception $e) {
             return back()->with('error', 'Lỗi: ' . $e->getMessage());
         }

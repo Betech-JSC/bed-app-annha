@@ -109,6 +109,11 @@ class Project extends Model
         return $this->hasMany(AcceptanceStage::class)->orderBy('order');
     }
 
+    public function acceptances(): HasMany
+    {
+        return $this->hasMany(Acceptance::class)->orderBy('order');
+    }
+
     public function defects(): HasMany
     {
         return $this->hasMany(Defect::class);

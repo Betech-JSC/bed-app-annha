@@ -2,208 +2,124 @@
 
 namespace App\Services;
 
-use App\Models\AcceptanceItem;
-use App\Models\AcceptanceStage;
+use App\Models\Acceptance;
 use App\Models\Defect;
+use App\Models\DefectHistory;
 use App\Models\Project;
+use App\Models\ProjectTask;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\ValidationException;
+use Illuminate\Support\Facades\Log;
 
+/**
+ * AcceptanceService
+ *
+ * Single-table acceptance workflow: one Acceptance record per child task.
+ * Parent task grouping is a UI concern — no Stage wrapper needed.
+ *
+ * Flow: draft → submitted → supervisor_approved → customer_approved
+ *                                ↑ (reject → back to rejected, revert → draft)
+ */
 class AcceptanceService
 {
     /**
-     * Create or update an acceptance stage
+     * Push a child task into the acceptance flow when it reaches 100%.
+     * Idempotent: creates if missing, flips draft → submitted if already exists.
      */
-    public function upsertStage(array $data, ?AcceptanceStage $stage = null, $user = null): AcceptanceStage
+    public function pushFromTask(ProjectTask $child): ?Acceptance
     {
-        if ($stage && $stage->status === 'customer_approved') {
-            throw new \Exception('Không thể chỉnh sửa giai đoạn đã được nghiệm thu xong.');
+        try {
+            if ($child->parent_id === null) {
+                return null;
+            }
+
+            $acceptance = Acceptance::where('task_id', $child->id)->first();
+
+            if (!$acceptance) {
+                $maxOrder = (int) Acceptance::where('project_id', $child->project_id)->max('order');
+                $acceptance = Acceptance::create([
+                    'project_id'      => $child->project_id,
+                    'task_id'         => $child->id,
+                    'name'            => $child->name,
+                    'description'     => $child->description,
+                    'order'           => $maxOrder + 1,
+                    'workflow_status' => 'submitted',
+                    'submitted_at'    => now(),
+                    'submitted_by'    => auth()->id() ?? $child->updated_by ?? $child->created_by,
+                    'created_by'      => $child->created_by,
+                ]);
+
+                Log::info('Acceptance auto-created (submitted) for child task', [
+                    'task_id'       => $child->id,
+                    'acceptance_id' => $acceptance->id,
+                ]);
+            } elseif ($acceptance->workflow_status === 'draft') {
+                $acceptance->workflow_status = 'submitted';
+                $acceptance->submitted_at    = now();
+                $acceptance->submitted_by    = auth()->id() ?? $child->updated_by ?? $child->created_by;
+                $acceptance->save();
+
+                Log::info('Acceptance flipped draft → submitted for child task', [
+                    'task_id'       => $child->id,
+                    'acceptance_id' => $acceptance->id,
+                ]);
+            }
+
+            $this->checkParentCompletion($acceptance);
+
+            return $acceptance;
+        } catch (\Exception $e) {
+            Log::error('AcceptanceService::pushFromTask failed', [
+                'task_id' => $child->id,
+                'error'   => $e->getMessage(),
+            ]);
+            // Non-critical — must not break progress recalculation
+            return null;
         }
-
-        if (!$stage) {
-            $stage = new AcceptanceStage();
-            $stage->status = 'pending';
-            $stage->is_custom = $data['is_custom'] ?? true;
-        }
-
-        $stage->fill($data);
-        $stage->save();
-
-        return $stage;
     }
 
     /**
-     * Create or update an acceptance item
+     * Approve an acceptance record.
+     * Level 1 (Supervisor): submitted → supervisor_approved
+     * Level 3 (Customer):   supervisor_approved → customer_approved
      */
-    public function upsertItem(array $data, ?AcceptanceItem $item = null, $user = null): AcceptanceItem
+    public function approve(Acceptance $acceptance, User $user, int $level): bool
     {
-        $isNew = !$item;
-        $stageId = $data['acceptance_stage_id'] ?? ($item ? $item->acceptance_stage_id : null);
-        
-        if (!$stageId) {
-            throw new \Exception('Hạng mục phải thuộc về một Giai đoạn nghiệm thu.');
-        }
-
-        $stage = AcceptanceStage::findOrFail($stageId);
-
-        // 1. Stage Status Check: Lock mutations when customer_approved
-        if ($stage->status === 'customer_approved') {
-            throw new \Exception('Không thể chỉnh sửa — Giai đoạn nghiệm thu này đã hoàn tất.');
-        }
-
-        // 2. Item Status Check (for updates)
-        if ($item && $item->workflow_status === 'customer_approved') {
-            throw new \Exception('Không thể chỉnh sửa hạng mục đã được khách hàng nghiệm thu.');
-        }
-
-        // 3. Task Hierarchy Integrity Check
-        if (isset($data['task_id'])) {
-            $task = \App\Models\ProjectTask::findOrFail($data['task_id']);
-            
-            // Task của Item phải là con của Task của Stage
-            if ($stage->task_id && $task->parent_id !== $stage->task_id) {
-                throw new \Exception('Công việc gán cho hạng mục này phải là công việc con thuộc giai đoạn: ' . $stage->name);
-            }
-
-            // Task phải thuộc cùng dự án
-            if ($task->project_id !== $stage->project_id) {
-                throw new \Exception('Công việc gán không thuộc dự án của giai đoạn nghiệm thu này.');
-            }
-        }
-        
-        if ($isNew) {
-            $item = new AcceptanceItem();
-            $item->workflow_status = 'draft';
-            $item->acceptance_status = 'not_started';
-            $item->created_by = $user->id ?? null;
-        } else {
-            $item->updated_by = $user->id ?? null;
-        }
-
-        $item->fill($data);
-
-        // 4. Auto update status based on end_date
-        if ($item->end_date && now()->toDateString() >= $item->end_date->toDateString()) {
-            if ($item->acceptance_status === 'not_started') {
-                $item->acceptance_status = 'pending';
-            }
-        }
-
-        $item->save();
-
-        return $item;
-    }
-
-    /**
-     * Submit an item for supervisor approval
-     */
-    public function submitItem(AcceptanceItem $item, $user): bool
-    {
-        if ($item->acceptanceStage && $item->acceptanceStage->status === 'customer_approved') {
-            throw new \Exception('Không thể gửi duyệt — Nghiệm thu đã hoàn tất.');
-        }
-        if (!in_array($item->workflow_status, ['draft', 'rejected'])) {
-            throw new \Exception('Chỉ có thể gửi duyệt khi ở trạng thái draft hoặc rejected.');
-        }
-
-        // Validate attachments (Photos are mandatory for submission)
-        if ($item->attachments()->count() === 0) {
-            throw new \Exception('Vui lòng upload hình ảnh thực tế nghiệm thu trước khi gửi duyệt.');
-        }
-
-        DB::transaction(function () use ($item, $user) {
-            $oldStatus = $item->workflow_status;
-            
-            $item->workflow_status = 'submitted';
-            $item->submitted_by = $user->id;
-            $item->submitted_at = now();
-
-            if ($oldStatus === 'rejected') {
-                $item->rejection_reason = null;
-                $item->rejected_by = null;
-                $item->rejected_at = null;
-            }
-
-            $item->rejected_by = null;
-            $item->rejected_at = null;
-            $item->rejection_reason = null;
-            
-            $item->save();
-            
-            // Notify supervisor
-            $item->acceptanceStage->notifyEvent('submitted', $user);
-            
-            // Re-sync stage status
-            $item->acceptanceStage->checkCompletion();
-        });
-
-        return true;
-    }
-
-    /**
-     * Universal approval method for Acceptance Items
-     * @param bool $skipCheckCompletion - Set true when called from approveStage() to avoid redundant checks
-     */
-    public function approveItem(AcceptanceItem $item, $user, ?int $level = null, bool $skipCheckCompletion = false): bool
-    {
-        $level = $level ?? $this->determineLevelForUser($item, $user);
-
-        // 2-cấp flow: Giám sát (level 1) xác nhận → Khách hàng (level 3) duyệt.
-        // Level 2 (PM) đã bị bãi bỏ.
-        switch ($level) {
-            case 1: // Supervisor
-                if ($item->workflow_status !== 'submitted') {
-                    throw new \Exception('Hạng mục không ở trạng thái chờ giám sát duyệt.');
-                }
-                break;
-            case 3: // Customer
-                if ($item->workflow_status !== 'supervisor_approved') {
-                    throw new \Exception('Hạng mục cần được giám sát xác nhận trước khi khách hàng duyệt.');
-                }
-                break;
-            default:
-                throw new \Exception('Cấp duyệt không hợp lệ hoặc bạn không có quyền duyệt.');
-        }
-
-        // 2. Shared Prerequisites Check
-        $this->validateApprovalPrerequisites($item);
-
-        return DB::transaction(function () use ($item, $user, $level, $skipCheckCompletion) {
+        return DB::transaction(function () use ($acceptance, $user, $level) {
             switch ($level) {
                 case 1:
-                    $item->workflow_status = 'supervisor_approved';
-                    $item->supervisor_approved_by = $user->id;
-                    $item->supervisor_approved_at = now();
+                    if ($acceptance->workflow_status !== 'submitted') {
+                        throw new \Exception('Phiếu nghiệm thu không ở trạng thái chờ giám sát duyệt.');
+                    }
+                    if ($acceptance->has_open_defects) {
+                        throw new \Exception('Không thể duyệt vì còn lỗi chưa được xử lý xong.');
+                    }
+                    $acceptance->workflow_status          = 'supervisor_approved';
+                    $acceptance->supervisor_approved_by   = $user->id;
+                    $acceptance->supervisor_approved_at   = now();
                     break;
+
                 case 3:
-                    $item->workflow_status = 'customer_approved';
-                    $item->customer_approved_by = $user->id;
-                    $item->customer_approved_at = now();
-                    $item->acceptance_status = 'approved';
-                    $item->approved_by = $user->id;
-                    $item->approved_at = now();
+                    if ($acceptance->workflow_status !== 'supervisor_approved') {
+                        throw new \Exception('Phiếu nghiệm thu cần được giám sát xác nhận trước khi khách hàng duyệt.');
+                    }
+                    if ($acceptance->has_open_defects) {
+                        throw new \Exception('Không thể duyệt vì còn lỗi chưa được xử lý xong.');
+                    }
+                    $acceptance->workflow_status        = 'customer_approved';
+                    $acceptance->customer_approved_by   = $user->id;
+                    $acceptance->customer_approved_at   = now();
                     break;
+
+                default:
+                    throw new \Exception('Cấp duyệt không hợp lệ.');
             }
 
-            $saved = $item->save();
+            $saved = $acceptance->save();
 
-            // Side effects AFTER save
-            if ($saved) {
-                $stage = $item->acceptanceStage;
-
-                // Only run checkCompletion if NOT called from approveStage()
-                // approveStage() handles stage status transitions itself
-                if (!$skipCheckCompletion) {
-                    $stage->checkCompletion();
-                }
-
-                $eventMap = [1 => 'supervisor_approved', 3 => 'customer_approved'];
-                $stage->notifyEvent($eventMap[$level], $user);
-
-                if ($level === 3) {
-                    $item->updateProjectProgress();
-                }
+            if ($saved && $level === 3) {
+                $this->createProgressLogOnApproval($acceptance, $user);
+                $this->checkParentCompletion($acceptance);
             }
 
             return $saved;
@@ -211,314 +127,267 @@ class AcceptanceService
     }
 
     /**
-     * Reject an item from workflow
+     * Reject an acceptance record. Auto-creates a Defect if none unverified exist.
      */
-    public function rejectItem(AcceptanceItem $item, $user, string $reason): bool
+    public function reject(Acceptance $acceptance, User $user, string $reason): bool
     {
-        if ($item->acceptanceStage && $item->acceptanceStage->status === 'customer_approved') {
-            throw new \Exception('Không thể từ chối — Nghiệm thu đã hoàn tất.');
-        }
-        if (!in_array($item->workflow_status, ['submitted', 'supervisor_approved'])) {
-            throw new \Exception('Hạng mục không ở trạng thái chờ duyệt.');
+        if (!in_array($acceptance->workflow_status, ['submitted', 'supervisor_approved'])) {
+            throw new \Exception('Phiếu nghiệm thu không ở trạng thái có thể từ chối.');
         }
 
-        return DB::transaction(function () use ($item, $user, $reason) {
-            $item->workflow_status = 'rejected';
-            $item->rejected_by = $user->id;
-            $item->rejected_at = now();
-            $item->rejection_reason = $reason;
-            $item->save();
+        return DB::transaction(function () use ($acceptance, $user, $reason) {
+            $acceptance->workflow_status  = 'rejected';
+            $acceptance->rejected_by      = $user->id;
+            $acceptance->rejected_at      = now();
+            $acceptance->rejection_reason = $reason;
+            $acceptance->save();
 
-            // Auto-create defect
-            $item->autoCreateDefectOnReject($user instanceof User ? $user : null, $reason);
-
-            // Hạ status stage về pending khi có item bị reject
-            $item->acceptanceStage->checkCompletion();
-
-            // Notify stakeholders
-            $item->acceptanceStage->notifyEvent('rejected', $user, ['reason' => $reason]);
+            $this->autoCreateDefect($acceptance, $user, $reason);
 
             return true;
         });
     }
 
     /**
-     * Revert Acceptance Item to Draft (Hoàn duyệt)
+     * Submit acceptance for approval (draft → submitted).
      */
-    public function revertItemToDraft(AcceptanceItem $item, $user = null): bool
+    public function submit(Acceptance $acceptance, User $user): bool
     {
-        if ($item->acceptanceStage && $item->acceptanceStage->status === 'customer_approved') {
+        if ($acceptance->workflow_status !== 'draft') {
+            throw new \Exception('Chỉ có thể gửi duyệt phiếu nghiệm thu ở trạng thái nháp.');
+        }
+
+        $acceptance->workflow_status = 'submitted';
+        $acceptance->submitted_by = $user->id;
+        $acceptance->submitted_at = now();
+
+        return $acceptance->save();
+    }
+
+    /**
+     * Revert to draft (hoàn duyệt).
+     */
+    public function revertToDraft(Acceptance $acceptance, User $user): bool
+    {
+        if ($acceptance->workflow_status === 'customer_approved') {
             throw new \Exception('Không thể hoàn duyệt — Nghiệm thu đã hoàn tất.');
         }
-        $revertibleStatuses = ['submitted', 'supervisor_approved', 'rejected'];
-        if (!in_array($item->workflow_status, $revertibleStatuses)) {
+        $revertible = ['submitted', 'supervisor_approved', 'rejected'];
+        if (!in_array($acceptance->workflow_status, $revertible)) {
             throw new \Exception('Chỉ có thể hoàn duyệt hạng mục đang chờ duyệt hoặc bị từ chối.');
         }
 
-        $item->workflow_status = 'draft';
-        $item->supervisor_approved_by = null;
-        $item->supervisor_approved_at = null;
+        $acceptance->workflow_status          = 'draft';
+        $acceptance->supervisor_approved_by   = null;
+        $acceptance->supervisor_approved_at   = null;
+        $acceptance->rejection_reason         = null;
+        $acceptance->rejected_by              = null;
+        $acceptance->rejected_at              = null;
 
-        $saved = $item->save();
-
-        if ($saved) {
-            // Hạ status stage khi item quay về draft
-            $item->acceptanceStage->checkCompletion();
-            $item->acceptanceStage->notifyEvent('reverted_to_draft', $user);
-        }
-
-        return $saved;
+        return $acceptance->save();
     }
 
     /**
-     * Universal approval method for Acceptance Stages
+     * Batch approve all acceptances at the given level for a parent task's children.
+     * Returns count of records approved.
      */
-    public function approveStage(AcceptanceStage $stage, $user, ?int $level = null): bool
+    public function batchApprove(ProjectTask $parentTask, User $user, int $level): int
     {
-        $level = $level ?? $this->determineLevelForStage($stage, $user);
+        $targetStatus = $level === 1 ? 'submitted' : 'supervisor_approved';
 
-        // CHỐT CHẶN TỐI QUAN TRỌNG: Mọi cấp độ đều không được duyệt nếu còn lỗi chưa Verify
-        if ($stage->has_open_defects) {
-             throw new \Exception('Không thể duyệt giai đoạn này vì có lỗi thi công chưa được xử lý xong hoặc chưa được Giám sát xác nhận đạt (Verified).');
-        }
-
-        switch ($level) {
-            case 1: // Supervisor
-                if (!in_array($stage->status, ['pending', 'rejected'])) throw new \Exception('Giai đoạn không ở trạng thái chờ duyệt hoặc đã bị từ chối.');
-                break;
-            case 3: // Customer
-                if ($stage->status !== 'supervisor_approved') throw new \Exception('Chỉ có thể duyệt sau khi giám sát đã xác nhận.');
-                break;
-            default:
-                throw new \Exception('Bạn không có quyền duyệt giai đoạn này.');
-        }
-
-        return DB::transaction(function () use ($stage, $user, $level) {
-            // Tự động duyệt tất cả các hạng mục con có trạng thái phù hợp
-            // IMPORTANT: skipCheckCompletion=true to prevent premature auto-promotion
-            foreach ($stage->items as $item) {
-                $isCorrectStatus = ($level === 1 && $item->workflow_status === 'submitted') ||
-                                  ($level === 3 && $item->workflow_status === 'supervisor_approved');
-
-                if ($isCorrectStatus) {
-                    $this->approveItem($item, $user, $level, true); // skipCheckCompletion
-                }
-            }
-
-            // Set stage status ONCE after all items are approved
-            switch ($level) {
-                case 1:
-                    $stage->status = 'supervisor_approved';
-                    $stage->supervisor_approved_by = $user->id;
-                    $stage->supervisor_approved_at = now();
-                    $stage->notifyEvent('supervisor_approved', $user);
-                    break;
-                case 3:
-                    $stage->status = 'customer_approved';
-                    $stage->customer_approved_by = $user->id;
-                    $stage->customer_approved_at = now();
-                    $stage->notifyEvent('customer_approved', $user);
-                    break;
-            }
-
-            $saved = $stage->save();
-
-            // Post-save side effects for customer_approved (Level 3) ONLY
-            if ($saved && $level === 3) {
-                // BUSINESS RULE: Force-sync ALL items to customer_approved
-                // Some items may have been at earlier statuses (draft, submitted)
-                // and were skipped by the individual approveItem loop above
-                $stage->items()->where('workflow_status', '!=', 'customer_approved')->update([
-                    'workflow_status' => 'customer_approved',
-                    'customer_approved_at' => now(),
-                    'customer_approved_by' => $user->id,
-                    'acceptance_status' => 'approved',
-                    'approved_by' => $user->id,
-                    'approved_at' => now(),
-                ]);
-
-                // Create 100% progress logs for each item linked to a task
-                foreach ($stage->items()->get() as $item) {
-                    $item->updateProjectProgress();
-                }
-
-                // Update project progress
-                if ($stage->project) {
-                    if (!$stage->project->progress) {
-                        $stage->project->progress()->create([
-                            'overall_percentage' => 0,
-                            'calculated_from' => 'acceptance',
-                        ]);
-                    }
-                    $stage->project->progress->calculateOverall();
-                }
-
-                // Recalculate linked task status: pending_acceptance → completed
-                if ($stage->task_id) {
-                    $linkedTask = \App\Models\ProjectTask::find($stage->task_id);
-                    if ($linkedTask) {
-                        $progressService = app(\App\Services\TaskProgressService::class);
-                        $progressService->updateTaskFromLogs($linkedTask, true);
-                    }
-                }
-            }
-
-            return $saved;
-        });
-    }
-
-    /**
-     * Reject an acceptance stage
-     */
-    public function rejectStage(AcceptanceStage $stage, $user, string $reason): bool
-    {
-        $rejectableStatuses = ['pending', 'supervisor_approved'];
-        if (!in_array($stage->status, $rejectableStatuses)) {
-            throw new \Exception('Giai đoạn không ở trạng thái có thể từ chối.');
-        }
-
-        return DB::transaction(function () use ($stage, $user, $reason) {
-            // TRẢI NGHIỆM TỐI ƯU: Tự động từ chối tất cả các hạng mục con
-            foreach ($stage->items as $item) {
-                try {
-                    $this->rejectItem($item, $user, $reason);
-                } catch (\Exception $e) {
-                    // Bỏ qua nếu hạng mục không ở trạng thái có thể từ chối
-                }
-            }
-
-            $stage->status = 'rejected';
-            $stage->rejected_by = $user->id;
-            $stage->rejected_at = now();
-            $stage->rejection_reason = $reason;
-            $stage->save();
-
-            // Auto-create defect
-            $stage->autoCreateDefectIfNotAcceptable($user instanceof User ? $user : null, $reason);
-            
-            // Notify
-            $stage->notifyEvent('rejected', $user, ['reason' => $reason]);
-
-            return true;
-        });
-    }
-
-    /**
-     * Delete an acceptance stage
-     */
-    public function deleteStage(AcceptanceStage $stage): bool
-    {
-        if ($stage->status === 'customer_approved' || $stage->status === 'owner_approved') {
-            throw new \Exception('Không thể xóa giai đoạn đã được nghiệm thu hoàn toàn.');
-        }
-
-        if ($stage->has_open_defects) {
-            throw new \Exception('Không thể xóa giai đoạn còn lỗi chưa được khắc phục.');
-        }
-
-        return $stage->delete();
-    }
-
-    /**
-     * Delete an item
-     */
-    public function deleteItem(AcceptanceItem $item): bool
-    {
-        if ($item->acceptanceStage && $item->acceptanceStage->status === 'customer_approved') {
-            throw new \Exception('Không thể xóa — Nghiệm thu đã hoàn tất.');
-        }
-        if (!in_array($item->workflow_status, ['draft', 'rejected'])) {
-            throw new \Exception('Chỉ xóa được hạng mục ở trạng thái nháp hoặc bị từ chối.');
-        }
-
-        if ($item->acceptance_status === 'approved') {
-            throw new \Exception('Không thể xóa hạng mục đã được nghiệm thu.');
-        }
-
-        return $item->delete();
-    }
-
-    /**
-     * Batch approve all items in a stage that are pending for the user's level
-     */
-    public function approveAllInStage(AcceptanceStage $stage, $user): int
-    {
-        $items = $stage->items()
-            ->whereIn('workflow_status', ['submitted', 'supervisor_approved'])
+        $acceptances = Acceptance::where('project_id', $parentTask->project_id)
+            ->where('workflow_status', $targetStatus)
+            ->whereHas('task', fn($q) => $q->where('parent_id', $parentTask->id))
             ->get();
 
         $count = 0;
-        foreach ($items as $item) {
+        foreach ($acceptances as $acceptance) {
             try {
-                if ($this->approveItem($item, $user)) {
+                if ($this->approve($acceptance, $user, $level)) {
                     $count++;
                 }
             } catch (\Exception $e) {
-                // Skip items that don't meet prerequisites in batch mode
-                continue;
+                Log::warning('batchApprove: skipped one record', [
+                    'acceptance_id' => $acceptance->id,
+                    'reason'        => $e->getMessage(),
+                ]);
             }
-        }
-
-        if ($count > 0) {
-            $stage->checkCompletion();
         }
 
         return $count;
     }
 
     /**
-     * Internal: Validate prerequisites for approval (Defects, Progress, Dates)
+     * Check if all sibling acceptances (children of same parent task) are
+     * customer_approved → if so, update the parent task status to 'completed'.
      */
-    protected function validateApprovalPrerequisites(AcceptanceItem $item): void
+    public function checkParentCompletion(Acceptance $acceptance): void
     {
-        // 1. Date check
-        if (!$item->can_accept) {
-             throw new \Exception('Hạng mục chỉ được nghiệm thu sau khi hoàn thành (ngày kết thúc đã qua).');
-        }
-
-        // 2. Open Defects Check (Phải VERIFIED hết lỗi mới cho duyệt)
-        $openDefects = Defect::where('project_id', $item->acceptanceStage->project_id)
-            ->whereIn('status', ['open', 'in_progress', 'fixed', 'rejected'])
-            ->where(function ($q) use ($item) {
-                if ($item->task_id) {
-                    $q->where('task_id', $item->task_id);
-                }
-                $q->orWhere('acceptance_stage_id', $item->acceptance_stage_id);
-            })
-            ->count();
-
-        if ($openDefects > 0) {
-            throw new \Exception("Không thể duyệt vì còn {$openDefects} lỗi chưa được xử lý xong.");
-        }
-
-        // 3. Overall stage progress check (for Customer approval - level 3)
-        // Strictly enforce: customer can only approve when all tasks are 100%
-        if ($item->workflow_status === 'supervisor_approved') {
-            $stageItems = AcceptanceItem::where('acceptance_stage_id', $item->acceptance_stage_id)
-                ->whereNotNull('task_id')->with('task')->get();
-            
-            $incompleteTasks = [];
-            foreach ($stageItems as $si) {
-                if ($si->task && $si->task->progress_percentage < 100) {
-                    $incompleteTasks[] = $si->task->name ?? "Hạng mục #{$si->id}";
-                }
+        try {
+            $task = $acceptance->task;
+            if (!$task || !$task->parent_id) {
+                return;
             }
-            if (count($incompleteTasks) > 0) {
-                throw new \Exception('Không thể duyệt. Các hạng mục sau chưa hoàn thành 100%: ' . implode(', ', $incompleteTasks));
+
+            $parentTask = ProjectTask::find($task->parent_id);
+            if (!$parentTask) {
+                return;
             }
+
+            // All child tasks of the parent
+            $siblingTaskIds = ProjectTask::where('parent_id', $parentTask->id)
+                ->whereNull('deleted_at')
+                ->pluck('id');
+
+            if ($siblingTaskIds->isEmpty()) {
+                return;
+            }
+
+            // All siblings must have a customer_approved acceptance
+            $approvedCount = Acceptance::whereIn('task_id', $siblingTaskIds)
+                ->where('workflow_status', 'customer_approved')
+                ->count();
+
+            if ($approvedCount >= $siblingTaskIds->count()) {
+                // All children accepted — auto-complete the parent task
+                $parentTask->forceFill(['status' => 'completed'])->saveQuietly();
+
+                Log::info('Parent task auto-completed after all children accepted', [
+                    'parent_task_id' => $parentTask->id,
+                    'children_count' => $siblingTaskIds->count(),
+                ]);
+            }
+        } catch (\Exception $e) {
+            Log::warning('checkParentCompletion failed', ['error' => $e->getMessage()]);
         }
     }
 
     /**
-     * Internal: Determine user's approval level based on permissions
+     * Attach files to an acceptance record.
      */
-    protected function determineLevelForUser(AcceptanceItem $item, $user): ?int
+    public function attachFiles(Acceptance $acceptance, array $attachmentIds, User $user): array
     {
-        // This logic is usually better handled by the controller since it knows the guard (admin vs app)
-        // But for ApprovalCenter compatibility, we use common permission constants
-        
-        $project = $item->acceptanceStage->project;
-        
+        $attached = [];
+        foreach ($attachmentIds as $attachmentId) {
+            $attachment = \App\Models\Attachment::find($attachmentId);
+            $isManager  = $acceptance->project?->project_manager_id === $user->id;
+
+            if ($attachment && ($attachment->uploaded_by === $user->id || $isManager)) {
+                $attachment->update([
+                    'attachable_type' => Acceptance::class,
+                    'attachable_id'   => $acceptance->id,
+                ]);
+                $attached[] = $attachment;
+            }
+        }
+        return $attached;
+    }
+
+    /**
+     * Get acceptances for a project, grouped by parent task, with eager loading.
+     */
+    public function getForProject(Project $project): \Illuminate\Support\Collection
+    {
+        return Acceptance::where('project_id', $project->id)
+            ->with([
+                'task.parent',
+                'submitter',
+                'supervisorApprover',
+                'customerApprover',
+                'rejector',
+                'attachments',
+                'defects' => fn($q) => $q->whereIn('status', ['open', 'in_progress']),
+            ])
+            ->orderBy('order')
+            ->get();
+    }
+
+    // ==================================================================
+    // PRIVATE HELPERS
+    // ==================================================================
+
+    private function autoCreateDefect(Acceptance $acceptance, User $user, string $reason): ?Defect
+    {
+        try {
+            $hasUnverified = Defect::where('project_id', $acceptance->project_id)
+                ->where('task_id', $acceptance->task_id)
+                ->whereIn('status', ['open', 'in_progress', 'fixed'])
+                ->exists();
+
+            if ($hasUnverified) {
+                return null;
+            }
+
+            $defect = Defect::create([
+                'project_id'  => $acceptance->project_id,
+                'task_id'     => $acceptance->task_id,
+                'description' => "Nghiệm thu bị từ chối: {$acceptance->name}.\n"
+                    . ($reason ? "Lý do: {$reason}\n" : '')
+                    . 'Vui lòng khắc phục trước khi gửi duyệt lại.',
+                'severity'    => 'high',
+                'status'      => 'open',
+                'reported_by' => $user->id,
+                'reported_at' => now(),
+            ]);
+
+            DefectHistory::create([
+                'defect_id'  => $defect->id,
+                'action'     => 'created',
+                'new_status' => 'open',
+                'user_id'    => $user->id,
+                'comment'    => 'Tự động tạo khi nghiệm thu bị từ chối',
+            ]);
+
+            return $defect;
+        } catch (\Exception $e) {
+            Log::warning('autoCreateDefect failed', ['acceptance_id' => $acceptance->id, 'error' => $e->getMessage()]);
+            return null;
+        }
+    }
+
+    private function createProgressLogOnApproval(Acceptance $acceptance, User $user): void
+    {
+        try {
+            $task = $acceptance->task;
+            if (!$task) {
+                return;
+            }
+
+            $logDate    = now()->toDateString();
+            $existing   = \App\Models\ConstructionLog::where('project_id', $acceptance->project_id)
+                ->where('log_date', $logDate)
+                ->where('task_id', $task->id)
+                ->first();
+
+            if ($existing) {
+                $existing->update([
+                    'completion_percentage' => 100,
+                    'notes'                 => ($existing->notes ? $existing->notes . "\n" : '')
+                        . "Nghiệm thu đã được khách hàng phê duyệt: {$acceptance->name}",
+                ]);
+            } else {
+                \App\Models\ConstructionLog::create([
+                    'project_id'            => $acceptance->project_id,
+                    'task_id'               => $task->id,
+                    'log_date'              => $logDate,
+                    'completion_percentage' => 100,
+                    'notes'                 => "Nghiệm thu đã được khách hàng phê duyệt: {$acceptance->name}",
+                    'created_by'            => $user->id,
+                ]);
+            }
+        } catch (\Exception $e) {
+            Log::warning('createProgressLogOnApproval failed', ['acceptance_id' => $acceptance->id, 'error' => $e->getMessage()]);
+        }
+    }
+
+    // ==================================================================
+    // PERMISSION HELPERS (used by controllers / ApprovalCenter)
+    // ==================================================================
+
+    public function determineLevelForUser(Acceptance $acceptance, User $user): ?int
+    {
+        $project = $acceptance->project;
+
         if ($this->hasPermission($user, \App\Constants\Permissions::ACCEPTANCE_APPROVE_LEVEL_3, $project)) {
             return 3;
         }
@@ -529,176 +398,14 @@ class AcceptanceService
         return null;
     }
 
-    protected function determineLevelForStage(AcceptanceStage $stage, $user): ?int
+    protected function hasPermission(User $user, string $permission, ?Project $project): bool
     {
-        $project = $stage->project;
-        if ($this->hasPermission($user, \App\Constants\Permissions::ACCEPTANCE_APPROVE_LEVEL_3, $project)) return 3;
-        if ($this->hasPermission($user, \App\Constants\Permissions::ACCEPTANCE_APPROVE_LEVEL_1, $project)) return 1;
-        return null;
-    }
-
-    protected function hasPermission($user, string $permission, $project): bool
-    {
-        if (!$user) return false;
-        
-        // Super Admin bypass
         if (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) {
             return true;
         }
-
-        // Simple permission check compatibility
         if (method_exists($user, 'hasPermission')) {
             return $user->hasPermission($permission);
         }
-        // For Admin users (auth:admin)
-        if (method_exists($user, 'can')) {
-            return $user->can($permission);
-        }
         return false;
-    }
-
-    /**
-     * Get stages for project with eager loading and business rules (Category A filtering)
-     */
-    public function getStagesForProject(Project $project): \Illuminate\Support\Collection
-    {
-        return $project->acceptanceStages()
-            ->with([
-                'internalApprover',
-                'customerApprover',
-                'designApprover',
-                'ownerApprover',
-                'task', 
-                'acceptanceTemplate', 
-                'defects' => function ($q) {
-                    $q->whereIn('status', ['open', 'in_progress']);
-                },
-                'attachments',
-                'items' => function ($q) {
-                    // BUSINESS RULE: Show ONLY Category A (parent) items, hide children A' and A''
-                    $q->where(function ($query) {
-                        $query->whereNull('task_id')
-                            ->orWhereHas('task', function ($taskQuery) {
-                                $taskQuery->whereNull('parent_id');
-                            });
-                    })
-                    ->orderBy('order')
-                    ->with([
-                        'attachments',
-                        'task',
-                        'template.attachments',
-                        'submitter',
-                        'projectManagerApprover',
-                        'customerApprover',
-                    ]);
-                }
-            ])
-            ->orderBy('order')
-            ->get();
-    }
-
-    /**
-     * Get items for a stage with business rules (Category A filtering)
-     */
-    public function getStageItems(AcceptanceStage $stage): \Illuminate\Support\Collection
-    {
-        return $stage->items()
-            ->where(function ($query) {
-                // Items without task_id (Category A items)
-                $query->whereNull('task_id')
-                    // OR items linked to parent tasks (task.parent_id is null)
-                    ->orWhereHas('task', function ($taskQuery) {
-                        $taskQuery->whereNull('parent_id');
-                    });
-            })
-            ->with([
-                'approver',
-                'rejector',
-                'creator',
-                'updater',
-                'task',
-                'template.attachments',
-                'submitter',
-                'projectManagerApprover',
-                'customerApprover',
-                'attachments'
-            ])
-            ->orderBy('order')
-            ->get();
-    }
-
-    /**
-     * Centralized attachment logic for Stages and Items
-     */
-    public function attachFiles($model, array $attachmentIds, User $user): array
-    {
-        $attached = [];
-        foreach ($attachmentIds as $attachmentId) {
-            $attachment = \App\Models\Attachment::find($attachmentId);
-            // Permission check: uploaded by user OR is project manager
-            $isManager = (isset($model->project) && $user->id === $model->project->project_manager_id) 
-                       || (isset($model->acceptanceStage->project) && $user->id === $model->acceptanceStage->project->project_manager_id);
-
-            if ($attachment && ($attachment->uploaded_by === $user->id || $isManager)) {
-                $attachment->update([
-                    'attachable_type' => get_class($model),
-                    'attachable_id' => $model->id,
-                ]);
-                $attached[] = $attachment;
-            }
-        }
-        return $attached;
-    }
-
-    /**
-     * Reorder items within a stage
-     */
-    public function reorderItems(AcceptanceStage $stage, array $itemsData): void
-    {
-        DB::transaction(function () use ($stage, $itemsData) {
-            foreach ($itemsData as $itemData) {
-                AcceptanceItem::where('id', $itemData['id'])
-                    ->where('acceptance_stage_id', $stage->id)
-                    ->update(['order' => $itemData['order']]);
-            }
-        });
-    }
-
-    /**
-     * Legacy approval handler for backward compatibility
-     */
-    public function approveStageLegacy(AcceptanceStage $stage, string $type, User $user): bool
-    {
-        return DB::transaction(function () use ($stage, $type, $user) {
-            $success = false;
-            switch ($type) {
-                case 'supervisor':
-                    $success = $stage->approveSupervisor($user);
-                    break;
-                case 'project_manager':
-                    // BUSINESS RULE: PM approval level was removed. Reject calls to legacy endpoint.
-                    throw new \Exception('Cấp duyệt QLDA đã bị bãi bỏ. Vui lòng dùng quy trình GS → KH.');
-                case 'customer':
-                    $success = $stage->approveCustomer($user);
-                    break;
-                case 'internal':
-                    $success = $stage->approveInternal($user);
-                    break;
-                case 'design':
-                    if ($stage->status === 'customer_approved') {
-                        $success = $stage->approveDesign($user);
-                    }
-                    break;
-                case 'owner':
-                    if ($stage->has_open_defects) {
-                        throw new \Exception('Không thể duyệt vì còn lỗi chưa được khắc phục.');
-                    }
-                    if ($stage->project->customer_id === $user->id && $stage->status === 'design_approved') {
-                        $success = $stage->approveOwner($user);
-                    }
-                    break;
-            }
-            return $success;
-        });
     }
 }

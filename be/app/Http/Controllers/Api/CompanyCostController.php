@@ -16,7 +16,7 @@ class CompanyCostController extends Controller
 {
     protected $authService;
 
-    public function __construct(AuthorizationService $authService)
+    public function __construct(\App\Services\AuthorizationService $authService)
     {
         $this->authService = $authService;
     }

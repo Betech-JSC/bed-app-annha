@@ -22,7 +22,7 @@ class MaterialBillController extends Controller
     protected $materialBillService;
 
     public function __construct(
-        AuthorizationService $authService,
+        \App\Services\AuthorizationService $authService,
         MaterialBillService $materialBillService
     ) {
         $this->authService = $authService;

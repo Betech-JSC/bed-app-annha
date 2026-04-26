@@ -15,7 +15,7 @@ class ProjectDocumentController extends Controller
     protected $authService;
     protected $documentService;
 
-    public function __construct(AuthorizationService $authService, \App\Services\ProjectDocumentService $documentService)
+    public function __construct(\App\Services\AuthorizationService $authService, \App\Services\ProjectDocumentService $documentService)
     {
         $this->authService = $authService;
         $this->documentService = $documentService;

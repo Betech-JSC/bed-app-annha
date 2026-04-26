@@ -19,7 +19,7 @@ class ProjectPaymentController extends Controller
     protected $notificationService;
 
     public function __construct(
-        AuthorizationService $authService, 
+        \App\Services\AuthorizationService $authService, 
         \App\Services\FinancialService $financialService,
         NotificationService $notificationService
     ) {

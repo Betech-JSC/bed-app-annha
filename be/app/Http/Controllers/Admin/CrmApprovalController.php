@@ -5,8 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Constants\Permissions;
 use App\Models\Cost;
-use App\Models\AcceptanceStage;
-use App\Models\AcceptanceItem;
+use App\Models\Acceptance;
 use App\Models\ChangeRequest;
 use App\Models\AdditionalCost;
 use App\Models\SubcontractorPayment;
@@ -259,9 +258,9 @@ class CrmApprovalController extends Controller
 
     public function approveSupervisorAcceptance(Request $request, $id)
     {
-        $stage = AcceptanceStage::findOrFail($id);
+        $acceptance = Acceptance::findOrFail($id);
         $user = Auth::guard('admin')->user();
-        $this->crmRequire($user, Permissions::ACCEPTANCE_APPROVE_LEVEL_1, $stage->project);
+        $this->crmRequire($user, Permissions::ACCEPTANCE_APPROVE_LEVEL_1, $acceptance->project);
 
         return $this->delegateApprove($user, 'acceptance_supervisor', $id);
     }
@@ -269,18 +268,18 @@ class CrmApprovalController extends Controller
     public function rejectSupervisorAcceptance(Request $request, $id)
     {
         $request->validate(['reason' => 'required|string|max:500']);
-        $stage = AcceptanceStage::findOrFail($id);
+        $acceptance = Acceptance::findOrFail($id);
         $user = Auth::guard('admin')->user();
-        $this->crmRequire($user, Permissions::ACCEPTANCE_APPROVE_LEVEL_1, $stage->project);
+        $this->crmRequire($user, Permissions::ACCEPTANCE_APPROVE_LEVEL_1, $acceptance->project);
 
         return $this->delegateReject($user, 'acceptance_supervisor', $id, $request->reason);
     }
 
     public function approvePMAcceptance(Request $request, $id)
     {
-        $stage = AcceptanceStage::findOrFail($id);
+        $acceptance = Acceptance::findOrFail($id);
         $user = Auth::guard('admin')->user();
-        $this->crmRequire($user, Permissions::ACCEPTANCE_APPROVE_LEVEL_2, $stage->project);
+        $this->crmRequire($user, Permissions::ACCEPTANCE_APPROVE_LEVEL_2, $acceptance->project);
 
         return $this->delegateApprove($user, 'acceptance_pm', $id);
     }
@@ -288,18 +287,18 @@ class CrmApprovalController extends Controller
     public function rejectPMAcceptance(Request $request, $id)
     {
         $request->validate(['reason' => 'required|string|max:500']);
-        $stage = AcceptanceStage::findOrFail($id);
+        $acceptance = Acceptance::findOrFail($id);
         $user = Auth::guard('admin')->user();
-        $this->crmRequire($user, Permissions::ACCEPTANCE_APPROVE_LEVEL_2, $stage->project);
+        $this->crmRequire($user, Permissions::ACCEPTANCE_APPROVE_LEVEL_2, $acceptance->project);
 
         return $this->delegateReject($user, 'acceptance_pm', $id, $request->reason);
     }
 
     public function approveCustomerAcceptance(Request $request, $id)
     {
-        $stage = AcceptanceStage::findOrFail($id);
+        $acceptance = Acceptance::findOrFail($id);
         $user = Auth::guard('admin')->user();
-        $this->crmRequire($user, Permissions::ACCEPTANCE_APPROVE_LEVEL_3, $stage->project);
+        $this->crmRequire($user, Permissions::ACCEPTANCE_APPROVE_LEVEL_3, $acceptance->project);
 
         return $this->delegateApprove($user, 'acceptance_customer', $id);
     }
@@ -307,9 +306,9 @@ class CrmApprovalController extends Controller
     public function rejectAcceptance(Request $request, $id)
     {
         $request->validate(['reason' => 'required|string|max:500']);
-        $stage = AcceptanceStage::findOrFail($id);
+        $acceptance = Acceptance::findOrFail($id);
         $user = Auth::guard('admin')->user();
-        $this->crmRequire($user, Permissions::ACCEPTANCE_APPROVE_LEVEL_3, $stage->project);
+        $this->crmRequire($user, Permissions::ACCEPTANCE_APPROVE_LEVEL_3, $acceptance->project);
 
         return $this->delegateReject($user, 'acceptance_customer', $id, $request->reason);
     }
@@ -689,15 +688,15 @@ class CrmApprovalController extends Controller
         ];
     }
 
-    private function formatAcceptanceItem(AcceptanceStage $stage, ?string $statusLabel = null, ?string $approvalLevel = null): array
+    private function formatAcceptanceItem(Acceptance $acceptance, ?string $statusLabel = null, ?string $approvalLevel = null): array
     {
         // Eager-load defects with attachments for before/after image display
-        if (!$stage->relationLoaded('defects')) {
-            $stage->load(['defects.attachments', 'defects.reporter', 'defects.fixer']);
+        if (!$acceptance->relationLoaded('defects')) {
+            $acceptance->load(['defects.attachments', 'defects.reporter', 'defects.fixer']);
         }
 
         // Categorize attachments into before/after/other
-        $attachments = $stage->attachments->map(fn($a) => [
+        $attachments = $acceptance->attachments->map(fn($a) => [
             'id' => $a->id,
             'name' => $a->file_name,
             'url' => $a->file_url,
@@ -709,7 +708,7 @@ class CrmApprovalController extends Controller
         ]);
 
         // Format defects with their images
-        $defects = $stage->defects->map(fn($d) => [
+        $defects = $acceptance->defects->map(fn($d) => [
             'id' => $d->id,
             'description' => $d->description,
             'severity' => $d->severity,
@@ -737,26 +736,25 @@ class CrmApprovalController extends Controller
         ]);
 
         return [
-            'id' => $stage->id,
+            'id' => $acceptance->id,
             'type' => 'acceptance',
             'type_label' => 'Nghiệm thu',
-            'title' => $stage->name,
-            'subtitle' => ($stage->project->code ?? '') . ' - ' . ($stage->project->name ?? 'Dự án'),
+            'title' => $acceptance->name,
+            'subtitle' => ($acceptance->project->code ?? '') . ' - ' . ($acceptance->project->name ?? 'Dự án'),
             'amount' => 0,
-            'status' => $stage->status,
-            'status_label' => $statusLabel ?? $this->getStatusLabel($stage->status),
-            'created_by' => $stage->project?->projectManager?->name ?? 'N/A',
-            'created_at' => optional($stage->created_at)->format('d/m/Y H:i') ?? '',
-            'description' => $stage->description,
-            'project_id' => $stage->project_id,
+            'status' => $acceptance->workflow_status,
+            'status_label' => $statusLabel ?? $this->getStatusLabel($acceptance->workflow_status),
+            'created_by' => $acceptance->submitter?->name ?? ($acceptance->project?->projectManager?->name ?? 'N/A'),
+            'created_at' => optional($acceptance->created_at)->format('d/m/Y H:i') ?? '',
+            'description' => $acceptance->description,
+            'project_id' => $acceptance->project_id,
             'approval_level' => $approvalLevel ?? 'customer',
-            'has_open_defects' => $stage->has_open_defects,
-            'acceptability_status' => $stage->acceptability_status,
+            'has_open_defects' => $acceptance->has_open_defects,
             'defects' => $defects,
             'before_images' => $attachments->filter(fn($a) => (in_array($a['type'], ['before']) || in_array($a['description'], ['before']) || (empty($a['type']) && empty($a['description']))) && $a['is_image'])->values(),
             'after_images' => $attachments->filter(fn($a) => ($a['type'] === 'after' || $a['description'] === 'after') && $a['is_image'])->values(),
             'attachments' => $attachments,
-            'attachments_count' => $stage->attachments->count(),
+            'attachments_count' => $acceptance->attachments->count(),
         ];
     }
 
@@ -1269,6 +1267,7 @@ class CrmApprovalController extends Controller
     private function getStatusLabel(string $status): string
     {
         $labels = [
+            'draft' => 'Nháp', 'submitted' => 'Đã gửi duyệt',
             'pending' => 'Chờ duyệt', 'supervisor_approved' => 'GS đã duyệt', 'project_manager_approved' => 'QLDA đã duyệt',
             'customer_approved' => 'KH đã duyệt', 'owner_approved' => 'CĐT đã duyệt', 'design_approved' => 'TK đã duyệt',
             'internal_approved' => 'Nội bộ đã duyệt', 'pending_management_approval' => 'Chờ BĐH duyệt',

@@ -375,26 +375,20 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         Route::put('/{project}/invoices/{invoice}', [CrmProjectsController::class, 'updateInvoice'])->name('invoices.update');
         Route::delete('/{project}/invoices/{invoice}', [CrmProjectsController::class, 'destroyInvoice'])->name('invoices.destroy');
 
-        // Acceptance Stages
+        // Acceptance Workflow
         Route::get('/{project}/acceptance', fn($project) => redirect("/projects/{$project}?tab=acceptance"))->name('acceptance.index');
         Route::post('/{project}/acceptance', [CrmProjectsController::class, 'storeAcceptance'])->name('acceptance.store');
-        Route::put('/{project}/acceptance/{stage}', [CrmProjectsController::class, 'updateAcceptance'])->name('acceptance.update');
-        Route::post('/{project}/acceptance/{stage}/approve', [CrmProjectsController::class, 'approveAcceptance'])->name('acceptance.approve');
-        Route::delete('/{project}/acceptance/{stage}', [CrmProjectsController::class, 'destroyAcceptance'])->name('acceptance.destroy');
-        Route::post('/{project}/acceptance/{stage}/attach-files', [CrmProjectsController::class, 'attachFilesToAcceptance'])->name('acceptance.attach-files');
-
-        // Acceptance Items (matching APP AcceptanceItemController)
-        Route::post('/{project}/acceptance/{stage}/items', [CrmProjectsController::class, 'storeAcceptanceItem'])->name('acceptance.items.store');
-        Route::put('/{project}/acceptance/{stage}/items/{item}', [CrmProjectsController::class, 'updateAcceptanceItem'])->name('acceptance.items.update');
-        Route::delete('/{project}/acceptance/{stage}/items/{item}', [CrmProjectsController::class, 'destroyAcceptanceItem'])->name('acceptance.items.destroy');
-        Route::post('/{project}/acceptance/{stage}/items/{item}/submit', [CrmProjectsController::class, 'submitAcceptanceItem'])->name('acceptance.items.submit');
-        Route::post('/{project}/acceptance/{stage}/items/{item}/approve-supervisor', [CrmProjectsController::class, 'approveAcceptanceItemSupervisor'])->name('acceptance.items.approve.supervisor');
-        Route::post('/{project}/acceptance/{stage}/items/{item}/approve-pm', [CrmProjectsController::class, 'approveAcceptanceItemPM'])->name('acceptance.items.approve.pm');
-        Route::post('/{project}/acceptance/{stage}/items/{item}/approve-customer', [CrmProjectsController::class, 'approveAcceptanceItemCustomer'])->name('acceptance.items.approve.customer');
-        Route::post('/{project}/acceptance/{stage}/items/{item}/reject', [CrmProjectsController::class, 'rejectAcceptanceItem'])->name('acceptance.items.reject');
-        Route::post('/{project}/acceptance/{stage}/items/{item}/revert', [CrmProjectsController::class, 'revertAcceptanceItemToDraft'])->name('acceptance.items.revert');
-        Route::post('/{project}/acceptance/{stage}/items/{item}/attach-files', [CrmProjectsController::class, 'attachFilesToAcceptanceItem'])->name('acceptance.items.attach-files');
-        Route::post('/{project}/acceptance/{stage}/approve-all', [CrmProjectsController::class, 'approveAllAcceptanceItems'])->name('acceptance.approve-all');
+        Route::put('/{project}/acceptance/{id}', [CrmProjectsController::class, 'updateAcceptance'])->name('acceptance.update');
+        Route::post('/{project}/acceptance/{id}/approve', [CrmProjectsController::class, 'approveAcceptance'])->name('acceptance.approve');
+        Route::delete('/{project}/acceptance/{id}', [CrmProjectsController::class, 'destroyAcceptance'])->name('acceptance.destroy');
+        
+        // Match Vue frontend exact URLs
+        Route::post('/{project}/acceptances/{id}/supervisor-approve', [CrmProjectsController::class, 'approveAcceptanceSupervisor'])->name('acceptances.supervisor-approve');
+        Route::post('/{project}/acceptances/{id}/customer-approve', [CrmProjectsController::class, 'approveAcceptanceCustomer'])->name('acceptances.customer-approve');
+        Route::post('/{project}/acceptances/{id}/submit', [CrmProjectsController::class, 'submitAcceptance'])->name('acceptances.submit');
+        Route::post('/{project}/acceptances/{id}/attach-files', [CrmProjectsController::class, 'attachFilesToAcceptance'])->name('acceptances.attach-files');
+        Route::post('/{project}/acceptances/{id}/revert', [CrmProjectsController::class, 'revertAcceptanceToDraft'])->name('acceptances.revert');
+        Route::post('/{project}/acceptances/{id}/reject', [CrmProjectsController::class, 'rejectAcceptance'])->name('acceptances.reject');
 
         // Documents
         Route::post('/{project}/documents', [CrmProjectsController::class, 'storeDocument'])->name('documents.store');

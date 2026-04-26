@@ -15,7 +15,8 @@ use App\Http\Controllers\Api\SubcontractorItemController;
 use App\Http\Controllers\Api\ConstructionLogController;
 use App\Http\Controllers\Api\GlobalSubcontractorController;
 use App\Http\Controllers\Api\CostGroupController;
-use App\Http\Controllers\Api\AcceptanceStageController;
+use App\Http\Controllers\Api\AcceptanceController;
+
 use App\Http\Controllers\Api\AcceptanceTemplateController;
 use App\Http\Controllers\Api\DefectController;
 use App\Http\Controllers\Api\ProjectProgressController;
@@ -36,7 +37,7 @@ use App\Http\Controllers\Api\SubcontractorPaymentController;
 use App\Http\Controllers\Api\ProjectPhaseController;
 use App\Http\Controllers\Api\ProjectTaskController;
 use App\Http\Controllers\Api\ProjectTaskDependencyController;
-use App\Http\Controllers\Api\AcceptanceItemController;
+
 use App\Http\Controllers\Api\DepartmentController;
 use App\Http\Controllers\Api\MaterialController;
 use App\Http\Controllers\Api\EquipmentController;
@@ -423,35 +424,38 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/{projectId}/input-invoices/{id}', [InputInvoiceController::class, 'update']);
         Route::delete('/{projectId}/input-invoices/{id}', [InputInvoiceController::class, 'destroy']);
 
-        // Acceptance Stages
-        Route::get('/{projectId}/acceptance', [AcceptanceStageController::class, 'index']);
-        Route::post('/{projectId}/acceptance', [AcceptanceStageController::class, 'store']);
-        Route::get('/{projectId}/acceptance/{id}', [AcceptanceStageController::class, 'show'])->where('id', '[0-9]+');
-        Route::put('/{projectId}/acceptance/{id}', [AcceptanceStageController::class, 'update'])->where('id', '[0-9]+');
-        Route::delete('/{projectId}/acceptance/{id}', [AcceptanceStageController::class, 'destroy'])->where('id', '[0-9]+');
-        Route::post('/{projectId}/acceptance/{id}/approve', [AcceptanceStageController::class, 'approve'])->where('id', '[0-9]+');
-        Route::post('/{projectId}/acceptance/{id}/supervisor-approve', [AcceptanceStageController::class, 'supervisorApprove'])->where('id', '[0-9]+');
-        Route::post('/{projectId}/acceptance/{id}/project-manager-approve', [AcceptanceStageController::class, 'projectManagerApprove'])->where('id', '[0-9]+');
-        Route::post('/{projectId}/acceptance/{id}/customer-approve', [AcceptanceStageController::class, 'customerApprove'])->where('id', '[0-9]+');
-        Route::post('/{projectId}/acceptance/{id}/attach-files', [AcceptanceStageController::class, 'attachFiles'])->where('id', '[0-9]+');
+        // Acceptances (unified per-child-task acceptance, grouped by parent in UI)
+        Route::prefix('/{projectId}/acceptances')->group(function () {
+            Route::get('/', [AcceptanceController::class, 'index']);
+            Route::post('/', [AcceptanceController::class, 'store']);
+            Route::post('/batch-supervisor-approve', [AcceptanceController::class, 'batchSupervisorApprove']);
+            Route::post('/batch-customer-approve', [AcceptanceController::class, 'batchCustomerApprove']);
+            Route::get('/{id}', [AcceptanceController::class, 'show'])->where('id', '[0-9]+');
+            Route::put('/{id}', [AcceptanceController::class, 'update'])->where('id', '[0-9]+');
+            Route::delete('/{id}', [AcceptanceController::class, 'destroy'])->where('id', '[0-9]+');
+            Route::post('/{id}/supervisor-approve', [AcceptanceController::class, 'supervisorApprove'])->where('id', '[0-9]+');
+            Route::post('/{id}/customer-approve', [AcceptanceController::class, 'customerApprove'])->where('id', '[0-9]+');
+            Route::post('/{id}/reject', [AcceptanceController::class, 'reject'])->where('id', '[0-9]+');
+            Route::post('/{id}/revert', [AcceptanceController::class, 'revert'])->where('id', '[0-9]+');
+            Route::post('/{id}/attach-files', [AcceptanceController::class, 'attachFiles'])->where('id', '[0-9]+');
+        });
 
-        // Acceptance Items
-        Route::get('/{projectId}/acceptance/{stageId}/items', [AcceptanceItemController::class, 'index'])->where('stageId', '[0-9]+');
-        Route::post('/{projectId}/acceptance/{stageId}/items', [AcceptanceItemController::class, 'store'])->where('stageId', '[0-9]+');
-        Route::get('/{projectId}/acceptance/{stageId}/items/{id}', [AcceptanceItemController::class, 'show'])->where(['stageId' => '[0-9]+', 'id' => '[0-9]+']);
-        Route::put('/{projectId}/acceptance/{stageId}/items/{id}', [AcceptanceItemController::class, 'update'])->where(['stageId' => '[0-9]+', 'id' => '[0-9]+']);
-        Route::delete('/{projectId}/acceptance/{stageId}/items/{id}', [AcceptanceItemController::class, 'destroy'])->where(['stageId' => '[0-9]+', 'id' => '[0-9]+']);
-        Route::post('/{projectId}/acceptance/{stageId}/items/{id}/approve', [AcceptanceItemController::class, 'approve'])->where(['stageId' => '[0-9]+', 'id' => '[0-9]+']);
-        Route::post('/{projectId}/acceptance/{stageId}/items/{id}/reject', [AcceptanceItemController::class, 'reject'])->where(['stageId' => '[0-9]+', 'id' => '[0-9]+']);
-        Route::post('/{projectId}/acceptance/{stageId}/items/{id}/reset', [AcceptanceItemController::class, 'reset'])->where(['stageId' => '[0-9]+', 'id' => '[0-9]+']);
-        Route::post('/{projectId}/acceptance/{stageId}/items/reorder', [AcceptanceItemController::class, 'reorder'])->where('stageId', '[0-9]+');
-        Route::post('/{projectId}/acceptance/{stageId}/items/{id}/attach-files', [AcceptanceItemController::class, 'attachFiles'])->where(['stageId' => '[0-9]+', 'id' => '[0-9]+']);
-        Route::post('/{projectId}/acceptance/{stageId}/items/{id}/submit', [AcceptanceItemController::class, 'submit'])->where(['stageId' => '[0-9]+', 'id' => '[0-9]+']);
-        Route::post('/{projectId}/acceptance/{stageId}/items/{id}/supervisor-approve', [AcceptanceItemController::class, 'supervisorApprove'])->where(['stageId' => '[0-9]+', 'id' => '[0-9]+']);
-        Route::post('/{projectId}/acceptance/{stageId}/items/{id}/project-manager-approve', [AcceptanceItemController::class, 'projectManagerApprove'])->where(['stageId' => '[0-9]+', 'id' => '[0-9]+']);
-        Route::post('/{projectId}/acceptance/{stageId}/items/{id}/customer-approve', [AcceptanceItemController::class, 'customerApprove'])->where(['stageId' => '[0-9]+', 'id' => '[0-9]+']);
-        Route::post('/{projectId}/acceptance/{stageId}/items/{id}/workflow-reject', [AcceptanceItemController::class, 'workflowReject'])->where(['stageId' => '[0-9]+', 'id' => '[0-9]+']);
-        Route::post('/{projectId}/acceptance/{stageId}/items/{id}/revert', [AcceptanceItemController::class, 'revertToDraft'])->where(['stageId' => '[0-9]+', 'id' => '[0-9]+']);
+        // Legacy acceptance routes (deprecated — returns 410)
+        Route::get('/{projectId}/acceptance', [AcceptanceController::class, 'deprecated']);
+        Route::post('/{projectId}/acceptance', [AcceptanceController::class, 'deprecated']);
+        Route::get('/{projectId}/acceptance/{id}', [AcceptanceController::class, 'deprecated'])->where('id', '[0-9]+');
+        Route::put('/{projectId}/acceptance/{id}', [AcceptanceController::class, 'deprecated'])->where('id', '[0-9]+');
+        Route::delete('/{projectId}/acceptance/{id}', [AcceptanceController::class, 'deprecated'])->where('id', '[0-9]+');
+        Route::post('/{projectId}/acceptance/{id}/approve', [AcceptanceController::class, 'deprecated'])->where('id', '[0-9]+');
+        Route::post('/{projectId}/acceptance/{id}/supervisor-approve', [AcceptanceController::class, 'deprecated'])->where('id', '[0-9]+');
+        Route::post('/{projectId}/acceptance/{id}/project-manager-approve', [AcceptanceController::class, 'deprecated'])->where('id', '[0-9]+');
+        Route::post('/{projectId}/acceptance/{id}/customer-approve', [AcceptanceController::class, 'deprecated'])->where('id', '[0-9]+');
+        Route::post('/{projectId}/acceptance/{id}/attach-files', [AcceptanceController::class, 'deprecated'])->where('id', '[0-9]+');
+        Route::get('/{projectId}/acceptance/{stageId}/items', [AcceptanceController::class, 'deprecated'])->where('stageId', '[0-9]+');
+        Route::post('/{projectId}/acceptance/{stageId}/items', [AcceptanceController::class, 'deprecated'])->where('stageId', '[0-9]+');
+        Route::post('/{projectId}/acceptance/{stageId}/items/{id}/supervisor-approve', [AcceptanceController::class, 'deprecated'])->where(['stageId' => '[0-9]+', 'id' => '[0-9]+']);
+        Route::post('/{projectId}/acceptance/{stageId}/items/{id}/project-manager-approve', [AcceptanceController::class, 'deprecated'])->where(['stageId' => '[0-9]+', 'id' => '[0-9]+']);
+        Route::post('/{projectId}/acceptance/{stageId}/items/{id}/customer-approve', [AcceptanceController::class, 'deprecated'])->where(['stageId' => '[0-9]+', 'id' => '[0-9]+']);
 
         // Defects
         Route::get('/{projectId}/defects', [DefectController::class, 'index'])->middleware('permission:defect.view,projectId');

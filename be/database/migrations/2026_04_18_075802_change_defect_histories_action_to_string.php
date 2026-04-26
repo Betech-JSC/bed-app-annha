@@ -11,9 +11,11 @@ return new class extends Migration
      */
     public function up(): void
     {
+        \DB::statement('SET FOREIGN_KEY_CHECKS=0');
         Schema::table('defect_histories', function (Blueprint $table) {
             $table->string('action', 50)->change();
         });
+        \DB::statement('SET FOREIGN_KEY_CHECKS=1');
     }
 
     /**

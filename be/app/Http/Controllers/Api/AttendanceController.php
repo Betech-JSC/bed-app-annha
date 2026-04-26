@@ -19,7 +19,7 @@ class AttendanceController extends Controller
     protected $attendanceService;
 
     public function __construct(
-        AuthorizationService $authService,
+        \App\Services\AuthorizationService $authService,
         \App\Services\AttendanceService $attendanceService
     ) {
         $this->authService = $authService;

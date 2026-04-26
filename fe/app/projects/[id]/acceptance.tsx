@@ -10,7 +10,7 @@ import {
 import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { useSelector } from "react-redux";
 import type { RootState } from "@/reducers/index";
-import { acceptanceApi, AcceptanceStage } from "@/api/acceptanceApi";
+import { newAcceptanceApi, Acceptance } from "@/api/acceptanceApi";
 import { projectApi, Project } from "@/api/projectApi";
 import { personnelApi } from "@/api/personnelApi";
 import { Ionicons } from "@expo/vector-icons";
@@ -22,7 +22,7 @@ export default function AcceptanceScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const user = useSelector((state: RootState) => state.user);
-  const [stages, setStages] = useState<AcceptanceStage[]>([]);
+  const [stages, setStages] = useState<Acceptance[]>([]);
   const [project, setProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
   const [isSupervisor, setIsSupervisor] = useState(false);
@@ -59,7 +59,7 @@ export default function AcceptanceScreen() {
     try {
       setLoading(true);
       setPermissionDenied(false);
-      const response = await acceptanceApi.getStages(id!);
+      const response = await newAcceptanceApi.getAll(id!);
       if (response.success) {
         setStages(response.data || []);
       }

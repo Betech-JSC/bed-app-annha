@@ -2,9 +2,8 @@
 
 namespace App\Services;
 
+use App\Models\Acceptance;
 use App\Models\Cost;
-use App\Models\AcceptanceStage;
-use App\Models\AcceptanceItem;
 use App\Models\ChangeRequest;
 use App\Models\AdditionalCost;
 use App\Models\SubcontractorPayment;
@@ -254,20 +253,17 @@ class ApprovalQueryService
             str_contains($a->approvable->status ?? '', 'accountant')
         )->pluck('approvable')->filter();
 
-        $data['acceptance_supervisor'] = $allApprovals->filter(fn($a) => 
-            $a->approvable_type === AcceptanceStage::class && 
-            ($a->approvable->status ?? '') === 'pending'
+        $data['acceptance_supervisor'] = $allApprovals->filter(fn($a) =>
+            $a->approvable_type === Acceptance::class &&
+            ($a->approvable->workflow_status ?? '') === 'submitted'
         )->pluck('approvable')->filter();
 
-        $data['acceptance_pm'] = $allApprovals->filter(fn($a) => 
-            $a->approvable_type === AcceptanceStage::class && 
-            ($a->approvable->status ?? '') === 'supervisor_approved'
+        $data['acceptance_customer'] = $allApprovals->filter(fn($a) =>
+            $a->approvable_type === Acceptance::class &&
+            ($a->approvable->workflow_status ?? '') === 'supervisor_approved'
         )->pluck('approvable')->filter();
 
-        $data['acceptance_customer'] = $allApprovals->filter(fn($a) => 
-            $a->approvable_type === AcceptanceStage::class && 
-            ($a->approvable->status ?? '') === 'project_manager_approved'
-        )->pluck('approvable')->filter();
+        $data['acceptance_pm'] = collect(); // Deprecated — level 2 removed
 
         $data['additional_costs'] = $allApprovals->filter(fn($a) => 
             $a->approvable_type === AdditionalCost::class
@@ -297,10 +293,7 @@ class ApprovalQueryService
         // ALL REMAINING MODELS (via Centralized Approvals)
         // ═══════════════════════════════════════════════════════════════
 
-        // Acceptance Items (Hạng mục nghiệm thu)
-        $data['acceptance_items'] = $allApprovals->filter(fn($a) =>
-            $a->approvable_type === AcceptanceItem::class
-        )->pluck('approvable')->filter();
+        $data['acceptance_items'] = collect(); // Deprecated — merged into acceptances
 
         // Change Requests (Yêu cầu thay đổi)
         $data['change_requests'] = $allApprovals->filter(fn($a) =>
@@ -478,7 +471,7 @@ class ApprovalQueryService
             'change_requests' => $recentApprovals->filter(fn($a) => $a->approvable_type === ChangeRequest::class)->pluck('approvable')->filter(),
             'additional_costs' => $recentApprovals->filter(fn($a) => $a->approvable_type === AdditionalCost::class)->pluck('approvable')->filter(),
             'sub_payments' => $recentApprovals->filter(fn($a) => $a->approvable_type === SubcontractorPayment::class)->pluck('approvable')->filter(),
-            'acceptances' => $recentApprovals->filter(fn($a) => $a->approvable_type === AcceptanceStage::class)->pluck('approvable')->filter(),
+            'acceptances' => $recentApprovals->filter(fn($a) => $a->approvable_type === Acceptance::class)->pluck('approvable')->filter(),
             'budgets' => $recentApprovals->filter(fn($a) => $a->approvable_type === ProjectBudget::class)->pluck('approvable')->filter(),
             'equipment_rentals' => $recentApprovals->filter(fn($a) => $a->approvable_type === EquipmentRental::class)->pluck('approvable')->filter(),
             'asset_usages' => $recentApprovals->filter(fn($a) => $a->approvable_type === AssetUsage::class)->pluck('approvable')->filter(),
@@ -492,7 +485,7 @@ class ApprovalQueryService
             'defects' => $recentApprovals->filter(fn($a) => $a->approvable_type === Defect::class)->pluck('approvable')->filter(),
             'equipment_purchases' => $recentApprovals->filter(fn($a) => $a->approvable_type === \App\Models\EquipmentPurchase::class)->pluck('approvable')->filter(),
             'attendances' => $recentApprovals->filter(fn($a) => $a->approvable_type === Attendance::class)->pluck('approvable')->filter(),
-            'acceptance_items' => $recentApprovals->filter(fn($a) => $a->approvable_type === AcceptanceItem::class)->pluck('approvable')->filter(),
+            'acceptance_items' => collect(), // Deprecated
         ];
     }
 
@@ -536,8 +529,8 @@ class ApprovalQueryService
             );
         })->count();
 
-        $realPendingAcceptance = $allApprovals->filter(fn($a) => 
-            $a->approvable_type === AcceptanceStage::class
+        $realPendingAcceptance = $allApprovals->filter(fn($a) =>
+            $a->approvable_type === Acceptance::class
         )->count();
         
         // Stats for TODAY from centralized table

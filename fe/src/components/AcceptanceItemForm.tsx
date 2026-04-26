@@ -15,13 +15,13 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { DatePickerInput } from "./";
-import { AcceptanceItem, acceptanceApi, AcceptanceTemplate } from "@/api/acceptanceApi";
+import { Acceptance, AcceptanceTemplate, acceptanceApi } from "@/api/acceptanceApi";
 import { ganttApi } from "@/api/ganttApi";
 import { UniversalFileUploader } from "@/components";
 
 interface AcceptanceItemFormProps {
   visible: boolean;
-  item?: AcceptanceItem | null;
+  item?: Acceptance | null;
   projectId: string | number;
   onClose: () => void;
   onSubmit: (data: {

@@ -799,187 +799,108 @@
 
       <!-- ============ ACCEPTANCE TAB ============ -->
       <a-tab-pane key="acceptance" v-if="isTabVisible('acceptance')">
-        <template #tab><a-tooltip title="Quản lý nghiệm thu: tạo giai đoạn, duyệt 2 cấp (GS xác nhận → KH duyệt), bộ tài liệu, lỗi ghi nhận" placement="bottom">Nghiệm thu ({{ counts.acceptance_stages || 0 }})</a-tooltip></template>
+        <template #tab><a-tooltip title="Quản lý nghiệm thu hạng mục: GS xác nhận → KH duyệt" placement="bottom">Nghiệm thu ({{ counts.acceptance_stages || 0 }})</a-tooltip></template>
         <div class="p-4">
           <div class="flex justify-end mb-3 gap-2">
             <a-button v-if="can('acceptance.create')" type="primary" size="small" @click="openAcceptModal()">
-              <template #icon><PlusOutlined /></template>Tạo giai đoạn
+              <template #icon><PlusOutlined /></template>Tạo phiếu
             </a-button>
           </div>
 
-          <!-- Stage Cards (matching APP's AcceptanceChecklist) -->
-          <div v-for="stage in (project.acceptance_stages || [])" :key="stage.id" class="mb-4 rounded-xl border border-gray-200 bg-white overflow-hidden shadow-sm hover:shadow-md transition-shadow">
-            <!-- Stage Header -->
-            <div class="flex items-center justify-between p-4 border-b border-gray-100">
-              <div class="flex items-center gap-3 flex-1">
-                <!-- Status Icon -->
-                <div :class="['w-9 h-9 rounded-xl flex items-center justify-center', getAcceptIconClass(stage.status)]">
-                  <CheckCircleOutlined v-if="stage.status?.includes('approved')" class="text-lg" />
-                  <CloseCircleOutlined v-else-if="stage.status === 'rejected'" class="text-lg text-red-500" />
-                  <span v-else class="text-lg">⏳</span>
+          <!-- Flat acceptances grouped by parent task -->
+          <template v-if="acceptanceGroups.length">
+            <div v-for="group in acceptanceGroups" :key="group.parentTaskId" class="mb-6">
+              <!-- Group header: parent task name -->
+              <div class="flex items-center justify-between mb-2 px-1">
+                <div class="flex items-center gap-2">
+                  <span class="text-[11px] font-bold text-gray-400 uppercase tracking-widest">📐</span>
+                  <span class="text-sm font-bold text-gray-700">{{ group.parentTaskName }}</span>
+                  <a-tag class="rounded-full text-[10px]">{{ group.items.length }} hạng mục</a-tag>
                 </div>
-                <div class="flex-1">
-                  <div class="flex items-center gap-2 flex-wrap">
-                    <span class="font-bold text-gray-800">{{ stage.name }}</span>
-                    <!-- Re-approval Badges -->
-                    <a-tag v-if="stage.is_resubmitted" color="blue" class="rounded-md text-[9px] uppercase font-bold m-0 border-0">
-                      Duyệt lại (Lần {{ stage.rejection_count + 1 }})
-                    </a-tag>
-                    <a-tag v-if="stage.is_resubmitted && !stage.has_open_defects" color="success" class="rounded-md text-[9px] uppercase font-bold m-0 border-0">
-                      Đã khắc phục lỗi
-                    </a-tag>
-                    <!-- Acceptability Status Badge (Giống APP) -->
-                    <span :class="['inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold',
-                      getAcceptability(stage) === 'acceptable' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700']">
-                      <span :class="['w-1.5 h-1.5 rounded-full', getAcceptability(stage) === 'acceptable' ? 'bg-emerald-500' : 'bg-red-500']"></span>
-                      {{ getAcceptability(stage) === 'acceptable' ? 'Đạt' : 'Chưa đạt' }}
-                    </span>
-                  </div>
-                  <!-- Task info (linked parent task) -->
-                  <div v-if="stage.task" class="flex items-center gap-1 text-xs text-gray-400 mt-0.5">
-                    <span class="cursor-pointer hover:text-blue-500 hover:underline transition-colors" @click="activeTab = 'progress'; activeTabGroup = 'schedule';">
-                      <span>📐</span> {{ stage.task?.name }}
-                    </span>
-                  </div>
-                  <!-- Template info -->
-                  <div v-if="stage.acceptance_template" class="flex items-center gap-1 text-xs text-blue-400 mt-0.5">
-                    <FileOutlined class="text-[10px]" /> {{ stage.acceptance_template.name }}
-                  </div>
-                </div>
-              </div>
-              <!-- Status & Actions -->
-              <div class="flex gap-1 items-center flex-shrink-0">
-                <a-tag :color="acceptStatusColors[stage.status] || 'default'" class="rounded-full text-xs">{{ acceptStatusLabels[stage.status] || stage.status }}</a-tag>
-                <a-tooltip title="Sửa" v-if="can('acceptance.update') && !['customer_approved', 'owner_approved'].includes(stage.status)">
-                  <a-button type="text" size="small" @click="openEditAcceptModal(stage)"><EditOutlined /></a-button>
-                </a-tooltip>
-                <a-popconfirm v-if="can('acceptance.delete') && !['customer_approved', 'owner_approved'].includes(stage.status)" title="Xóa?" @confirm="deleteAccept(stage)">
-                  <a-button type="text" size="small" danger><DeleteOutlined /></a-button>
-                </a-popconfirm>
-              </div>
-            </div>
-
-            <!-- Completion Progress -->
-            <div v-if="stage.items?.length" class="px-4 pt-3">
-              <div class="flex items-center justify-between text-xs text-gray-500 mb-1">
-                <span>Hoàn thành</span>
-                <span class="font-semibold">{{ getAcceptCompletion(stage).approved }}/{{ getAcceptCompletion(stage).total }}</span>
-              </div>
-              <a-progress :percent="getAcceptCompletion(stage).percent" :size="'small'" :stroke-color="getAcceptCompletion(stage).percent >= 100 ? '#10B981' : '#3B82F6'" :show-info="false" />
-            </div>
-
-            <!-- Defect Warning (Giống APP) -->
-            <div v-if="getOpenDefects(stage) > 0" class="mx-4 mt-3 px-3 py-2 bg-red-50 rounded-lg border border-red-100 flex items-center gap-2 cursor-pointer hover:bg-red-100 transition" @click="activeTab = 'defects'">
-              <span class="text-red-500">⚠️</span>
-              <div class="flex-1">
-                <div class="text-xs font-semibold text-red-700">Còn {{ getOpenDefects(stage) }} lỗi chưa xử lý</div>
-                <div class="text-[10px] text-red-400">Nhấn để xem chi tiết →</div>
-              </div>
-            </div>
-
-            <!-- Workflow Info (Ai đã duyệt & Bước tiếp theo) -->
-            <div class="px-4 py-3 bg-gray-50/50 border-y border-gray-100/50 mt-3 space-y-2">
-              <!-- Approvers Info -->
-              <div v-if="stage.approval_status_info?.length" class="flex flex-wrap gap-2">
-                <div v-for="(info, idx) in stage.approval_status_info" :key="idx" 
-                     class="flex items-center gap-1.5 px-2 py-1 bg-white border border-gray-100 rounded-lg shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-                  <span class="text-[10px] font-bold text-gray-400 uppercase tracking-tight">{{ info.role }}:</span>
-                  <span class="text-xs font-semibold text-gray-700">{{ info.user }}</span>
-                  <span class="text-[10px] text-gray-400">({{ dayjs(info.at).format('DD/MM/YY HH:mm') }})</span>
-                </div>
-              </div>
-
-              <!-- Next Action -->
-              <div v-if="stage.next_action?.label" class="flex items-center gap-2">
-                <span class="text-xs text-blue-600 font-bold bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100 flex items-center gap-1.5 animate-pulse-slow">
-                  <div class="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
-                  TIẾP THEO: {{ stage.next_action.label }}
-                </span>
-                <span v-if="stage.next_action.action" class="text-[11px] text-gray-400 italic">
-                  ({{ stage.next_action.action }})
-                </span>
-              </div>
-            </div>
-
-            <!-- Description -->
-            <div v-if="stage.description" class="px-4 pt-2 text-sm text-gray-500">{{ stage.description }}</div>
-
-            <!-- Attachments Gallery Categorized -->
-            <div v-if="stage.attachments?.length" class="px-4 pt-3 space-y-3">
-              <!-- BEFORE IMAGES (Horizontal Strip) -->
-              <div v-if="stage.attachments.filter(a => a.type === 'before').length">
-                <div class="flex items-center gap-1.5 text-[9px] font-bold text-orange-500 uppercase mb-2 tracking-widest">
-                  <CameraOutlined /> Trước nghiệm thu
-                </div>
-                <div class="flex gap-2 overflow-x-auto pb-2 scrollbar-hide snap-x">
-                  <div v-for="att in stage.attachments.filter(a => a.type === 'before')" :key="att.id" @click.prevent="openFilePreview(att)"
-                     class="relative min-w-[56px] max-w-[56px] aspect-square rounded-xl border border-orange-100 overflow-hidden bg-orange-50 hover:border-orange-300 transition shadow-sm snap-start group pointer-events-auto">
-                    <img v-if="att.mime_type?.startsWith('image/')" :src="att.file_url" class="w-full h-full object-cover group-hover:scale-110 transition duration-500" />
-                    <FileImageOutlined v-else class="text-orange-300 text-lg" />
-                    <div class="absolute inset-0 bg-black/5 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
-                      <EyeOutlined class="text-[10px] text-white" />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- AFTER IMAGES (Horizontal Strip) -->
-              <div v-if="stage.attachments.filter(a => a.type === 'after').length">
-                <div class="flex items-center gap-1.5 text-[9px] font-bold text-emerald-500 uppercase mb-2 tracking-widest">
-                  <CheckCircleOutlined /> Sau nghiệm thu
-                </div>
-                <div class="flex gap-2 overflow-x-auto pb-2 scrollbar-hide snap-x">
-                  <div v-for="att in stage.attachments.filter(a => a.type === 'after')" :key="att.id" @click.prevent="openFilePreview(att)"
-                     class="relative min-w-[56px] max-w-[56px] aspect-square rounded-xl border border-emerald-100 overflow-hidden bg-emerald-50 hover:border-emerald-300 transition shadow-sm snap-start group pointer-events-auto">
-                    <img v-if="att.mime_type?.startsWith('image/')" :src="att.file_url" class="w-full h-full object-cover group-hover:scale-110 transition duration-500" />
-                    <FileImageOutlined v-else class="text-emerald-300 text-lg" />
-                    <div class="absolute inset-0 bg-black/5 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
-                      <EyeOutlined class="text-[10px] text-white" />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- OTHER ATTACHMENTS (Compact List) -->
-              <div v-if="stage.attachments.filter(a => a.type !== 'before' && a.type !== 'after').length">
-                <div class="flex items-center gap-1.5 text-[9px] font-bold text-gray-400 uppercase mb-2 tracking-widest">
-                  <FileTextOutlined /> Tài liệu bổ sung
-                </div>
-                <div class="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-                  <div v-for="att in stage.attachments.filter(a => a.type !== 'before' && a.type !== 'after')" :key="att.id" @click.prevent="openFilePreview(att)"
-                     class="inline-flex items-center gap-2 text-[10px] bg-white text-gray-600 px-3 py-1.5 rounded-full border border-gray-100 shadow-sm hover:border-blue-400 hover:text-blue-500 transition cursor-pointer whitespace-nowrap">
-                    <PaperClipOutlined class="text-[9px]" /> {{ att.original_name || att.file_name }}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Checklist Items (hạng mục nghiệm thu) -->
-            <div v-if="stage.items?.length" class="px-4 pt-3 pb-1">
-              <div class="text-xs font-semibold text-gray-600 mb-2">Hạng mục ({{ stage.items.length }})</div>
-              <div v-for="item in stage.items" :key="item.id" class="flex items-center gap-2 text-sm py-1.5 border-b border-gray-50 last:border-0">
-                <a-checkbox :checked="item.workflow_status === 'customer_approved'" disabled />
-                <span :class="item.workflow_status === 'customer_approved' ? 'text-gray-400 line-through' : 'text-gray-700'">{{ item.name }}</span>
-                <div class="flex items-center gap-2 ml-auto">
-                  <a-tag v-if="item.workflow_status && item.workflow_status !== 'pending'" :color="acceptItemStatusColor(item.workflow_status)" class="rounded-full text-[10px]">{{ acceptItemStatusLabel(item.workflow_status) }}</a-tag>
-                  <a-button v-if="['pending', 'submitted', 'supervisor_approved', 'rejected'].includes(item.workflow_status) && can('acceptance.revert') && stage.status !== 'customer_approved'"
-                            type="text" size="small" class="text-orange-500 hover:text-orange-600 p-0 h-auto" @click.stop="revertAcceptItemAction(stage, item)">
-                    <ReloadOutlined class="text-[10px]" />
+                <!-- Batch approve buttons -->
+                <div class="flex gap-1">
+                  <a-button v-if="can('acceptance.approve.level_1') && group.items.some(a => a.workflow_status === 'submitted')"
+                    size="small" type="default" @click="batchSupervisorApprove(group.parentTaskId)">
+                    Duyệt tất cả (GS)
+                  </a-button>
+                  <a-button v-if="can('acceptance.approve.level_3') && group.items.some(a => a.workflow_status === 'supervisor_approved')"
+                    size="small" type="primary" @click="batchCustomerApprove(group.parentTaskId)">
+                    Duyệt tất cả (KH)
                   </a-button>
                 </div>
               </div>
-            </div>
 
-            <!-- Action button (Giống APP: "Nghiệm thu giai đoạn") -->
-            <div class="px-4 py-3 border-t border-gray-100 mt-2">
-              <a-button type="link" block size="small" @click="openAcceptDetailModal(stage)" class="!text-blue-600 !font-semibold">
-                <CheckCircleOutlined /> {{ can('acceptance.update') ? 'Nghiệm thu giai đoạn' : 'Xem chi tiết nghiệm thu' }}
-                <span class="ml-1">→</span>
-              </a-button>
-            </div>
-          </div>
+              <!-- Acceptance cards -->
+              <div v-for="acceptance in group.items" :key="acceptance.id"
+                class="mb-3 rounded-xl border border-gray-200 bg-white overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+                <div class="flex items-center justify-between p-3 border-b border-gray-100">
+                  <div class="flex items-center gap-2 flex-1 min-w-0">
+                    <div :class="['w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0', getAcceptIconClass(acceptance.workflow_status)]">
+                      <CheckCircleOutlined v-if="acceptance.workflow_status === 'customer_approved'" />
+                      <CloseCircleOutlined v-else-if="acceptance.workflow_status === 'rejected'" />
+                      <span v-else class="text-sm">⏳</span>
+                    </div>
+                    <div class="min-w-0 flex-1">
+                      <div class="font-semibold text-gray-800 text-sm truncate">{{ acceptance.name }}</div>
+                      <div v-if="acceptance.task?.name" class="text-[11px] text-gray-400 truncate">{{ acceptance.task.name }}</div>
+                    </div>
+                  </div>
+                  <div class="flex gap-1 items-center flex-shrink-0 ml-2">
+                    <a-tag :color="acceptStatusColors[acceptance.workflow_status] || 'default'" class="rounded-full text-xs">
+                      {{ acceptStatusLabels[acceptance.workflow_status] || acceptance.workflow_status }}
+                    </a-tag>
+                    <a-tooltip title="Sửa" v-if="can('acceptance.update') && acceptance.workflow_status !== 'customer_approved'">
+                      <a-button type="text" size="small" @click="openEditAcceptModal(acceptance)"><EditOutlined /></a-button>
+                    </a-tooltip>
+                    <a-popconfirm v-if="can('acceptance.delete') && ['draft','rejected'].includes(acceptance.workflow_status)" title="Xóa phiếu nghiệm thu này?" @confirm="deleteAccept(acceptance)">
+                      <a-button type="text" size="small" danger><DeleteOutlined /></a-button>
+                    </a-popconfirm>
+                  </div>
+                </div>
 
-          <a-empty v-if="!project.acceptance_stages?.length" description="Chưa có nghiệm thu" />
+                <!-- Defect warning -->
+                <div v-if="getOpenDefects(acceptance) > 0" class="mx-3 mt-2 px-3 py-1.5 bg-red-50 rounded-lg border border-red-100 flex items-center gap-2 cursor-pointer hover:bg-red-100 transition text-xs" @click="activeTab = 'defects'">
+                  <span>⚠️</span>
+                  <span class="font-semibold text-red-700">Còn {{ getOpenDefects(acceptance) }} lỗi chưa xử lý</span>
+                </div>
+
+                <!-- Approver info -->
+                <div v-if="acceptance.supervisor_approved_by || acceptance.customer_approved_by" class="px-3 py-2 text-[11px] text-gray-500 flex flex-wrap gap-x-4 gap-y-0.5">
+                  <span v-if="acceptance.supervisor_approved_by">GS: <span class="font-semibold text-gray-700">{{ acceptance.supervisorApprover?.name }}</span></span>
+                  <span v-if="acceptance.customer_approved_by">KH: <span class="font-semibold text-gray-700">{{ acceptance.customerApprover?.name }}</span></span>
+                </div>
+
+                <!-- Rejection reason -->
+                <div v-if="acceptance.workflow_status === 'rejected' && acceptance.rejection_reason" class="mx-3 mb-2 px-3 py-1.5 bg-amber-50 rounded-lg border border-amber-100 text-xs text-amber-700">
+                  <span class="font-semibold">Lý do từ chối:</span> {{ acceptance.rejection_reason }}
+                </div>
+
+                <!-- Action buttons -->
+                <div class="px-3 py-2 border-t border-gray-50 flex gap-2 flex-wrap">
+                  <a-button type="link" size="small" @click="openAcceptDetailModal(acceptance)" class="!text-blue-600 !font-semibold !p-0">
+                    <CheckCircleOutlined /> Xem chi tiết →
+                  </a-button>
+                  <template v-if="acceptance.workflow_status === 'draft' && can('acceptance.update')">
+                    <a-button size="small" type="primary" ghost @click="submitAccept(acceptance)">Gửi duyệt</a-button>
+                  </template>
+                  <template v-if="acceptance.workflow_status === 'submitted' && can('acceptance.approve.level_1')">
+                    <a-button size="small" type="primary" @click="approveSupervisor(acceptance)">Duyệt (GS)</a-button>
+                  </template>
+                  <template v-if="acceptance.workflow_status === 'supervisor_approved' && can('acceptance.approve.level_3')">
+                    <a-button size="small" type="primary" @click="approveCustomer(acceptance)">Duyệt (KH)</a-button>
+                  </template>
+                  <template v-if="['submitted','supervisor_approved'].includes(acceptance.workflow_status) && (can('acceptance.approve.level_1') || can('acceptance.approve.level_3'))">
+                    <a-button size="small" danger @click="openRejectAcceptModal(acceptance)">Từ chối</a-button>
+                  </template>
+                  <template v-if="['submitted','supervisor_approved','rejected'].includes(acceptance.workflow_status) && can('acceptance.revert')">
+                    <a-button size="small" @click="revertAccept(acceptance)"><ReloadOutlined /> Hoàn duyệt</a-button>
+                  </template>
+                </div>
+              </div>
+            </div>
+          </template>
+
+          <a-empty v-if="!acceptanceGroups.length" description="Chưa có phiếu nghiệm thu" />
         </div>
       </a-tab-pane>
 
@@ -5561,159 +5482,82 @@
   </a-modal>
 
   <!-- Acceptance Create Modal -->
-  <a-modal v-model:open="showAcceptModal" title="Tạo giai đoạn nghiệm thu" :width="600" @ok="saveAccept" ok-text="Tạo" cancel-text="Hủy" :confirm-loading="savingForm" centered destroy-on-close class="crm-modal">
+  <a-modal v-model:open="showAcceptModal" title="Tạo phiếu nghiệm thu" :width="560" @ok="saveAccept" ok-text="Tạo" cancel-text="Hủy" :confirm-loading="savingForm" centered destroy-on-close class="crm-modal">
     <a-form layout="vertical" class="mt-4">
-      <a-form-item label="Tên giai đoạn" required v-bind="fieldStatus('name')"><a-input v-model:value="acceptForm.name" size="large" placeholder="VD: Nghiệm thu phần thô, nghiệm thu hoàn thiện..." /></a-form-item>
-      <a-row :gutter="16">
-        <a-col :span="12"><a-form-item label="Công việc cha (hạng mục A)"><a-select v-model:value="acceptForm.task_id" size="large" class="w-full" allow-clear show-search option-filter-prop="label" placeholder="Chọn hạng mục">
-          <a-select-option v-for="t in parentTasks" :key="t.id" :value="t.id" :label="t.name">{{ t.name }}</a-select-option>
-        </a-select></a-form-item></a-col>
-        <a-col :span="12"><a-form-item label="Mẫu nghiệm thu"><a-select v-model:value="acceptForm.acceptance_template_id" size="large" class="w-full" allow-clear show-search option-filter-prop="label" placeholder="Chọn mẫu">
+      <a-form-item label="Hạng mục con (Child task)" required>
+        <a-select v-model:value="acceptForm.task_id" size="large" class="w-full" allow-clear show-search option-filter-prop="label" placeholder="Chọn hạng mục con cần nghiệm thu">
+          <a-select-option v-for="t in childTasks" :key="t.id" :value="t.id" :label="t.name">{{ t.name }}</a-select-option>
+        </a-select>
+      </a-form-item>
+      <a-form-item label="Tên phiếu nghiệm thu"><a-input v-model:value="acceptForm.name" size="large" placeholder="Để trống sẽ lấy tên hạng mục" /></a-form-item>
+      <a-form-item label="Bộ tiêu chuẩn nghiệm thu">
+        <a-select v-model:value="acceptForm.acceptance_template_id" size="large" class="w-full" allow-clear show-search option-filter-prop="label" placeholder="Chọn bộ nghiệm thu (không bắt buộc)">
           <a-select-option v-for="t in acceptanceTemplates" :key="t.id" :value="t.id" :label="t.name">{{ t.name }}</a-select-option>
-        </a-select></a-form-item></a-col>
-      </a-row>
+        </a-select>
+      </a-form-item>
       <a-form-item label="Mô tả"><a-textarea v-model:value="acceptForm.description" :rows="3" placeholder="Mô tả nội dung nghiệm thu..." /></a-form-item>
-      <!-- Inline Attachments -->
-      <div class="border-t pt-3 mt-2">
-        <div class="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-1"><FileOutlined /> Biên bản / Tài liệu nghiệm thu</div>
-        <input type="file" multiple @change="e => modalFiles = [...(e.target.files || [])]" class="block w-full text-xs py-1.5 px-2 border border-dashed border-gray-300 rounded-lg hover:border-blue-400 transition" />
-        <div v-if="modalFiles.length" class="text-[10px] text-green-600 mt-1">{{ modalFiles.length }} tệp đã chọn — sẽ upload khi lưu</div>
-      </div>
+      <a-form-item label="Tài liệu đính kèm">
+        <input type="file" multiple @change="e => modalFiles = [...(e.target.files || [])]" class="block w-full text-xs py-1.5 px-2 border border-dashed border-gray-300 rounded-lg hover:border-blue-400 transition" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" />
+        <div v-if="modalFiles.length" class="text-[10px] text-green-600 mt-1">{{ modalFiles.length }} tệp đã chọn — sẽ upload khi tạo</div>
+      </a-form-item>
     </a-form>
   </a-modal>
 
   <!-- Acceptance Edit Modal -->
-  <a-modal v-model:open="showEditAcceptModal" title="Chỉnh sửa giai đoạn nghiệm thu" :width="650" @ok="updateAccept" ok-text="Cập nhật" cancel-text="Hủy" :confirm-loading="savingForm" centered destroy-on-close class="crm-modal">
+  <a-modal v-model:open="showEditAcceptModal" title="Chỉnh sửa phiếu nghiệm thu" :width="560" @ok="updateAccept" ok-text="Cập nhật" cancel-text="Hủy" :confirm-loading="savingForm" centered destroy-on-close class="crm-modal">
     <a-form layout="vertical" class="mt-4">
-      <div class="flex items-center justify-between gap-4 mb-4 p-3 bg-gray-50 rounded-xl border border-gray-100">
-         <div class="text-xs font-bold text-gray-500 uppercase tracking-wider">Thông tin chung</div>
-         <a-form-item class="mb-0" label="Tùy chỉnh" label-align="right" :label-col="{ span: 16 }">
-           <a-switch v-model:checked="editAcceptForm.is_custom" checked-children="Bật" un-checked-children="Tắt" />
-         </a-form-item>
-      </div>
-
-      <a-form-item label="Tên giai đoạn" required><a-input v-model:value="editAcceptForm.name" size="large" placeholder="VD: Nghiệm thu phần thô..." /></a-form-item>
-      
-      <a-row :gutter="16">
-        <a-col :span="12">
-          <a-form-item label="Công việc cha (hạng mục A)">
-            <a-select v-model:value="editAcceptForm.task_id" size="large" class="w-full" allow-clear show-search option-filter-prop="label" placeholder="Chọn hạng mục">
-              <a-select-option v-for="t in parentTasks" :key="t.id" :value="t.id" :label="t.name">{{ t.name }}</a-select-option>
-            </a-select>
-          </a-form-item>
-        </a-col>
-        <a-col :span="12">
-          <a-form-item label="Mẫu nghiệm thu">
-            <a-select v-model:value="editAcceptForm.acceptance_template_id" size="large" class="w-full" allow-clear show-search option-filter-prop="label" placeholder="Chọn mẫu" :disabled="editAcceptForm.is_custom">
-              <a-select-option v-for="t in acceptanceTemplates" :key="t.id" :value="t.id" :label="t.name">{{ t.name }}</a-select-option>
-            </a-select>
-          </a-form-item>
-        </a-col>
-      </a-row>
-
-      <a-row :gutter="16" class="mt-2">
-        <a-col :span="12">
-          <a-form-item label="Trạng thái">
-            <a-select v-model:value="editAcceptForm.status" size="large" class="w-full">
-              <a-select-option v-for="(label, val) in acceptStatusLabels" :key="val" :value="val">{{ label }}</a-select-option>
-            </a-select>
-          </a-form-item>
-        </a-col>
-        <a-col :span="12">
-          <a-form-item label="Thứ tự hiển thị">
-            <a-input-number v-model:value="editAcceptForm.order" :min="0" size="large" class="w-full" placeholder="Số nguyên (0, 1, 2...)" />
-          </a-form-item>
-        </a-col>
-      </a-row>
-
-      <a-form-item label="Mô tả chi tiết"><a-textarea v-model:value="editAcceptForm.description" :rows="3" placeholder="Ghi chú thêm về giai đoạn này..." /></a-form-item>
-
-      <!-- Categorized Attachment Management -->
-      <div class="border-t pt-4 mt-4 space-y-6">
-        <!-- 1. General Files -->
-        <div class="p-4 bg-gray-50/50 rounded-2xl border border-gray-100">
-          <div class="text-[10px] font-extrabold text-blue-500 uppercase tracking-widest mb-3 flex items-center justify-between">
-            <span class="flex items-center gap-1.5"><FileProtectOutlined /> Biên bản / Hồ sơ pháp lý</span>
-            <span v-if="modalFilesGeneral.length" class="bg-blue-500 text-white px-1.5 py-0.5 rounded text-[9px]">+{{ modalFilesGeneral.length }}</span>
-          </div>
-          
-          <div v-if="editingAcceptStage?.attachments?.filter(a => !a.type || (a.type !== 'before' && a.type !== 'after')).length" class="flex flex-wrap gap-2 mb-3">
-            <div v-for="a in editingAcceptStage.attachments.filter(a => !a.type || (a.type !== 'before' && a.type !== 'after'))" :key="a.id" class="relative group">
-              <div @click="openFilePreview(a)" 
-                  class="inline-flex items-center gap-2 text-[10px] px-2.5 py-1.5 rounded-lg border transition cursor-pointer"
-                  :class="isAttachmentDeleted(editAcceptForm, a.id) ? 'bg-gray-100 text-gray-400 border-gray-200 opacity-60' : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300 shadow-sm'">
-                <span v-if="isAttachmentDeleted(editAcceptForm, a.id)" class="line-through flex items-center gap-1"><CloseCircleOutlined /> Xóa</span>
-                <template v-else>
-                  <FilePdfOutlined v-if="a.ext === 'pdf'" class="text-red-500" />
-                  <FileWordOutlined v-else-if="['doc','docx'].includes(a.ext)" class="text-blue-500" />
-                  <FileExcelOutlined v-else-if="['xls','xlsx'].includes(a.ext)" class="text-green-500" />
-                  <PaperClipOutlined v-else />
-                  <span class="max-w-[100px] truncate">{{ a.original_name || a.file_name }}</span>
-                </template>
-              </div>
-              <div v-if="!isAttachmentDeleted(editAcceptForm, a.id)" 
-                  class="absolute -top-1.5 -right-1.5 opacity-0 group-hover:opacity-100 transition-all cursor-pointer bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center shadow-lg border border-white hover:bg-red-600 z-10"
-                  @click.stop="toggleDeleteAttachment(editAcceptForm, a.id)">
-                <CloseOutlined class="text-[9px]" />
-              </div>
-              <div v-else 
-                  class="absolute -top-1.5 -right-1.5 opacity-0 group-hover:opacity-100 transition-all cursor-pointer bg-blue-500 text-white rounded-full w-4 h-4 flex items-center justify-center shadow-lg border border-white hover:bg-blue-600 z-10"
-                  @click.stop="toggleDeleteAttachment(editAcceptForm, a.id)">
-                <ReloadOutlined class="text-[9px]" />
-              </div>
+      <a-form-item label="Hạng mục con (Child task)" required>
+        <a-select v-model:value="editAcceptForm.task_id" size="large" class="w-full" show-search option-filter-prop="label" placeholder="Chọn hạng mục con">
+          <a-select-option v-for="t in childTasks" :key="t.id" :value="t.id" :label="t.name">{{ t.name }}</a-select-option>
+        </a-select>
+      </a-form-item>
+      <a-form-item label="Tên phiếu nghiệm thu" required><a-input v-model:value="editAcceptForm.name" size="large" placeholder="Tên phiếu nghiệm thu..." /></a-form-item>
+      <a-form-item label="Bộ tiêu chuẩn nghiệm thu">
+        <a-select v-model:value="editAcceptForm.acceptance_template_id" size="large" class="w-full" allow-clear show-search option-filter-prop="label" placeholder="Chọn bộ nghiệm thu (không bắt buộc)">
+          <a-select-option v-for="t in acceptanceTemplates" :key="t.id" :value="t.id" :label="t.name">{{ t.name }}</a-select-option>
+        </a-select>
+      </a-form-item>
+      <a-form-item label="Mô tả"><a-textarea v-model:value="editAcceptForm.description" :rows="3" placeholder="Mô tả nội dung nghiệm thu..." /></a-form-item>
+      <a-form-item label="Ghi chú (GS)"><a-textarea v-model:value="editAcceptForm.notes" :rows="2" placeholder="Ghi chú từ giám sát..." /></a-form-item>
+      <a-form-item label="Tài liệu đính kèm">
+        <!-- Existing files block -->
+        <div v-if="editingAcceptId && editingAcceptAttachments.length" class="flex flex-wrap gap-2 mb-2">
+          <div v-for="a in editingAcceptAttachments" :key="a.id" 
+               class="group relative border rounded p-1"
+               :class="isAttachmentDeleted(editAcceptForm, a.id) ? 'border-red-300 opacity-50 grayscale' : 'border-gray-200 bg-gray-50'">
+            <div class="w-10 h-10 flex items-center justify-center overflow-hidden rounded bg-white">
+              <img v-if="a.file_type?.startsWith('image/')" :src="a.file_url" class="object-cover w-full h-full" />
+              <FileOutlined v-else class="text-xl text-gray-400" />
+            </div>
+            <div v-if="!isAttachmentDeleted(editAcceptForm, a.id)" 
+                 class="absolute -top-1.5 -right-1.5 opacity-0 group-hover:opacity-100 transition-all cursor-pointer bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center shadow-lg border border-white hover:bg-red-600 z-10"
+                 @click.stop="toggleDeleteAttachment(editAcceptForm, a.id)">
+              <CloseOutlined class="text-[10px] font-bold" />
+            </div>
+            <div v-else 
+                 class="absolute -top-1.5 -right-1.5 opacity-0 group-hover:opacity-100 transition-all cursor-pointer bg-blue-500 text-white rounded-full w-4 h-4 flex items-center justify-center shadow-lg border border-white hover:bg-blue-600 z-10"
+                 @click.stop="toggleDeleteAttachment(editAcceptForm, a.id)">
+              <ReloadOutlined class="text-[10px] font-bold" />
             </div>
           </div>
-          <input type="file" multiple @change="e => modalFilesGeneral = [...(e.target.files || [])]" 
-                 class="block w-full text-[10px] text-gray-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-[10px] file:font-bold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer" />
         </div>
-
-        <!-- 2. Before Photos -->
-        <div class="p-4 bg-orange-50/30 rounded-2xl border border-orange-100">
-          <div class="text-[10px] font-extrabold text-orange-500 uppercase tracking-widest mb-3 flex items-center justify-between">
-            <span class="flex items-center gap-1.5"><CameraOutlined /> Ảnh TRƯỚC nghiệm thu</span>
-            <span v-if="modalFilesBefore.length" class="bg-orange-500 text-white px-1.5 py-0.5 rounded text-[9px]">+{{ modalFilesBefore.length }}</span>
-          </div>
-
-          <div v-if="editingAcceptStage?.attachments?.filter(a => a.type === 'before').length" class="flex flex-wrap gap-2 mb-3">
-             <div v-for="a in editingAcceptStage.attachments.filter(a => a.type === 'before')" :key="a.id" class="relative group w-16 h-16 shadow-sm border border-orange-100 rounded-lg overflow-hidden">
-                <img :src="a.file_url" class="w-full h-full object-cover" :class="{'opacity-30 grayscale': isAttachmentDeleted(editAcceptForm, a.id)}" />
-                <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center gap-1">
-                   <EyeOutlined class="text-white text-xs cursor-pointer" @click="openFilePreview(a)" />
-                   <div class="w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white cursor-pointer" @click="toggleDeleteAttachment(editAcceptForm, a.id)">
-                      <CloseOutlined class="text-[10px]" />
-                   </div>
-                </div>
-                <div v-if="isAttachmentDeleted(editAcceptForm, a.id)" class="absolute inset-x-0 bottom-0 bg-red-500 text-white text-[8px] text-center font-bold">XÓA</div>
-             </div>
-          </div>
-          <input type="file" multiple accept="image/*" @change="e => modalFilesBefore = [...(e.target.files || [])]" 
-                 class="block w-full text-[10px] text-gray-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-[10px] file:font-bold file:bg-orange-100 file:text-orange-700 hover:file:bg-orange-200 cursor-pointer" />
-        </div>
-
-        <!-- 3. After Photos -->
-        <div class="p-4 bg-emerald-50/30 rounded-2xl border border-emerald-100">
-          <div class="text-[10px] font-extrabold text-emerald-600 uppercase tracking-widest mb-3 flex items-center justify-between">
-            <span class="flex items-center gap-1.5"><CheckCircleOutlined /> Ảnh SAU nghiệm thu</span>
-            <span v-if="modalFilesAfter.length" class="bg-emerald-600 text-white px-1.5 py-0.5 rounded text-[9px]">+{{ modalFilesAfter.length }}</span>
-          </div>
-
-          <div v-if="editingAcceptStage?.attachments?.filter(a => a.type === 'after').length" class="flex flex-wrap gap-2 mb-3">
-             <div v-for="a in editingAcceptStage.attachments.filter(a => a.type === 'after')" :key="a.id" class="relative group w-16 h-16 shadow-sm border border-emerald-100 rounded-lg overflow-hidden">
-                <img :src="a.file_url" class="w-full h-full object-cover" :class="{'opacity-30 grayscale': isAttachmentDeleted(editAcceptForm, a.id)}" />
-                <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center gap-1">
-                   <EyeOutlined class="text-white text-xs cursor-pointer" @click="openFilePreview(a)" />
-                   <div class="w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white cursor-pointer" @click="toggleDeleteAttachment(editAcceptForm, a.id)">
-                      <CloseOutlined class="text-[10px]" />
-                   </div>
-                </div>
-                <div v-if="isAttachmentDeleted(editAcceptForm, a.id)" class="absolute inset-x-0 bottom-0 bg-red-500 text-white text-[8px] text-center font-bold">XÓA</div>
-             </div>
-          </div>
-          <input type="file" multiple accept="image/*" @change="e => modalFilesAfter = [...(e.target.files || [])]" 
-                 class="block w-full text-[10px] text-gray-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-[10px] file:font-bold file:bg-emerald-100 file:text-emerald-700 hover:file:bg-emerald-200 cursor-pointer" />
-        </div>
-      </div>
+        <input type="file" multiple @change="e => modalFiles = [...(e.target.files || [])]" class="block w-full text-xs py-1.5 px-2 border border-dashed border-gray-300 rounded-lg hover:border-blue-400 transition" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" />
+        <div v-if="modalFiles.length" class="text-[10px] text-green-600 mt-1">{{ modalFiles.length }} tệp đã chọn — sẽ upload khi lưu</div>
+      </a-form-item>
     </a-form>
+  </a-modal>
+
+  <!-- Reject Acceptance Modal -->
+  <a-modal v-model:open="showRejectAcceptModal" title="Từ chối nghiệm thu" :width="480" @ok="confirmRejectAccept" ok-text="Từ chối" cancel-text="Hủy" :ok-button-props="{ danger: true, disabled: !rejectAcceptReason.trim() }" centered destroy-on-close class="crm-modal">
+    <div class="mt-4">
+      <div class="p-3 mb-3 bg-red-50 rounded-lg border border-red-100">
+        <div class="text-sm font-semibold text-red-700">{{ rejectingAcceptance?.name }}</div>
+        <div class="text-xs text-red-500 mt-1">Khi từ chối, hệ thống sẽ tự động tạo lỗi ghi nhận.</div>
+      </div>
+      <a-form-item label="Lý do từ chối" required>
+        <a-textarea v-model:value="rejectAcceptReason" :rows="3" placeholder="Nhập lý do từ chối..." :max-length="500" show-count />
+      </a-form-item>
+    </div>
   </a-modal>
 
   <!-- ==================== ACCEPTANCE DETAIL DRAWER (Giống APP: "Nghiệm thu giai đoạn") ==================== -->
@@ -5725,8 +5569,8 @@
         <div class="bg-gray-50 p-5 rounded-2xl border border-gray-100 flex items-center justify-between">
           <div class="flex items-center gap-3">
             <div :class="['w-12 h-12 rounded-xl flex items-center justify-center text-white shrink-0 shadow-lg', 
-              getAcceptability(acceptDetailStage) === 'acceptable' ? 'bg-emerald-500 shadow-emerald-100' : 'bg-amber-500 shadow-amber-100']">
-              <SafetyCertificateOutlined v-if="getAcceptability(acceptDetailStage) === 'acceptable'" class="text-xl" />
+              acceptDetailStage.workflow_status === 'customer_approved' ? 'bg-emerald-500 shadow-emerald-100' : 'bg-amber-500 shadow-amber-100']">
+              <SafetyCertificateOutlined v-if="acceptDetailStage.workflow_status === 'customer_approved'" class="text-xl" />
               <WarningOutlined v-else class="text-xl" />
             </div>
             <div>
@@ -5734,8 +5578,8 @@
               <div class="text-lg font-bold text-gray-800 truncate max-w-[280px]">{{ acceptDetailStage.name }}</div>
             </div>
           </div>
-          <a-tag :color="acceptStatusColors[acceptDetailStage.status] || 'default'" class="rounded-full px-3 py-0.5 text-[11px] font-bold">
-            {{ acceptStatusLabels[acceptDetailStage.status] || acceptDetailStage.status }}
+          <a-tag :color="acceptStatusColors[acceptDetailStage.workflow_status] || 'default'" class="rounded-full px-3 py-0.5 text-[11px] font-bold">
+            {{ acceptStatusLabels[acceptDetailStage.workflow_status] || acceptDetailStage.workflow_status }}
           </a-tag>
         </div>
 
@@ -5785,178 +5629,6 @@
              <div class="text-[11px] text-emerald-600">Giai đoạn này đã được khách hàng nghiệm thu. Không thể chỉnh sửa hoặc thêm mới.</div>
            </div>
          </div>
-
-        <!-- 3. Documents & Template -->
-        <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
-          <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2 text-blue-500">
-            <FileOutlined /> Hồ sơ nghiệm thu 
-          </div>
-          
-          <div v-if="can('acceptance.update') && ['draft', 'rejected'].includes(acceptDetailStage.status) && !isAcceptanceLocked">
-            <a-select v-model:value="acceptDetailTemplateId" size="large" class="w-full mb-4" allow-clear show-search option-filter-prop="label" placeholder="Chọn bộ hồ sơ mẫu" @change="onAcceptDetailTemplateChange">
-              <a-select-option v-for="t in acceptanceTemplates" :key="t.id" :value="t.id" :label="t.name">
-                {{ t.name }}
-              </a-select-option>
-            </a-select>
-          </div>
-          <div v-else-if="acceptDetailSelectedTemplate" class="mb-4 p-4 bg-gray-50 rounded-xl border border-gray-100 flex items-center justify-between">
-             <div class="flex items-center gap-3">
-               <div class="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center text-blue-600">
-                 <FileTextOutlined />
-               </div>
-               <div class="text-sm font-bold text-gray-700 truncate max-w-[400px]">{{ acceptDetailSelectedTemplate.name }}</div>
-             </div>
-             <a-tag color="blue">Đang áp dụng</a-tag>
-          </div>
-          
-          <div v-if="acceptDetailSelectedTemplate" class="space-y-4">
-            <!-- Documents List (Professional Card Style) -->
-            <div v-if="acceptDetailSelectedTemplate.documents?.length" class="space-y-3">
-              <div class="flex items-center justify-between">
-                <div class="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest">📄 Hồ sơ văn bản</div>
-                <span class="text-[9px] text-blue-500 font-bold bg-blue-50 px-1.5 py-0.5 rounded">{{ acceptDetailSelectedTemplate.documents.length }} file</span>
-              </div>
-              <div class="max-h-[240px] overflow-y-auto pr-1 space-y-2 scrollbar-thin">
-                <a v-for="doc in acceptDetailSelectedTemplate.documents" :key="doc.id" href="#" @click.prevent="openFilePreview(doc)"
-                   class="flex items-center gap-3 p-2.5 bg-gray-50/50 rounded-xl border border-gray-100 hover:border-blue-300 hover:bg-white transition-all group relative overflow-hidden">
-                  <div class="w-9 h-9 rounded-lg bg-white shadow-sm flex items-center justify-center group-hover:bg-blue-50 transition-colors">
-                    <FilePdfOutlined v-if="fileExt(doc) === 'pdf'" class="text-red-500 text-lg" />
-                    <FileExcelOutlined v-else-if="['xls','xlsx'].includes(fileExt(doc))" class="text-green-600 text-lg" />
-                    <FileWordOutlined v-else-if="['doc','docx'].includes(fileExt(doc))" class="text-blue-600 text-lg" />
-                    <FileOutlined v-else class="text-blue-400 text-lg" />
-                  </div>
-                  <div class="flex-1 min-w-0">
-                    <div class="text-[11px] font-bold text-gray-700 truncate group-hover:text-blue-600">{{ doc.original_name || doc.file_name }}</div>
-                    <div class="text-[9px] text-gray-400 uppercase">{{ formatFileSize(doc.file_size) }} • {{ fileExt(doc) }}</div>
-                  </div>
-                  <DownloadOutlined class="text-gray-300 group-hover:text-blue-500 transition-colors mr-2" />
-                </a>
-              </div>
-            </div>
-
-            <!-- Standard & Description from Template -->
-            <div v-if="acceptDetailSelectedTemplate.standard || acceptDetailSelectedTemplate.description" class="bg-blue-50/30 p-4 rounded-xl border border-blue-100/50">
-              <div class="text-[10px] font-bold text-blue-500 uppercase tracking-widest mb-2 flex items-center gap-2">
-                <InfoCircleOutlined /> Tiêu chuẩn kỹ thuật & Mô tả
-              </div>
-              <div v-if="acceptDetailSelectedTemplate.standard" class="text-[11px] font-bold text-gray-800 mb-2 leading-relaxed whitespace-pre-wrap">{{ acceptDetailSelectedTemplate.standard }}</div>
-              <div v-if="acceptDetailSelectedTemplate.description" class="text-[11px] text-gray-600 leading-relaxed whitespace-pre-wrap">{{ acceptDetailSelectedTemplate.description }}</div>
-            </div>
-
-            <!-- Reference/Illustrative Images (Smart Gallery) -->
-            <div v-if="acceptDetailSelectedTemplate.images?.length" class="space-y-3">
-              <div class="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest">🖼️ Hình ảnh minh họa tiêu chuẩn</div>
-              <div class="flex gap-2 overflow-x-auto pb-2 scrollbar-hide snap-x">
-                <div v-for="(img, idx) in acceptDetailSelectedTemplate.images.slice(0, 6)" :key="img.id" @click="openFilePreview(img)"
-                     class="relative min-w-[70px] max-w-[70px] aspect-square rounded-xl overflow-hidden border border-gray-100 cursor-pointer hover:border-blue-500 transition-all group snap-start shadow-sm">
-                  <img :src="img.file_url" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
-                  <div v-if="idx === 5 && acceptDetailSelectedTemplate.images.length > 6" class="absolute inset-0 bg-black/60 backdrop-blur-[1px] flex items-center justify-center text-white font-bold text-[10px]">
-                    +{{ acceptDetailSelectedTemplate.images.length - 6 }}
-                  </div>
-                  <div class="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors"></div>
-                </div>
-              </div>
-            </div>
-            
-            <!-- Criteria List (Nội dung kiểm tra từ mẫu) -->
-            <div v-if="acceptDetailSelectedTemplate.criteria?.length" class="bg-blue-50/20 rounded-2xl p-4 border border-blue-100/30">
-              <div class="text-[10px] font-bold text-blue-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-                <FileProtectOutlined /> Tiêu chí đánh giá ({{ acceptDetailSelectedTemplate.criteria.length }})
-              </div>
-              <div class="space-y-3">
-                <div v-for="(crit, cIdx) in acceptDetailSelectedTemplate.criteria" :key="crit.id" class="flex items-start gap-3">
-                  <div class="w-5 h-5 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-[10px] font-bold shrink-0">{{ cIdx + 1 }}</div>
-                  <div class="flex-1">
-                    <div class="text-[11px] font-bold text-gray-700 leading-relaxed">{{ crit.name }}</div>
-                    <div v-if="crit.description" class="text-[10px] text-gray-500 mt-0.5 leading-relaxed">{{ crit.description }}</div>
-                    <div v-if="crit.is_critical" class="mt-1"><a-tag color="red" class="text-[9px] px-1 py-0 border-none uppercase font-bold">Quan trọng</a-tag></div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div v-else class="text-center py-6 bg-gray-50/50 rounded-xl border border-dashed border-gray-200">
-            <div class="mb-2 text-gray-300"><FileSearchOutlined class="text-3xl" /></div>
-            <div class="text-xs text-gray-400 italic">Chưa chọn bộ hồ sơ mẫu cho giai đoạn này</div>
-          </div>
-        </div>
-
-        <!-- 3.5. Detailed Items (Hạng mục chi tiết của dự án) -->
-        <div v-if="acceptDetailStage.items?.length" class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
-          <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2 text-emerald-500">
-            <UnorderedListOutlined /> Hạng mục chi tiết ({{ acceptDetailStage.items.length }})
-          </div>
-          <div class="space-y-3">
-            <div v-for="item in acceptDetailStage.items" :key="item.id" class="p-3 bg-gray-50 rounded-xl border border-gray-100 group hover:border-emerald-200 transition-all">
-              <div class="flex items-start justify-between gap-3 mb-2">
-                <div class="flex-1 min-w-0">
-                  <div class="text-xs font-bold text-gray-700 truncate group-hover:text-emerald-600">{{ item.name }}</div>
-                  <div v-if="item.task" class="text-[10px] text-gray-400 flex items-center gap-1 mt-0.5">
-                    <HistoryOutlined /> {{ item.task.name }} 
-                  </div>
-                </div>
-                <div class="shrink-0 flex flex-col items-end gap-1">
-                   <a-tag :color="getStatusColor(item.workflow_status)" class="m-0 text-[10px] font-bold uppercase py-0.5">{{ getStatusLabel(item.workflow_status) }}</a-tag>
-                   <div class="text-[9px] text-gray-400 font-medium">NT: {{ item.acceptance_status === 'approved' ? 'Đạt' : (item.acceptance_status === 'rejected' ? 'Không đạt' : 'Chờ') }}</div>
-                </div>
-              </div>
-              <div v-if="item.description" class="text-[10px] text-gray-500 leading-relaxed mb-2">{{ item.description }}</div>
-              
-              <!-- Item Attachments (Evidence Strip) -->
-              <div v-if="item.attachments?.length" class="mt-3">
-                 <div class="flex gap-2 overflow-x-auto pb-2 scrollbar-hide snap-x">
-                    <div v-for="(aiAtt, aIdx) in item.attachments.slice(0, 5)" :key="aiAtt.id" 
-                         class="relative min-w-[56px] max-w-[56px] aspect-square rounded-lg overflow-hidden border border-gray-200 bg-white cursor-pointer hover:border-blue-400 transition-all shadow-sm group/att snap-start" 
-                         @click.stop="openFilePreview(aiAtt)">
-                       <img v-if="['jpg','jpeg','png','webp'].includes(aiAtt.ext?.toLowerCase())" :src="aiAtt.file_url" class="w-full h-full object-cover group-hover/att:scale-110 transition-transform duration-500" />
-                       <div v-else class="w-full h-full flex items-center justify-center bg-gray-50">
-                         <span class="text-[8px] font-bold text-gray-400 uppercase">{{ aiAtt.ext }}</span>
-                       </div>
-                       <div v-if="aIdx === 4 && item.attachments.length > 5" class="absolute inset-0 bg-black/50 backdrop-blur-[1px] flex items-center justify-center text-white font-bold text-[9px]">
-                         +{{ item.attachments.length - 5 }}
-                       </div>
-                    </div>
-                 </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- 3.7. Financial Summary (Thanh toán & Chi phí) -->
-        <div v-if="acceptDetailStage.costs?.length || acceptDetailStage.invoices?.length" class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
-          <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2 text-amber-500">
-            <DollarOutlined /> Tài chính liên quan
-          </div>
-          <div class="space-y-3">
-            <!-- Invoices (Milestone billing) -->
-            <div v-for="inv in acceptDetailStage.invoices" :key="'inv-'+inv.id" class="p-3 bg-amber-50 rounded-xl border border-amber-100 flex items-center justify-between">
-              <div class="flex items-center gap-3">
-                <div class="w-8 h-8 rounded-lg bg-white flex items-center justify-center text-amber-600 shadow-sm">
-                  <FileTextOutlined />
-                </div>
-                <div>
-                  <div class="text-xs font-bold text-amber-800">Đợt thanh toán: {{ inv.invoice_number || 'Mặc định' }}</div>
-                  <div class="text-[10px] text-amber-600">Số tiền: {{ formatCurrency(inv.total_amount) }}</div>
-                </div>
-              </div>
-              <a-tag color="orange" class="m-0 text-[9px] font-bold uppercase">{{ inv.status_label || inv.status }}</a-tag>
-            </div>
-
-            <!-- Additional Costs -->
-            <div v-for="c in acceptDetailStage.costs" :key="'cost-'+c.id" class="p-3 bg-gray-50 rounded-xl border border-gray-100 flex items-center justify-between">
-              <div class="flex items-center gap-3">
-                <div class="w-8 h-8 rounded-lg bg-white flex items-center justify-center text-blue-600 shadow-sm">
-                  <AuditOutlined />
-                </div>
-                <div>
-                  <div class="text-xs font-bold text-gray-700">{{ c.name }}</div>
-                  <div class="text-[10px] text-gray-400">Chi phí: {{ formatCurrency(c.amount) }}</div>
-                </div>
-              </div>
-              <a-tag :color="getStatusColor(c.status)" class="m-0 text-[9px] font-bold uppercase">{{ getStatusLabel(c.status) }}</a-tag>
-            </div>
-          </div>
-        </div>
 
         <!-- 4. Real Photos (Evidence Comparison Strips) -->
         <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
@@ -6039,7 +5711,7 @@
         <!-- 5. Defects with inline actions -->
         <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
           <!-- Rejected Guidance Banner -->
-          <div v-if="acceptDetailStage.status === 'rejected'" class="mb-4 p-4 bg-amber-50 rounded-2xl border border-amber-200">
+          <div v-if="acceptDetailStage.workflow_status === 'rejected'" class="mb-4 p-4 bg-amber-50 rounded-2xl border border-amber-200">
             <div class="flex items-start gap-3">
               <div class="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center shrink-0">
                 <ExclamationCircleOutlined class="text-amber-600" />
@@ -6203,62 +5875,39 @@
       <!-- Action Footer (Standard Sticky) -->
       <div class="fixed bottom-0 right-0 w-[560px] p-4 bg-white border-t border-gray-100 flex justify-between items-center shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-20 transition-all rounded-br-2xl">
         <div class="flex gap-2">
-           <a-button v-if="can('acceptance.update') && ['draft', 'rejected'].includes(acceptDetailStage.status) && !isAcceptanceLocked" 
-                     class="rounded-xl h-12 px-6 font-bold text-blue-600 bg-blue-50 border-blue-100" @click="saveAcceptDetail" :loading="savingAcceptDetail">
-             <SaveOutlined /> Cập nhật
-           </a-button>
+          <a-tag :color="acceptStatusColors[acceptDetailStage.workflow_status] || 'default'" class="rounded-full text-sm px-3">
+            {{ acceptStatusLabels[acceptDetailStage.workflow_status] || acceptDetailStage.workflow_status }}
+          </a-tag>
         </div>
-        
         <div class="flex gap-2">
-           <template v-if="!isAcceptanceLocked && acceptDetailStage.status !== 'owner_approved'">
-             <!-- Approval Buttons (2-cấp: GS xác nhận → KH duyệt) -->
-             <a-button v-if="['pending', 'rejected'].includes(acceptDetailStage.status) && can('acceptance.approve.level_1')"
-                       type="primary" size="large" class="rounded-xl h-12 px-8 font-bold bg-blue-600 hover:bg-blue-700" @click="approveAccept(acceptDetailStage, 1)">
-               Duyệt (GS)
-             </a-button>
-             <a-button v-if="acceptDetailStage.status === 'supervisor_approved' && can('acceptance.approve.level_3')"
-                       type="primary" size="large" class="rounded-xl h-12 px-8 font-bold bg-emerald-600 hover:bg-emerald-700 border-emerald-600" @click="approveAccept(acceptDetailStage, 3)">
-               Duyệt (KH)
-             </a-button>
-
-             <!-- Reject Button -->
-             <a-button v-if="['pending', 'supervisor_approved'].includes(acceptDetailStage.status)"
-                       danger ghost size="large" class="rounded-xl h-12 px-6 font-bold" @click="rejectAcceptDrawer">
-               Từ chối
-             </a-button>
-           </template>
+          <template v-if="!isAcceptanceLocked">
+            <a-button v-if="acceptDetailStage.workflow_status === 'draft' && can('acceptance.update')"
+                      type="primary" ghost size="large" class="rounded-xl h-10 px-6 font-bold border-blue-600 text-blue-600" @click="submitAccept(acceptDetailStage); showAcceptDetailDrawer=false">
+              Gửi duyệt
+            </a-button>
+            <a-button v-if="acceptDetailStage.workflow_status === 'submitted' && can('acceptance.approve.level_1')"
+                      type="primary" size="large" class="rounded-xl h-10 px-6 font-bold" @click="approveSupervisor(acceptDetailStage); showAcceptDetailDrawer=false">
+              Duyệt (GS)
+            </a-button>
+            <a-button v-if="acceptDetailStage.workflow_status === 'supervisor_approved' && can('acceptance.approve.level_3')"
+                      type="primary" size="large" class="rounded-xl h-10 px-6 font-bold bg-emerald-600 hover:bg-emerald-700 border-emerald-600" @click="approveCustomer(acceptDetailStage); showAcceptDetailDrawer=false">
+              Duyệt (KH)
+            </a-button>
+            <a-button v-if="['submitted','supervisor_approved'].includes(acceptDetailStage.workflow_status) && (can('acceptance.approve.level_1') || can('acceptance.approve.level_3'))"
+                      danger ghost size="large" class="rounded-xl h-10 px-4 font-bold" @click="openRejectAcceptModal(acceptDetailStage)">
+              Từ chối
+            </a-button>
+            <a-button v-if="['submitted','supervisor_approved','rejected'].includes(acceptDetailStage.workflow_status) && can('acceptance.revert')"
+                      size="large" class="rounded-xl h-10 px-4 font-bold" @click="revertAccept(acceptDetailStage); showAcceptDetailDrawer=false">
+              <ReloadOutlined /> Hoàn duyệt
+            </a-button>
+          </template>
         </div>
       </div>
     </template>
   </a-drawer>
 
 
-  <!-- ==================== ACCEPT ITEM REJECT MODAL ==================== -->
-  <a-modal v-model:open="showRejectAcceptItemModal" title="Từ chối hạng mục nghiệm thu" :width="480" @ok="confirmRejectAcceptItem" ok-text="Từ chối" cancel-text="Hủy"
-    :ok-button-props="{ danger: true, disabled: !rejectAcceptItemReason.trim() }" centered destroy-on-close class="crm-modal">
-    <div class="mt-4">
-      <div class="p-3 mb-3 bg-red-50 rounded-lg border border-red-100">
-        <div class="text-sm font-semibold text-red-700">{{ rejectingAcceptItem?.name }}</div>
-        <div class="text-xs text-red-500 mt-1">Khi từ chối, hệ thống sẽ tự động tạo lỗi ghi nhận.</div>
-      </div>
-      <a-form-item label="Lý do từ chối" required>
-        <a-textarea v-model:value="rejectAcceptItemReason" :rows="3" placeholder="Nhập lý do từ chối nghiệm thu..." :max-length="1000" show-count />
-      </a-form-item>
-    </div>
-  </a-modal>
-
-  <!-- ==================== EDIT ACCEPT ITEM MODAL ==================== -->
-  <a-modal v-model:open="showEditAcceptItemModal" title="Sửa hạng mục nghiệm thu" :width="520" @ok="updateAcceptItemData" ok-text="Cập nhật" cancel-text="Hủy"
-    :confirm-loading="editingAcceptItemLoading" centered destroy-on-close class="crm-modal">
-    <a-form layout="vertical" class="mt-4" size="small">
-      <a-form-item label="Tên hạng mục" required><a-input v-model:value="editAcceptItemForm.name" placeholder="Tên hạng mục nghiệm thu" /></a-form-item>
-      <a-row :gutter="8">
-        <a-col :span="12"><a-form-item label="Ngày bắt đầu"><a-date-picker v-model:value="editAcceptItemForm.start_date" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" /></a-form-item></a-col>
-        <a-col :span="12"><a-form-item label="Ngày kết thúc"><a-date-picker v-model:value="editAcceptItemForm.end_date" class="w-full" format="DD/MM/YYYY" value-format="YYYY-MM-DD" /></a-form-item></a-col>
-      </a-row>
-      <a-form-item label="Ghi chú"><a-textarea v-model:value="editAcceptItemForm.notes" :rows="2" placeholder="Ghi chú" /></a-form-item>
-    </a-form>
-  </a-modal>
 
   <!-- Document Upload Modal -->
   <a-modal v-model:open="showDocUploadModal" title="Upload tài liệu" :width="500" @ok="uploadDoc" ok-text="Upload" cancel-text="Hủy" centered destroy-on-close class="crm-modal" :ok-button-props="{ disabled: !docUploadForm.file }">
@@ -7218,7 +6867,7 @@ const materialBills = computed(() => {
   });
 })
 const logs = computed(() => props.monitorData?.logs || props.project.construction_logs || [])
-const acceptanceStages = computed(() => props.monitorData?.acceptanceStages || props.project.acceptance_stages || [])
+const acceptanceStages = computed(() => props.monitorData?.acceptances || [])
 const defects = computed(() => props.monitorData?.defects || props.project.defects || [])
 const additionalCosts = computed(() => props.monitorData?.additional_costs || props.project.additional_costs || [])
 const changeRequests = computed(() => props.monitorData?.change_requests || props.project.change_requests || [])
@@ -7393,7 +7042,7 @@ const getSubTabCount = (tabKey) => {
     gantt: c.tasks, progress: c.tasks,
     contract: 1, costs: c.costs, payments: c.payments, additional_costs: c.additional_costs, budgets: c.budgets, finance: 1, invoices: c.invoices,
     subcontractors: c.subcontractors, materials: c.material_bills || c.materials, equipment: c.equipment,
-    logs: c.construction_logs, acceptance: c.acceptance_stages, defects: c.defects, change_requests: c.change_requests, comments: c.comments, risks: c.risks,
+    logs: c.construction_logs, acceptance: c.acceptance_stages, defects: c.defects, change_requests: c.change_requests, comments: c.comments, risks: c.risks, acceptances: c.acceptance_stages,
     personnel: c.personnel, attendance: c.attendance, labor: c.labor_productivity,
     warranty: c.warranties, maintenances: c.maintenances,
     documents: c.attachments,
@@ -7547,8 +7196,8 @@ watch(() => props, (newProps) => {
   }
   // Sync acceptance detail drawer & its defects when props update
   if (showAcceptDetailDrawer.value && acceptDetailStage.value) {
-    const stages = newProps.project?.acceptance_stages || newProps.project?.acceptanceStages || []
-    const updated = stages.find(x => x.id === acceptDetailStage.value.id)
+    const allAcceptances = newProps.monitorData?.acceptances || []
+    const updated = allAcceptances.find(x => x.id === acceptDetailStage.value.id)
     if (updated) {
       acceptDetailStage.value = updated
       acceptDetailDefects.value = updated.defects || []
@@ -8040,14 +7689,29 @@ const riskCategoryLabels = { schedule: 'Tiến độ', cost: 'Chi phí', quality
 const riskLevelLabels = { very_low: 'Rất thấp', low: 'Thấp', medium: 'TB', high: 'Cao', very_high: 'Rất cao' }
 const riskLevelColors = { very_low: 'default', low: 'green', medium: 'blue', high: 'orange', very_high: 'red' }
 const acceptStatusLabels = {
-  pending: 'Đang nghiệm thu',
-  supervisor_approved: 'GS đã xác nhận',
+  draft: 'Nháp',
+  submitted: 'Chờ GS duyệt',
+  supervisor_approved: 'Chờ KH duyệt',
   customer_approved: 'Đã nghiệm thu',
-  owner_approved: 'CĐT đã duyệt',
-  design_approved: 'TK đã duyệt',
-  internal_approved: 'Nội bộ đã duyệt',
   rejected: 'Từ chối',
 }
+
+// Child tasks (have a parent) for acceptance create modal
+const childTasks = computed(() => allTasks.value.filter(t => t.parent_id))
+
+// Grouped acceptances by parent task for the tab UI
+const acceptanceGroups = computed(() => {
+  const list = acceptanceStages.value
+  if (!list.length) return []
+  const groups = {}
+  list.forEach(a => {
+    const parentId = a.task?.parent_id ?? 'ungrouped'
+    const parentName = a.task?.parent?.name ?? a.task?.name ?? 'Chưa phân nhóm'
+    if (!groups[parentId]) groups[parentId] = { parentTaskId: parentId, parentTaskName: parentName, items: [] }
+    groups[parentId].items.push(a)
+  })
+  return Object.values(groups)
+})
 
 // ============ TABLE COLUMNS ============
 const costCols = [
@@ -9534,219 +9198,160 @@ const saveInvoice = () => {
 }
 const deleteInvoice = (inv) => router.delete(`/projects/${props.project.id}/invoices/${inv.id}`, loadingOptions(`delete-invoice-${inv.id}`))
 
-// ============ ACCEPTANCE CRUD (Giống APP: AcceptanceChecklist) ============
+// ============ ACCEPTANCE CRUD ============
 const showAcceptModal = ref(false)
 const acceptForm = ref({ name: '', description: '', task_id: null, acceptance_template_id: null })
-const openAcceptModal = () => { acceptForm.value = { name: '', description: '', task_id: null, acceptance_template_id: null }; showAcceptModal.value = true }
+const openAcceptModal = () => { 
+  acceptForm.value = { name: '', description: '', task_id: null, acceptance_template_id: null }
+  modalFiles.value = []
+  showAcceptModal.value = true 
+}
 const saveAccept = () => {
-  const formData = new FormData()
-  Object.entries(acceptForm.value).forEach(([k, v]) => { if (v !== null) formData.append(k, v) })
-  modalFiles.value.forEach(f => formData.append('files[]', f))
+  const data = { ...acceptForm.value }
+  if (modalFiles.value.length) data.files = modalFiles.value
 
-  router.post(`/projects/${props.project.id}/acceptance`, formData, savingOptions({
-    forceFormData: true,
-    onSuccess: () => {
-      showAcceptModal.value = false
+  router.post(`/projects/${props.project.id}/acceptances`, data, savingOptions({
+    forceFormData: !!modalFiles.value.length,
+    onSuccess: () => { 
+      showAcceptModal.value = false 
       modalFiles.value = []
     },
   }))
 }
-const approveAccept = (stage, level) => router.post(`/projects/${props.project.id}/acceptance/${stage.id}/approve`, { level }, loadingOptions(`approve-accept-${stage.id}-${level}`, { 
-  preserveScroll: true,
-  onSuccess: () => message.success('Đã duyệt giai đoạn nghiệm thu.')
-}))
-const deleteAccept = (stage) => {
-  Modal.confirm({
-    title: 'Xóa giai đoạn nghiệm thu?',
-    content: `Danh sách hạng mục kiểm tra của "${stage.name}" sẽ bị xóa. Thao tác không thể hoàn tác.`,
-    okText: 'Xóa',
-    okType: 'danger',
-    onOk: () => {
-      router.delete(`/projects/${props.project.id}/acceptance/${stage.id}`, {
-        onSuccess: () => message.success('Đã xóa giai đoạn nghiệm thu')
-      })
-    }
+
+const deleteAccept = (acceptance) => {
+  router.delete(`/projects/${props.project.id}/acceptances/${acceptance.id}`, {
+    onSuccess: () => message.success('Đã xóa phiếu nghiệm thu'),
   })
 }
 
-// Item actions inside drawer (2-cấp: GS → KH, bỏ QLDA)
-const approveItem = (item) => {
-  const stageId = acceptDetailStage.value.id
-  const base = `/projects/${props.project.id}/acceptance/${stageId}/items/${item.id}`
-
-  let url = `${base}/approve-supervisor`
-  if (item.workflow_status === 'supervisor_approved') {
-    url = `${base}/approve-customer`
-  }
-
-  router.post(url, {}, {
-    preserveState: true,
+const submitAccept = (acceptance) => {
+  router.post(`/projects/${props.project.id}/acceptances/${acceptance.id}/submit`, {}, {
     preserveScroll: true,
-    onSuccess: () => message.success('Đã duyệt hạng mục')
+    onSuccess: () => message.success('Đã gửi phiếu nghiệm thu'),
   })
 }
 
-const rejectItem = (item) => {
-  const stageId = acceptDetailStage.value.id
+const approveSupervisor = (acceptance) => {
+  router.post(`/projects/${props.project.id}/acceptances/${acceptance.id}/supervisor-approve`, {}, {
+    preserveScroll: true,
+    onSuccess: () => message.success('GS đã xác nhận nghiệm thu'),
+  })
+}
+
+const approveCustomer = (acceptance) => {
+  router.post(`/projects/${props.project.id}/acceptances/${acceptance.id}/customer-approve`, {}, {
+    preserveScroll: true,
+    onSuccess: () => message.success('Đã duyệt nghiệm thu thành công'),
+  })
+}
+
+const showRejectAcceptModal = ref(false)
+const rejectingAcceptance = ref(null)
+const rejectAcceptReason = ref('')
+const openRejectAcceptModal = (acceptance) => {
+  rejectingAcceptance.value = acceptance
+  rejectAcceptReason.value = ''
+  showRejectAcceptModal.value = true
+}
+const confirmRejectAccept = () => {
+  if (!rejectingAcceptance.value || !rejectAcceptReason.value.trim()) return
+  router.post(`/projects/${props.project.id}/acceptances/${rejectingAcceptance.value.id}/reject`, {
+    reason: rejectAcceptReason.value,
+  }, {
+    preserveScroll: true,
+    onSuccess: () => {
+      showRejectAcceptModal.value = false
+      message.warning('Đã từ chối nghiệm thu')
+    },
+  })
+}
+
+const revertAccept = (acceptance) => {
   Modal.confirm({
-    title: 'Từ chối hạng mục?',
-    content: `Hạng mục "${item.name}" sẽ được đánh dấu là không đạt.`,
-    okText: 'Từ chối',
-    okType: 'danger',
+    title: 'Hoàn duyệt nghiệm thu?',
+    content: 'Phiếu sẽ trở về trạng thái Nháp.',
+    okText: 'Đồng ý',
+    cancelText: 'Hủy',
     onOk: () => {
-      // NOTE: backend controller expects 'rejection_reason'
-      router.post(`/projects/${props.project.id}/acceptance/${stageId}/items/${item.id}/reject`, {
-        rejection_reason: 'Không đạt yêu cầu kỹ thuật'
-      }, {
-        preserveState: true,
+      router.post(`/projects/${props.project.id}/acceptances/${acceptance.id}/revert`, {}, {
         preserveScroll: true,
-        onSuccess: () => message.success('Đã từ chối hạng mục')
+        onSuccess: () => message.success('Đã hoàn duyệt về nháp'),
       })
-    }
+    },
   })
 }
 
-const approveAllItems = () => {
-  if (!acceptDetailStage.value) return
-  const stageId = acceptDetailStage.value.id
-  Modal.confirm({
-    title: 'Duyệt tất cả hạng mục?',
-    content: `Duyệt nhanh toàn bộ hạng mục trong giai đoạn "${acceptDetailStage.value.name}"?`,
-    onOk: () => {
-      router.post(`/projects/${props.project.id}/acceptance/${stageId}/approve-all`, {}, {
-        preserveState: true,
-        preserveScroll: true,
-        onSuccess: () => message.success('Đã duyệt tất cả hạng mục')
-      })
-    }
+const batchSupervisorApprove = (parentTaskId) => {
+  router.post(`/projects/${props.project.id}/acceptances/batch-supervisor-approve`, { parent_task_id: parentTaskId }, {
+    preserveScroll: true,
+    onSuccess: () => message.success('Đã duyệt tất cả (GS)'),
   })
 }
 
-const rejectAcceptDrawer = () => {
-  if (!acceptDetailStage.value) return
-  Modal.confirm({
-    title: 'Từ chối giai đoạn nghiệm thu?',
-    content: 'Vui lòng xác nhận từ chối giai đoạn này.',
-    okText: 'Từ chối',
-    okType: 'danger',
-    onOk: () => {
-      router.post(`/approvals/acceptance-supervisor/${acceptDetailStage.value.id}/reject`, { reason: 'Từ chối từ chi tiết dự án' }, {
-        onSuccess: () => {
-          message.warning('Đã từ chối giai đoạn')
-          showAcceptDetailDrawer.value = false
-        }
-      })
-    }
+const batchCustomerApprove = (parentTaskId) => {
+  router.post(`/projects/${props.project.id}/acceptances/batch-customer-approve`, { parent_task_id: parentTaskId }, {
+    preserveScroll: true,
+    onSuccess: () => message.success('Đã duyệt tất cả (KH)'),
   })
 }
 
 // Edit acceptance
 const showEditAcceptModal = ref(false)
-const editingAcceptStage = ref(null)
-const editAcceptForm = ref({ name: '', description: '', task_id: null, acceptance_template_id: null, order: null, status: 'pending', is_custom: false, deleted_attachment_ids: [] })
+const editAcceptForm = ref({ name: '', description: '', notes: '', acceptance_template_id: null, task_id: null, deleted_attachment_ids: [] })
 const editingAcceptId = ref(null)
-const modalFilesGeneral = ref([])
-const modalFilesBefore = ref([])
-const modalFilesAfter = ref([])
+const editingAcceptAttachments = ref([])
 
-const openEditAcceptModal = (stage) => {
-  editingAcceptId.value = stage.id
-  editingAcceptStage.value = stage
+const openEditAcceptModal = (acceptance) => {
+  editingAcceptId.value = acceptance.id
+  editingAcceptAttachments.value = acceptance.attachments || []
+  modalFiles.value = []
   editAcceptForm.value = {
-    name: stage.name || '',
-    description: stage.description || '',
-    task_id: stage.task_id || null,
-    acceptance_template_id: stage.acceptance_template_id || null,
-    order: stage.order || null,
-    status: stage.status || 'pending',
-    is_custom: stage.is_custom || false,
+    name: acceptance.name || '',
+    description: acceptance.description || '',
+    notes: acceptance.notes || '',
+    acceptance_template_id: acceptance.acceptance_template_id || null,
+    task_id: acceptance.task_id || null,
     deleted_attachment_ids: [],
   }
-  modalFilesGeneral.value = []
-  modalFilesBefore.value = []
-  modalFilesAfter.value = []
   showEditAcceptModal.value = true
 }
 const updateAccept = () => {
-  const formData = new FormData()
-  formData.append('_method', 'PUT')
-  
-  Object.entries(editAcceptForm.value).forEach(([k, v]) => {
-    if (k === 'deleted_attachment_ids' && Array.isArray(v)) {
-      v.forEach(id => formData.append('deleted_attachment_ids[]', id))
-    } else if (v !== null && v !== undefined) {
-      formData.append(k, typeof v === 'boolean' ? (v ? 1 : 0) : v)
-    }
-  })
-  
-  modalFilesGeneral.value.forEach(f => formData.append('files[]', f))
-  modalFilesBefore.value.forEach(f => formData.append('files_before[]', f))
-  modalFilesAfter.value.forEach(f => formData.append('files_after[]', f))
+  const data = { ...editAcceptForm.value, _method: 'PUT' }
+  if (modalFiles.value.length) data.files = modalFiles.value
 
-  router.post(`/projects/${props.project.id}/acceptance/${editingAcceptId.value}`, formData, savingOptions({
+  router.post(`/projects/${props.project.id}/acceptances/${editingAcceptId.value}`, data, savingOptions({
     forceFormData: true,
-    onSuccess: () => {
-      showEditAcceptModal.value = false
-      modalFilesGeneral.value = []
-      modalFilesBefore.value = []
-      modalFilesAfter.value = []
-    }
+    onSuccess: () => { 
+      showEditAcceptModal.value = false 
+      modalFiles.value = []
+    },
   }))
 }
 
 // Acceptance status helpers
 const acceptStatusColors = {
-  pending: 'orange', supervisor_approved: 'cyan',
-  customer_approved: 'green', owner_approved: 'purple', design_approved: 'geekblue',
-  internal_approved: 'gold', rejected: 'red',
+  draft: 'default', submitted: 'orange', supervisor_approved: 'cyan',
+  customer_approved: 'green', rejected: 'red',
 }
 const getAcceptIconClass = (status) => {
-  if (!status) return 'bg-gray-100'
-  if (status.includes('approved')) return 'bg-emerald-100 text-emerald-600'
+  if (status === 'customer_approved') return 'bg-emerald-100 text-emerald-600'
+  if (status === 'supervisor_approved') return 'bg-cyan-100 text-cyan-600'
   if (status === 'rejected') return 'bg-red-100 text-red-600'
   return 'bg-orange-100 text-orange-600'
 }
-const getAcceptability = (stage) => {
-  // 1. Stage phải đạt ít nhất customer_approved
-  const approvedStatuses = ['customer_approved', 'design_approved', 'owner_approved']
-  const isFullyApproved = approvedStatuses.includes(stage.status)
-
-  // 2. No open or in-progress defects
-  const hasOpenDefects = (stage.defects || []).some(d => d.status === 'open' || d.status === 'in_progress')
-
-  // 3. All checklist items must be customer_approved (if items exist)
-  const items = stage.items || []
-  const allItemsApproved = items.length === 0 || items.every(i => i.workflow_status === 'customer_approved')
-
-  return (isFullyApproved && !hasOpenDefects && allItemsApproved) ? 'acceptable' : 'not_acceptable'
+const getOpenDefects = (acceptance) => {
+  return (acceptance.defects || []).filter(d => d.status !== 'verified').length
 }
-const getAcceptCompletion = (stage) => {
-  const items = stage.items || []
-  const total = items.length
-  const approved = items.filter(i => i.workflow_status === 'customer_approved').length
-  return { total, approved, percent: total > 0 ? Math.round((approved / total) * 100) : 0 }
-}
-const getOpenDefects = (stage) => {
-  return (stage.defects || []).filter(d => d.status !== 'verified').length
-}
-const acceptItemStatusColor = (status) => ({ draft: 'default', pending: 'default', submitted: 'processing', supervisor_approved: 'cyan', customer_approved: 'success', rejected: 'error' }[status] || 'default')
-const acceptItemStatusLabel = (status) => ({ draft: 'Nháp', pending: 'Đang nghiệm thu', submitted: 'Đang nghiệm thu', supervisor_approved: 'Chờ KH duyệt', customer_approved: 'Đã nghiệm thu', rejected: 'Từ chối' }[status] || status)
 
-// ============ ACCEPTANCE DETAIL DRAWER (Giống APP: "Nghiệm thu giai đoạn") ============
+// ============ ACCEPTANCE DETAIL DRAWER ============
 const showAcceptDetailDrawer = ref(false)
 const acceptDetailStage = ref(null)
-const acceptDetailTemplateId = ref(null)
 const acceptDetailDefects = ref([])
 const showCreateDefectInDrawer = ref(false)
 const newAcceptDefect = ref({ description: '', severity: 'medium' })
 const newAcceptDefectFiles = ref([])
 const creatingDefect = ref(false)
-const savingAcceptDetail = ref(false)
-
-const acceptDetailSelectedTemplate = computed(() => {
-  if (!acceptDetailTemplateId.value) return null
-  return (props.acceptanceTemplates || []).find(t => t.id === acceptDetailTemplateId.value)
-})
 
 // Progress tracker for defects in acceptance drawer
 const acceptDefectProgress = computed(() => {
@@ -9761,23 +9366,15 @@ const acceptDefectProgress = computed(() => {
   }
 })
 
-// BUSINESS RULE: Lock all mutations when acceptance stage is fully approved
-const isAcceptanceLocked = computed(() => {
-  return acceptDetailStage.value && ['customer_approved', 'owner_approved'].includes(acceptDetailStage.value.status)
-})
+const isAcceptanceLocked = computed(() => acceptDetailStage.value?.workflow_status === 'customer_approved')
 
-const openAcceptDetailModal = (stage) => {
-  acceptDetailStage.value = stage
-  acceptDetailTemplateId.value = stage.acceptance_template_id || null
-  acceptDetailDefects.value = stage.defects || []
+const openAcceptDetailModal = (acceptance) => {
+  acceptDetailStage.value = acceptance
+  acceptDetailDefects.value = acceptance.defects || []
   showCreateDefectInDrawer.value = false
   newAcceptDefect.value = { description: '', severity: 'medium' }
   newAcceptDefectFiles.value = []
   showAcceptDetailDrawer.value = true
-}
-
-const onAcceptDetailTemplateChange = (val) => {
-  acceptDetailTemplateId.value = val
 }
 
 const createDefectFromDrawer = () => {
@@ -9788,9 +9385,8 @@ const createDefectFromDrawer = () => {
   formData.append('severity', newAcceptDefect.value.severity)
   formData.append('status', 'open')
   formData.append('defect_type', 'acceptance')
-  formData.append('acceptance_stage_id', acceptDetailStage.value.id)
+  formData.append('acceptance_id', acceptDetailStage.value.id)
   if (acceptDetailStage.value.task_id) formData.append('task_id', acceptDetailStage.value.task_id)
-  // Attach files
   newAcceptDefectFiles.value.forEach(f => formData.append('files[]', f.file))
   router.post(`/projects/${props.project.id}/defects`, formData, {
     forceFormData: true,
@@ -9828,18 +9424,7 @@ const goToDefect = (defect) => {
   // Keep acceptance drawer open so user can return
 }
 
-const saveAcceptDetail = () => {
-  if (!acceptDetailStage.value) return
-  savingAcceptDetail.value = true
-  router.put(`/projects/${props.project.id}/acceptance/${acceptDetailStage.value.id}`, {
-    acceptance_template_id: acceptDetailTemplateId.value,
-  }, {
-    onSuccess: () => { showAcceptDetailDrawer.value = false },
-    onFinish: () => { savingAcceptDetail.value = false },
-  })
-}
-
-// Upload files to acceptance stage (With Before/After types)
+// Upload files to acceptance (with before/after types)
 const uploadAcceptStageFiles = (event, type = null) => {
   const files = event.target.files
   if (!files?.length || !acceptDetailStage.value) return
@@ -9849,7 +9434,7 @@ const uploadAcceptStageFiles = (event, type = null) => {
   }
   if (type) formData.append('type', type)
 
-  router.post(`/projects/${props.project.id}/acceptance/${acceptDetailStage.value.id}/attach-files`, formData, {
+  router.post(`/projects/${props.project.id}/acceptances/${acceptDetailStage.value.id}/attach-files`, formData, {
     forceFormData: true,
     preserveScroll: true,
     onSuccess: () => {
@@ -9859,174 +9444,15 @@ const uploadAcceptStageFiles = (event, type = null) => {
   event.target.value = ''
 }
 
-// ============ ACCEPTANCE ITEM WORKFLOW (matching APP AcceptanceItemController) ============
-const showAddAcceptItem = ref(false)
-const newAcceptItem = ref({ name: '', start_date: null, end_date: null, task_id: null, notes: '' })
-const creatingAcceptItem = ref(false)
-
-// Reject item modal
-const showRejectAcceptItemModal = ref(false)
-const rejectingAcceptItem = ref(null)
-const rejectAcceptItemReason = ref('')
-
-// Edit item modal
-const showEditAcceptItemModal = ref(false)
-const editingAcceptItemData = ref(null)
-const editAcceptItemForm = ref({ name: '', start_date: null, end_date: null, notes: '' })
-const editingAcceptItemLoading = ref(false)
-
-// Workflow step progress helper (2-cấp: GS xác nhận → KH duyệt)
+// Workflow step helper (2-cấp: GS → KH)
 const getStepState = (currentStatus, stepKey) => {
   const steps = ['submitted', 'supervisor_approved', 'customer_approved']
   const currentIdx = steps.indexOf(currentStatus)
   const stepIdx = steps.indexOf(stepKey)
-
-  if (currentStatus === 'rejected' || currentStatus === 'draft' || !currentStatus) return 'pending'
-  if (stepIdx < currentIdx) return 'done'
-  if (stepIdx === currentIdx) return 'done'
+  if (!currentStatus || currentStatus === 'rejected' || currentStatus === 'draft') return 'pending'
+  if (stepIdx <= currentIdx) return 'done'
   if (stepIdx === currentIdx + 1) return 'current'
   return 'pending'
-}
-
-// Create acceptance item
-const createAcceptItem = () => {
-  if (!newAcceptItem.value.name?.trim() || !newAcceptItem.value.start_date || !newAcceptItem.value.end_date) return
-  creatingAcceptItem.value = true
-  const stageId = acceptDetailStage.value.id
-  router.post(`/projects/${props.project.id}/acceptance/${stageId}/items`, {
-    name: newAcceptItem.value.name,
-    start_date: newAcceptItem.value.start_date,
-    end_date: newAcceptItem.value.end_date,
-    task_id: newAcceptItem.value.task_id,
-    notes: newAcceptItem.value.notes,
-  }, {
-    preserveScroll: true,
-    onSuccess: () => {
-      showAddAcceptItem.value = false
-      newAcceptItem.value = { name: '', start_date: null, end_date: null, task_id: null, notes: '' }
-      showAcceptDetailDrawer.value = false // close to refresh data
-    },
-    onFinish: () => { creatingAcceptItem.value = false },
-  })
-}
-
-// Edit acceptance item
-const editAcceptItem = (item) => {
-  editingAcceptItemData.value = item
-  editAcceptItemForm.value = {
-    name: item.name || '',
-    start_date: item.start_date ? dayjs(item.start_date).format('YYYY-MM-DD') : null,
-    end_date: item.end_date ? dayjs(item.end_date).format('YYYY-MM-DD') : null,
-    notes: item.notes || '',
-  }
-  showEditAcceptItemModal.value = true
-}
-
-const updateAcceptItemData = () => {
-  if (!editingAcceptItemData.value || !editAcceptItemForm.value.name?.trim()) return
-  editingAcceptItemLoading.value = true
-  const stageId = acceptDetailStage.value.id
-  router.put(`/projects/${props.project.id}/acceptance/${stageId}/items/${editingAcceptItemData.value.id}`, editAcceptItemForm.value, {
-    preserveScroll: true,
-    onSuccess: () => {
-      showEditAcceptItemModal.value = false
-      showAcceptDetailDrawer.value = false // close to refresh
-    },
-    onFinish: () => { editingAcceptItemLoading.value = false },
-  })
-}
-
-// Delete acceptance item
-const deleteAcceptItem = (item) => {
-  if (!confirm(`Xóa hạng mục "${item.name}"?`)) return
-  const stageId = acceptDetailStage.value.id
-  router.delete(`/projects/${props.project.id}/acceptance/${stageId}/items/${item.id}`, {
-    preserveScroll: true,
-    onSuccess: () => { showAcceptDetailDrawer.value = false },
-  })
-}
-
-// Submit for approval (draft/rejected → submitted)
-const submitAcceptItem = (item) => {
-  const stageId = acceptDetailStage.value.id
-  router.post(`/projects/${props.project.id}/acceptance/${stageId}/items/${item.id}/submit`, {}, {
-    preserveScroll: true,
-    onSuccess: () => { showAcceptDetailDrawer.value = false },
-  })
-}
-
-// Supervisor approve (submitted → supervisor_approved)
-const approveAcceptItemSupervisor = (item) => {
-  const stageId = acceptDetailStage.value.id
-  router.post(`/projects/${props.project.id}/acceptance/${stageId}/items/${item.id}/approve-supervisor`, {}, {
-    preserveScroll: true,
-    onSuccess: () => { showAcceptDetailDrawer.value = false },
-  })
-}
-
-// Customer approve (supervisor_approved → customer_approved)
-const approveAcceptItemCustomer = (item) => {
-  const stageId = acceptDetailStage.value.id
-  router.post(`/projects/${props.project.id}/acceptance/${stageId}/items/${item.id}/approve-customer`, {}, {
-    preserveScroll: true,
-    onSuccess: () => { showAcceptDetailDrawer.value = false },
-  })
-}
-
-// Reject item (opens modal)
-const openRejectAcceptItemModal = (item) => {
-  rejectingAcceptItem.value = item
-  rejectAcceptItemReason.value = ''
-  showRejectAcceptItemModal.value = true
-}
-
-const confirmRejectAcceptItem = () => {
-  if (!rejectingAcceptItem.value || !rejectAcceptItemReason.value.trim()) return
-  const stageId = acceptDetailStage.value.id
-  router.post(`/projects/${props.project.id}/acceptance/${stageId}/items/${rejectingAcceptItem.value.id}/reject`, {
-    rejection_reason: rejectAcceptItemReason.value,
-  }, {
-    preserveScroll: true,
-    onSuccess: () => {
-      showRejectAcceptItemModal.value = false
-      showAcceptDetailDrawer.value = false // close to refresh
-    },
-  })
-}
-
-const revertAcceptItemAction = (stage, item) => {
-  Modal.confirm({
-    title: 'Xác nhận hoàn duyệt',
-    content: 'Hạng mục này sẽ được đưa về trạng thái Nháp để bạn có thể chỉnh sửa hoặc xóa. Bạn có chắc chắn muốn thực hiện?',
-    okText: 'Đồng ý',
-    cancelText: 'Hủy',
-    onOk: () => {
-      router.post(`/projects/${props.project.id}/acceptance/${stage.id}/items/${item.id}/revert`, {}, {
-        preserveScroll: true,
-        onSuccess: () => { 
-          if (showAcceptDetailDrawer.value) showAcceptDetailDrawer.value = false 
-        },
-      })
-    }
-  })
-}
-
-// Upload photos for acceptance item
-const uploadAcceptItemPhotos = (item, event) => {
-  const files = event.target.files
-  if (!files?.length) return
-  const stageId = acceptDetailStage.value.id
-  const formData = new FormData()
-  for (let i = 0; i < files.length; i++) {
-    formData.append('files[]', files[i])
-  }
-  router.post(`/projects/${props.project.id}/acceptance/${stageId}/items/${item.id}/attach-files`, formData, {
-    forceFormData: true,
-    preserveScroll: true,
-    onSuccess: () => { showAcceptDetailDrawer.value = false },
-  })
-  // Clear input
-  event.target.value = ''
 }
 
 

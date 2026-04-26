@@ -95,7 +95,15 @@ class ProjectTask extends Model
     }
 
     /**
-     * Acceptance stages linked to this task (parent task only - Category A)
+     * New unified acceptance record (one per child task)
+     */
+    public function acceptance(): HasOne
+    {
+        return $this->hasOne(Acceptance::class, 'task_id');
+    }
+
+    /**
+     * @deprecated Use acceptance() instead. Kept for backward compat until old tables are dropped.
      */
     public function acceptanceStages(): HasMany
     {
@@ -103,7 +111,7 @@ class ProjectTask extends Model
     }
 
     /**
-     * Acceptance item linked to this task (sub-task - Category B)
+     * @deprecated Use acceptance() instead. Kept for backward compat until old tables are dropped.
      */
     public function acceptanceItem(): HasOne
     {

@@ -2,9 +2,8 @@
 
 namespace App\Services;
 
+use App\Models\Acceptance;
 use App\Models\Cost;
-use App\Models\AcceptanceStage;
-use App\Models\AcceptanceItem;
 use App\Models\ChangeRequest;
 use App\Models\AdditionalCost;
 use App\Models\SubcontractorPayment;
@@ -94,46 +93,18 @@ class ApprovalActionService
                     break;
 
                 case 'acceptance':
-                case 'acceptance_customer':
-                    $stage = AcceptanceStage::findOrFail($id);
-                    $this->acceptanceService->approveStage($stage, $user, 3);
-                    $result = true;
-                    $message = "Khách hàng đã duyệt nghiệm thu \"{$stage->name}\"";
-                    break;
-
-                case 'acceptance_pm':
-                    $stage = AcceptanceStage::findOrFail($id);
-                    $this->acceptanceService->approveStage($stage, $user, 2);
-                    $result = true;
-                    $message = "QLDA đã duyệt nghiệm thu \"{$stage->name}\"";
-                    break;
-
                 case 'acceptance_supervisor':
-                    $stage = AcceptanceStage::findOrFail($id);
-                    $this->acceptanceService->approveStage($stage, $user, 1);
+                    $acceptance = Acceptance::findOrFail($id);
+                    $this->acceptanceService->approve($acceptance, $user, 1);
                     $result = true;
-                    $message = "Giám sát đã duyệt nghiệm thu \"{$stage->name}\"";
+                    $message = "Giám sát đã xác nhận nghiệm thu \"{$acceptance->name}\"";
                     break;
 
-                case 'acceptance_item_supervisor':
-                    $item = AcceptanceItem::findOrFail($id);
-                    $this->acceptanceService->approveItem($item, $user, 1);
+                case 'acceptance_customer':
+                    $acceptance = Acceptance::findOrFail($id);
+                    $this->acceptanceService->approve($acceptance, $user, 3);
                     $result = true;
-                    $message = "Giám sát đã duyệt hạng mục \"{$item->name}\"";
-                    break;
-
-                case 'acceptance_item_pm':
-                    $item = AcceptanceItem::findOrFail($id);
-                    $this->acceptanceService->approveItem($item, $user, 2);
-                    $result = true;
-                    $message = "QLDA đã duyệt hạng mục \"{$item->name}\"";
-                    break;
-
-                case 'acceptance_item_customer':
-                    $item = AcceptanceItem::findOrFail($id);
-                    $this->acceptanceService->approveItem($item, $user, 3);
-                    $result = true;
-                    $message = "Khách hàng đã duyệt hạng mục \"{$item->name}\"";
+                    $message = "Khách hàng đã duyệt nghiệm thu \"{$acceptance->name}\"";
                     break;
 
                 case 'change_request':
@@ -332,14 +303,8 @@ class ApprovalActionService
                     $model = Cost::findOrFail($id); break;
                 case 'acceptance':
                 case 'acceptance_customer':
-                case 'acceptance_pm':
                 case 'acceptance_supervisor':
-                    $model = AcceptanceStage::findOrFail($id); break;
-                case 'acceptance_item':
-                case 'acceptance_item_supervisor':
-                case 'acceptance_item_pm':
-                case 'acceptance_item_customer':
-                    $model = AcceptanceItem::findOrFail($id); break;
+                    $model = Acceptance::findOrFail($id); break;
                 case 'change_request': $model = ChangeRequest::findOrFail($id); break;
                 case 'additional_cost': $model = AdditionalCost::findOrFail($id); break;
                 case 'sub_payment':
@@ -383,11 +348,8 @@ class ApprovalActionService
             } elseif ($model instanceof SubcontractorPayment) {
                 $this->financialService->rejectSubPayment($model, $reason, $user);
                 $result = true;
-            } elseif ($model instanceof AcceptanceStage) {
-                $this->acceptanceService->rejectStage($model, $user, $reason);
-                $result = true;
-            } elseif ($model instanceof AcceptanceItem) {
-                $this->acceptanceService->rejectItem($model, $user, $reason);
+            } elseif ($model instanceof Acceptance) {
+                $this->acceptanceService->reject($model, $user, $reason);
                 $result = true;
             } elseif ($model instanceof MaterialBill) {
                 $this->materialBillService->reject($model, $user, $reason);
@@ -533,13 +495,12 @@ class ApprovalActionService
                     break;
                 
                 case 'acceptance_customer':
-                case 'acceptance_pm':
                 case 'acceptance_supervisor':
                 case 'acceptance':
-                    $stage = AcceptanceStage::findOrFail($id);
-                    $stage->update(['status' => 'draft']);
+                    $acceptance = Acceptance::findOrFail($id);
+                    $this->acceptanceService->revertToDraft($acceptance, $user);
                     $result = true;
-                    $message = "Đã hoàn duyệt nghiệm thu \"{$stage->name}\"";
+                    $message = "Đã hoàn duyệt nghiệm thu \"{$acceptance->name}\"";
                     break;
 
                 default:
@@ -693,8 +654,7 @@ class ApprovalActionService
         try {
             $modelClass = match ($type) {
                 'management', 'accountant', 'project_cost', 'company_cost' => Cost::class,
-                'acceptance', 'acceptance_customer', 'acceptance_pm', 'acceptance_supervisor' => AcceptanceStage::class,
-                'acceptance_item', 'acceptance_item_supervisor', 'acceptance_item_pm', 'acceptance_item_customer' => AcceptanceItem::class,
+                'acceptance', 'acceptance_customer', 'acceptance_supervisor' => Acceptance::class,
                 'change_request' => ChangeRequest::class,
                 'additional_cost' => AdditionalCost::class,
                 'sub_payment', 'sub_payment_confirm' => SubcontractorPayment::class,

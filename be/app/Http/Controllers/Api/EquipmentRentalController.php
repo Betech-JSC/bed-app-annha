@@ -18,7 +18,7 @@ class EquipmentRentalController extends Controller
     protected $authService;
     protected $equipmentService;
 
-    public function __construct(AuthorizationService $authService, \App\Services\EquipmentService $equipmentService)
+    public function __construct(\App\Services\AuthorizationService $authService, \App\Services\EquipmentService $equipmentService)
     {
         $this->authService = $authService;
         $this->equipmentService = $equipmentService;

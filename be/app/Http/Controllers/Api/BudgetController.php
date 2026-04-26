@@ -26,7 +26,7 @@ class BudgetController extends Controller
         ProjectService $projectService,
         FinancialCalculationService $financialCalculationService,
         BudgetSyncService $budgetSyncService,
-        AuthorizationService $authService,
+        \App\Services\AuthorizationService $authService,
         \App\Services\ProjectBudgetService $budgetService,
         \App\Services\ProjectAnalysisService $analysisService
     ) {

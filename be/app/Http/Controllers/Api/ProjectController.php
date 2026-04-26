@@ -16,7 +16,7 @@ class ProjectController extends Controller
 {
     protected $authService;
 
-    public function __construct(AuthorizationService $authService, \App\Services\ProjectService $projectService)
+    public function __construct(\App\Services\AuthorizationService $authService, \App\Services\ProjectService $projectService)
     {
         $this->authService = $authService;
         $this->projectService = $projectService;
