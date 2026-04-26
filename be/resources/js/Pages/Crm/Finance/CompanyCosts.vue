@@ -46,9 +46,11 @@
           <a-select-option value="approved">Đã duyệt</a-select-option>
           <a-select-option value="rejected">Từ chối</a-select-option>
         </a-select>
-        <a-select v-model:value="localFilters.cost_group_id" style="width: 170px;" size="large" @change="applyFilters" placeholder="Nhóm CP" allow-clear>
-          <a-select-option value="">Tất cả nhóm</a-select-option>
-          <a-select-option v-for="g in costGroups" :key="g.id" :value="String(g.id)">{{ g.name }}</a-select-option>
+        <a-select v-model:value="localFilters.expense_category" style="width: 170px;" size="large" @change="applyFilters" placeholder="Phân loại" allow-clear>
+          <a-select-option value="">Tất cả loại</a-select-option>
+          <a-select-option value="capex">CAPEX</a-select-option>
+          <a-select-option value="opex">OPEX</a-select-option>
+          <a-select-option value="payroll">Lương</a-select-option>
         </a-select>
         <a-date-picker v-model:value="filterStartDate" placeholder="Từ ngày" size="large" format="DD/MM/YYYY" @change="applyFilters" />
         <a-date-picker v-model:value="filterEndDate" placeholder="Đến ngày" size="large" format="DD/MM/YYYY" @change="applyFilters" />
@@ -73,8 +75,10 @@
             <div class="text-xs text-gray-400 mt-0.5 truncate" style="max-width: 220px;">{{ record.description || '—' }}</div>
           </div>
         </template>
-        <template v-if="column.dataIndex === 'cost_group'">
-          <a-tag v-if="record.cost_group" color="blue" class="rounded-lg text-xs">{{ record.cost_group.name }}</a-tag>
+        <template v-if="column.dataIndex === 'expense_category'">
+          <span v-if="record.expense_category === 'capex'" class="crm-tag crm-tag--completed">CAPEX</span>
+          <span v-else-if="record.expense_category === 'opex'" class="crm-tag crm-tag--pending">OPEX</span>
+          <span v-else-if="record.expense_category === 'payroll'" class="crm-tag crm-tag--active">Lương</span>
           <span v-else class="text-gray-400 text-xs">—</span>
         </template>
         <template v-if="column.dataIndex === 'amount'">
@@ -249,13 +253,13 @@
           </a-popconfirm>
 
           <!-- Approve: Management -->
-          <template v-if="selectedCost.status === 'pending_management_approval' && $can('cost.approve_management')">
+          <template v-if="selectedCost.status === 'pending_management_approval' && $can('company_cost.approve.management')">
             <a-button type="primary" size="small" @click="approveCost(selectedCost.id)"><CheckCircleOutlined /> Duyệt</a-button>
             <a-button danger size="small" @click="rejectCost(selectedCost.id)"><CloseCircleOutlined /> Từ chối</a-button>
           </template>
 
           <!-- Approve: Accountant -->
-          <template v-if="selectedCost.status === 'pending_accountant_approval' && $can('cost.approve_accountant')">
+          <template v-if="selectedCost.status === 'pending_accountant_approval' && $can('company_cost.approve.accountant')">
             <a-button type="primary" size="small" @click="approveCost(selectedCost.id)"><CheckCircleOutlined /> Xác nhận chi</a-button>
             <a-button danger size="small" @click="rejectCost(selectedCost.id)"><CloseCircleOutlined /> Từ chối</a-button>
           </template>
@@ -292,21 +296,13 @@
           <a-date-picker v-model:value="formDate" style="width: 100%;" size="large" format="DD/MM/YYYY" />
         </div>
       </div>
-      <div class="grid grid-cols-2 gap-4">
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Nhóm chi phí</label>
-          <a-select v-model:value="form.cost_group_id" style="width: 100%;" size="large" placeholder="Chọn nhóm" allow-clear>
-            <a-select-option v-for="g in costGroups" :key="g.id" :value="g.id">{{ g.name }}</a-select-option>
-          </a-select>
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Phân loại phí</label>
-          <a-select v-model:value="form.expense_category" style="width: 100%;" size="large" placeholder="Phân loại" allow-clear>
-            <a-select-option value="capex">CAPEX — Mua sắm tài sản</a-select-option>
-            <a-select-option value="opex">OPEX — Vận hành (điện, nước, mặt bằng)</a-select-option>
-            <a-select-option value="payroll">Lương, thưởng, bảo hiểm</a-select-option>
-          </a-select>
-        </div>
+      <div class="mb-4">
+        <label class="block text-sm font-medium text-gray-700 mb-1">Phân loại phí <span class="text-red-500">*</span></label>
+        <a-select v-model:value="form.expense_category" style="width: 100%;" size="large" placeholder="Phân loại" allow-clear>
+          <a-select-option value="capex">CAPEX — Mua sắm tài sản</a-select-option>
+          <a-select-option value="opex">OPEX — Vận hành (điện, nước, mặt bằng)</a-select-option>
+          <a-select-option value="payroll">Lương, thưởng, bảo hiểm</a-select-option>
+        </a-select>
       </div>
 
       <div class="grid grid-cols-2 gap-4">
@@ -403,7 +399,7 @@ const buildQuery = () => {
   const params = new URLSearchParams()
   if (localFilters.search) params.set('search', localFilters.search)
   if (localFilters.status) params.set('status', localFilters.status)
-  if (localFilters.cost_group_id) params.set('cost_group_id', localFilters.cost_group_id)
+  if (localFilters.expense_category) params.set('expense_category', localFilters.expense_category)
   if (filterStartDate.value) params.set('start_date', filterStartDate.value.format('YYYY-MM-DD'))
   if (filterEndDate.value) params.set('end_date', filterEndDate.value.format('YYYY-MM-DD'))
   return params.toString()
@@ -458,7 +454,7 @@ const statusChartData = computed(() => ({
 // ============================================================
 const columns = [
   { title: 'Tên chi phí', dataIndex: 'name', key: 'name', width: 260 },
-  { title: 'Nhóm', dataIndex: 'cost_group', key: 'cost_group', width: 140 },
+  { title: 'Phân loại', dataIndex: 'expense_category', key: 'expense_category', width: 140 },
   { title: 'Số tiền', dataIndex: 'amount', key: 'amount', width: 140, align: 'right' },
   { title: 'Ngày', dataIndex: 'cost_date', key: 'cost_date', width: 110 },
   { title: 'Trạng thái', dataIndex: 'status', key: 'status', width: 120 },
@@ -522,7 +518,7 @@ const rejectCost = (id) => {
 const form = useForm({
   name: '',
   amount: 0,
-  cost_group_id: null,
+  expense_category: null,
   cost_date: '',
   description: '',
   quantity: null,
@@ -561,7 +557,7 @@ const showEditModal = (record) => {
   editingCost.value = record
   form.name = record.name
   form.amount = parseFloat(record.amount)
-  form.cost_group_id = record.cost_group_id
+  form.expense_category = record.expense_category
   form.expense_category = record.expense_category
   form.description = record.description || ''
   form.quantity = record.quantity ? parseFloat(record.quantity) : null

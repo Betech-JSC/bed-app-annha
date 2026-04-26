@@ -34,9 +34,9 @@ class CompanyCostController extends Controller
             $query->where('status', $request->status);
         }
 
-        // Filter by cost_group_id
-        if ($request->has('cost_group_id')) {
-            $query->where('cost_group_id', $request->cost_group_id);
+        // Filter by expense_category
+        if ($request->has('expense_category')) {
+            $query->where('expense_category', $request->expense_category);
         }
 
         // Filter by date range
@@ -72,7 +72,7 @@ class CompanyCostController extends Controller
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
             'amount' => 'required|numeric|min:0',
-            'cost_group_id' => 'required|exists:cost_groups,id',
+            'expense_category' => 'required|in:capex,opex,payroll',
             'cost_date' => 'required|date',
             'description' => 'nullable|string',
             'quantity' => 'nullable|numeric|min:0',
@@ -95,7 +95,7 @@ class CompanyCostController extends Controller
             'project_id' => null, // Company cost - no project
             'name' => $request->name,
             'amount' => $request->amount,
-            'cost_group_id' => $request->cost_group_id,
+            'expense_category' => $request->expense_category,
             'cost_date' => $request->cost_date,
             'description' => $request->description,
             'quantity' => $request->quantity,
@@ -160,7 +160,7 @@ class CompanyCostController extends Controller
         $validator = Validator::make($request->all(), [
             'name' => 'sometimes|required|string|max:255',
             'amount' => 'sometimes|required|numeric|min:0',
-            'cost_group_id' => 'sometimes|required|exists:cost_groups,id',
+            'expense_category' => 'sometimes|required|in:capex,opex,payroll',
             'cost_date' => 'sometimes|required|date',
             'description' => 'nullable|string',
             'quantity' => 'nullable|numeric|min:0',
@@ -182,7 +182,7 @@ class CompanyCostController extends Controller
         $cost->update($request->only([
             'name',
             'amount',
-            'cost_group_id',
+            'expense_category',
             'cost_date',
             'description',
             'quantity',
@@ -382,15 +382,13 @@ class CompanyCostController extends Controller
             'pending_count' => (clone $query)->pending()->count(),
             'approved_count' => (clone $query)->approved()->count(),
             'rejected_count' => (clone $query)->where('status', 'rejected')->count(),
-            'by_cost_group' => (clone $query)->approved()
-                ->selectRaw('cost_group_id, SUM(amount) as total')
-                ->groupBy('cost_group_id')
-                ->with('costGroup:id,name')
+            'by_expense_category' => (clone $query)->approved()
+                ->selectRaw('expense_category, SUM(amount) as total')
+                ->groupBy('expense_category')
                 ->get()
                 ->map(function ($item) {
                     return [
-                        'cost_group_id' => $item->cost_group_id,
-                        'cost_group_name' => $item->costGroup->name ?? 'N/A',
+                        'expense_category' => $item->expense_category,
                         'total' => $item->total,
                     ];
                 }),

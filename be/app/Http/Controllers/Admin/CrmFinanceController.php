@@ -74,9 +74,9 @@ class CrmFinanceController extends Controller
             $query->where('status', $status);
         }
 
-        // Filter by cost_group_id
-        if ($groupId = $request->get('cost_group_id')) {
-            $query->where('cost_group_id', $groupId);
+        // Filter by expense_category
+        if ($expenseCategory = $request->get('expense_category')) {
+            $query->where('expense_category', $expenseCategory);
         }
 
         // Filter by date range
@@ -118,15 +118,20 @@ class CrmFinanceController extends Controller
                 ->sum('amount') ?: 0;
         }
 
-        // Chart: By Cost Group  
-        $byGroup = Cost::companyCosts()
+        // Chart: By Expense Category
+        $byExpenseCategory = Cost::companyCosts()
             ->where('status', '!=', 'rejected')
-            ->whereNotNull('cost_group_id')
-            ->selectRaw('cost_group_id, SUM(amount) as total')
-            ->groupBy('cost_group_id')
+            ->whereNotNull('expense_category')
+            ->selectRaw('expense_category, SUM(amount) as total')
+            ->groupBy('expense_category')
             ->orderByDesc('total')
-            ->with('costGroup:id,name')
             ->get();
+        
+        $expenseCategoryLabels = [
+            'capex' => 'CAPEX',
+            'opex' => 'OPEX',
+            'payroll' => 'Lương',
+        ];
 
         // Chart: By Status
         $byStatus = Cost::companyCosts()
@@ -150,8 +155,7 @@ class CrmFinanceController extends Controller
             'rejected' => '#EF4444',
         ];
 
-        // Cost Groups for filter
-        $costGroups = CostGroup::active()->ordered()->get(['id', 'name']);
+
 
         // Suppliers for form
         $suppliers = Supplier::orderBy('name')->get(['id', 'name']);
@@ -172,8 +176,8 @@ class CrmFinanceController extends Controller
                     'data' => $monthlyCosts,
                 ],
                 'byGroup' => [
-                    'labels' => $byGroup->map(fn($g) => $g->costGroup->name ?? 'Khác')->toArray(),
-                    'data' => $byGroup->pluck('total')->toArray(),
+                    'labels' => $byExpenseCategory->map(fn($g) => $expenseCategoryLabels[$g->expense_category] ?? 'Khác')->toArray(),
+                    'data' => $byExpenseCategory->pluck('total')->toArray(),
                 ],
                 'byStatus' => [
                     'labels' => $byStatus->map(fn($s) => $statusLabels[$s->status] ?? $s->status)->toArray(),
@@ -182,12 +186,11 @@ class CrmFinanceController extends Controller
                     'colors' => $byStatus->map(fn($s) => $statusColors[$s->status] ?? '#9CA3AF')->toArray(),
                 ],
             ],
-            'costGroups' => $costGroups,
             'suppliers' => $suppliers,
             'filters' => [
                 'search' => $request->get('search', ''),
                 'status' => $request->get('status', ''),
-                'cost_group_id' => $request->get('cost_group_id', ''),
+                'expense_category' => $request->get('expense_category', ''),
                 'start_date' => $request->get('start_date', ''),
                 'end_date' => $request->get('end_date', ''),
             ],
@@ -204,13 +207,12 @@ class CrmFinanceController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'amount' => 'required|numeric|min:0',
-            'cost_group_id' => 'nullable|exists:cost_groups,id',
+            'expense_category' => 'required|in:capex,opex,payroll',
             'cost_date' => 'required|date',
             'description' => 'nullable|string',
             'quantity' => 'nullable|numeric|min:0',
             'unit' => 'nullable|string|max:50',
             'supplier_id' => 'nullable|exists:suppliers,id',
-            'expense_category' => 'nullable|in:capex,opex,payroll',
             'attachment_ids' => 'nullable|array',
             'attachment_ids.*' => 'exists:attachments,id',
         ]);
@@ -245,13 +247,12 @@ class CrmFinanceController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'amount' => 'required|numeric|min:0',
-            'cost_group_id' => 'nullable|exists:cost_groups,id',
+            'expense_category' => 'required|in:capex,opex,payroll',
             'cost_date' => 'required|date',
             'description' => 'nullable|string',
             'quantity' => 'nullable|numeric|min:0',
             'unit' => 'nullable|string|max:50',
             'supplier_id' => 'nullable|exists:suppliers,id',
-            'expense_category' => 'nullable|in:capex,opex,payroll',
             'attachment_ids' => 'nullable|array',
             'attachment_ids.*' => 'exists:attachments,id',
         ]);

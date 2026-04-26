@@ -35,8 +35,8 @@ class CompanyCostWorkflowTest extends TestCase
         $pCreate = Permission::firstOrCreate(['name' => 'cost.create']);
         $pUpdate = Permission::firstOrCreate(['name' => 'cost.update']);
         $pSubmit = Permission::firstOrCreate(['name' => 'cost.submit']);
-        $pApproveManager = Permission::firstOrCreate(['name' => 'cost.approve_management']);
-        $pApproveAccountant = Permission::firstOrCreate(['name' => 'cost.approve_accountant']);
+        $pApproveManager = Permission::firstOrCreate(['name' => 'company_cost.approve.management']);
+        $pApproveAccountant = Permission::firstOrCreate(['name' => 'company_cost.approve.accountant']);
         $pReject = Permission::firstOrCreate(['name' => 'cost.reject']);
         
         // Also need view permission
