@@ -292,27 +292,52 @@ class ProjectController extends Controller
 
     /**
      * Chi tiết dự án
+     *
+     * Optimized: By default loads only core relations.
+     * Use ?include=payments,defects,logs,additionalCosts,personnel,subcontractors,acceptanceStages
+     * to load additional data on-demand.
      */
-    public function show(string $id)
+    public function show(string $id, Request $request)
     {
-        $project = Project::with([
+        // Core relations always loaded (lightweight)
+        $coreRelations = [
             'customer',
             'projectManager',
             'contract',
-            'payments',
-            'additionalCosts',
-            'personnel.user',
-            'personnel.personnelRole',
-            'subcontractors',
-            'constructionLogs' => function ($q) {
-                $q->latest('log_date')->limit(10);
-            },
-            'acceptanceStages',
-            'defects' => function ($q) {
-                $q->whereIn('status', ['open', 'in_progress']);
-            },
             'progress',
-        ])->findOrFail($id);
+        ];
+
+        // Optional relations map — key → Eloquent relation config
+        $optionalRelations = [
+            'payments'         => 'payments',
+            'additionalCosts'  => 'additionalCosts',
+            'personnel'        => ['personnel.user', 'personnel.personnelRole'],
+            'subcontractors'   => 'subcontractors',
+            'logs'             => ['constructionLogs' => fn($q) => $q->latest('log_date')->limit(10)],
+            'acceptanceStages' => 'acceptanceStages',
+            'defects'          => ['defects' => fn($q) => $q->whereIn('status', ['open', 'in_progress'])],
+        ];
+
+        // Parse ?include= parameter
+        $requestedIncludes = [];
+        if ($include = $request->query('include')) {
+            $requestedIncludes = array_map('trim', explode(',', $include));
+        }
+
+        // Build relations array
+        $relations = $coreRelations;
+        foreach ($requestedIncludes as $key) {
+            if (isset($optionalRelations[$key])) {
+                $val = $optionalRelations[$key];
+                if (is_array($val)) {
+                    $relations = array_merge($relations, $val);
+                } else {
+                    $relations[] = $val;
+                }
+            }
+        }
+
+        $project = Project::with($relations)->findOrFail($id);
 
         $user = auth()->user();
 
@@ -332,7 +357,8 @@ class ProjectController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $project
+            'data' => $project,
+            'available_includes' => array_keys($optionalRelations),
         ]);
     }
 

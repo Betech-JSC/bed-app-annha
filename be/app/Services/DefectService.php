@@ -14,10 +14,9 @@ class DefectService
      */
     public function upsertDefect(array $data, ?Defect $defect = null, ?User $actor = null): Defect
     {
-        // BUSINESS RULE: Auto-link task_id from acceptance_stage if provided
-        $taskId = $data['task_id'] ?? null;
-        if (!$taskId && isset($data['acceptance_stage_id'])) {
-            $acceptanceStage = \App\Models\AcceptanceStage::find($data['acceptance_stage_id']);
+        $taskId = $data['task_id'] ?? ($defect ? $defect->task_id : null);
+        if (empty($data['task_id']) && isset($data['acceptance_stage_id'])) {
+            $acceptanceStage = \App\Models\Acceptance::find($data['acceptance_stage_id']);
             if ($acceptanceStage && $acceptanceStage->task_id) {
                 $taskId = $acceptanceStage->task_id;
             }
@@ -26,9 +25,9 @@ class DefectService
         $payload = [
             'project_id' => $data['project_id'] ?? ($defect ? $defect->project_id : null),
             'task_id' => $taskId,
-            'acceptance_stage_id' => $data['acceptance_stage_id'] ?? null,
-            'acceptance_template_id' => $data['acceptance_template_id'] ?? null,
-            'defect_type' => $data['defect_type'] ?? 'other',
+            'acceptance_stage_id' => array_key_exists('acceptance_stage_id', $data) ? $data['acceptance_stage_id'] : ($defect ? $defect->acceptance_stage_id : null),
+            'acceptance_template_id' => array_key_exists('acceptance_template_id', $data) ? $data['acceptance_template_id'] : ($defect ? $defect->acceptance_template_id : null),
+            'defect_type' => $data['defect_type'] ?? ($defect ? $defect->defect_type : 'other'),
             'description' => $data['description'] ?? ($defect ? $defect->description : null),
             'severity' => $data['severity'] ?? ($defect ? $defect->severity : 'medium'),
             'status' => $data['status'] ?? ($defect ? $defect->status : 'open'),
@@ -138,6 +137,14 @@ class DefectService
 
         if (!empty($filters['severity'])) {
             $query->where('severity', $filters['severity']);
+        }
+
+        if (!empty($filters['acceptance_stage_id'])) {
+            $query->where('acceptance_stage_id', $filters['acceptance_stage_id']);
+        }
+
+        if (!empty($filters['task_id'])) {
+            $query->where('task_id', $filters['task_id']);
         }
 
         return $query->orderByDesc('created_at')->get();

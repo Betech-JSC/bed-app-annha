@@ -556,17 +556,7 @@ export default function AcceptanceItemList({
             </Text>
           </View>
         </View>
-        <PermissionGuard permission="acceptance.create">
-          <TouchableOpacity
-            style={styles.addButton}
-            onPress={() => {
-              setSelectedItem(null);
-              setShowForm(true);
-            }}
-          >
-            <Ionicons name="add" size={20} color="#3B82F6" />
-          </TouchableOpacity>
-        </PermissionGuard>
+        {/* Add Button removed as requested */}
       </TouchableOpacity>
 
       {expanded && (
@@ -575,7 +565,6 @@ export default function AcceptanceItemList({
             <View style={styles.emptyContainer}>
               <Ionicons name="document-text-outline" size={48} color="#D1D5DB" />
               <Text style={styles.emptyText}>Chưa có hạng mục nghiệm thu</Text>
-              <Text style={styles.emptySubtext}>Nhấn nút + để thêm hạng mục mới</Text>
             </View>
           ) : (
             items.map((item) => (

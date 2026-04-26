@@ -291,6 +291,7 @@ class AcceptanceService
         return Acceptance::where('project_id', $project->id)
             ->with([
                 'task.parent',
+                'template.criteria',
                 'submitter',
                 'supervisorApprover',
                 'customerApprover',

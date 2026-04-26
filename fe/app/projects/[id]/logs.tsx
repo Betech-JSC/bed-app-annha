@@ -71,6 +71,25 @@ const MONTHS = [
   "Tháng 12",
 ];
 
+// --- Helper Functions ---
+const getLogStatusText = (status: string | undefined) => {
+  switch (status) {
+    case 'approved': return 'Đã xác nhận';
+    case 'pending': return 'Chờ xác nhận';
+    case 'rejected': return 'Từ chối';
+    default: return 'Đã xác nhận'; // Theo rule hệ thống, nhật ký luôn auto-approved
+  }
+};
+
+const getLogStatusColor = (status: string | undefined) => {
+  switch (status) {
+    case 'approved': return '#10B981'; // Green
+    case 'pending': return '#F59E0B';  // Yellow
+    case 'rejected': return '#EF4444'; // Red
+    default: return '#10B981';
+  }
+};
+
 export default function ConstructionLogsScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();

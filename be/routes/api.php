@@ -70,12 +70,14 @@ use App\Http\Controllers\Api\EquipmentPurchaseController;
 use App\Http\Controllers\Api\AssetUsageController;
 use App\Http\Controllers\Api\EquipmentCategoryController;
 
-Route::post('login', [AuthController::class, 'login']);
-Route::post('forgot-password', [AuthController::class, 'forgotPassword']);
-Route::post('reset-password', [AuthController::class, 'resetPassword']);
+Route::middleware('throttle:10,1')->group(function () {
+    Route::post('login', [AuthController::class, 'login']);
+    Route::post('forgot-password', [AuthController::class, 'forgotPassword']);
+    Route::post('reset-password', [AuthController::class, 'resetPassword']);
+});
 Route::post('/users/save-token', [UserController::class, 'savePushToken']);
 
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware(['auth:sanctum', 'throttle:60,1'])->group(function () {
 
     Route::post('logout', [AuthController::class, 'logout']);
 
@@ -437,6 +439,7 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::post('/{id}/customer-approve', [AcceptanceController::class, 'customerApprove'])->where('id', '[0-9]+');
             Route::post('/{id}/reject', [AcceptanceController::class, 'reject'])->where('id', '[0-9]+');
             Route::post('/{id}/revert', [AcceptanceController::class, 'revert'])->where('id', '[0-9]+');
+            Route::post('/{id}/submit', [AcceptanceController::class, 'submit'])->where('id', '[0-9]+');
             Route::post('/{id}/attach-files', [AcceptanceController::class, 'attachFiles'])->where('id', '[0-9]+');
         });
 

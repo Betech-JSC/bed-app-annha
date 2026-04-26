@@ -191,6 +191,14 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         // Attendance (Chấm công — HR)
         Route::post('/attendance/{id}/approve', [CrmApprovalController::class, 'approveAttendance'])->name('attendance.approve');
         Route::post('/attendance/{id}/reject', [CrmApprovalController::class, 'rejectAttendance'])->name('attendance.reject');
+
+        // Maintenance
+        Route::post('/maintenance/{id}/approve', [CrmApprovalController::class, 'approveMaintenance'])->name('maintenance.approve');
+        Route::post('/maintenance/{id}/reject', [CrmApprovalController::class, 'rejectMaintenance'])->name('maintenance.reject');
+
+        // Warranty
+        Route::post('/warranty/{id}/approve', [CrmApprovalController::class, 'approveWarranty'])->name('warranty.approve');
+        Route::post('/warranty/{id}/reject', [CrmApprovalController::class, 'rejectWarranty'])->name('warranty.reject');
     });
 
 

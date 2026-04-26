@@ -59,6 +59,11 @@ export const newAcceptanceApi = {
     return response.data;
   },
 
+  getById: async (projectId: string | number, id: number | string) => {
+    const response = await api.get(`/projects/${projectId}/acceptances/${id}`);
+    return response.data;
+  },
+
   supervisorApprove: async (projectId: string | number, id: number) => {
     const response = await api.post(`/projects/${projectId}/acceptances/${id}/supervisor-approve`);
     return response.data;
@@ -91,6 +96,11 @@ export const newAcceptanceApi = {
 
   batchCustomerApprove: async (projectId: string | number, parentTaskId: number) => {
     const response = await api.post(`/projects/${projectId}/acceptances/batch-customer-approve`, { parent_task_id: parentTaskId });
+    return response.data;
+  },
+
+  submit: async (projectId: string | number, id: number) => {
+    const response = await api.post(`/projects/${projectId}/acceptances/${id}/submit`);
     return response.data;
   },
 };
@@ -180,5 +190,7 @@ export const acceptanceTemplateApi = {
 export const acceptanceApi = {
   ...newAcceptanceApi,
   ...acceptanceTemplateApi,
+  getStages: newAcceptanceApi.getAll,
+  getStage: newAcceptanceApi.getById,
 };
 

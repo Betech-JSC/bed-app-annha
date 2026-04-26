@@ -19,6 +19,8 @@ use App\Models\EquipmentRental;
 use App\Models\AssetUsage;
 use App\Models\MaterialBill;
 use App\Models\Attendance;
+use App\Models\ProjectMaintenance;
+use App\Models\ProjectWarranty;
 use App\Models\User;
 use App\Models\Approval;
 use App\Constants\Permissions;
@@ -41,14 +43,19 @@ class ApprovalQueryService
      * Get the full formatted dashboard data for mobile applications.
      * This combines raw data fetching with transformation/formatting.
      */
-    public function getMobileDashboardData($user, string $type = 'all'): array
+    /**
+     * Get the full formatted dashboard data for mobile applications.
+     *
+     * Optimized: supports pagination via $page/$perPage to avoid sending
+     * hundreds of items in a single response.
+     */
+    public function getMobileDashboardData($user, string $type = 'all', int $page = 1, int $perPage = 20): array
     {
         // 1. Determine user's approval capabilities for 'can_approve' flags
         $canApproveManagement = $user->hasPermission(Permissions::COST_APPROVE_MANAGEMENT) || $user->hasPermission(Permissions::COMPANY_COST_APPROVE_MANAGEMENT) || $user->isSuperAdmin();
         $canApproveAccountant = $user->hasPermission(Permissions::COST_APPROVE_ACCOUNTANT) || $user->hasPermission(Permissions::COMPANY_COST_APPROVE_ACCOUNTANT) || $user->isSuperAdmin();
 
         // 2. Fetch raw data from the same source used by Web
-        // Always fetch ALL for dashboard so we can calculate counts for all tabs
         $data = $this->getApprovalData($user, 'all');
         
         $result = [
@@ -57,9 +64,10 @@ class ApprovalQueryService
             'recent_items' => [],
             'stats' => [],
             'grand_total' => 0,
+            'pagination' => [],
         ];
 
-        // 3. Build ALL Items Array once
+        // 3. Build ALL Items Array once (needed for counts/summary)
         $allItems = $this->buildMobileItems($user, $data, 'all', $canApproveManagement, $canApproveAccountant);
 
         // 4. Build Summary from the already processed list
@@ -67,42 +75,65 @@ class ApprovalQueryService
 
         // 5. Filter for the requested type
         if ($type === 'all' || in_array($type, ['management', 'accountant', 'project_manager', 'supervisor', 'customer', 'hr'])) {
-            $result['items'] = ($type === 'all')
+            $filteredItems = ($type === 'all')
                 ? $allItems
                 : array_values(array_filter($allItems, fn($i) => ($i['role_group'] ?? '') === $type));
         } else {
-            // Specific type filter (e.g. project_cost)
-            $result['items'] = array_values(array_filter($allItems, fn($i) => ($i['type'] ?? '') === $type));
+            $filteredItems = array_values(array_filter($allItems, fn($i) => ($i['type'] ?? '') === $type));
         }
 
-        // 6. Build Recent Activity
-        $result['recent_items'] = $this->buildRecentMobileItems($user, $data);
+        // 5b. Sort by date DESC
+        usort($filteredItems, fn($a, $b) => strtotime($b['created_at']) - strtotime($a['created_at']));
 
-        // 7. Stats Overview (from filtered items)
+        // 5c. Paginate
+        $totalItems = count($filteredItems);
+        $totalPages = max(1, (int) ceil($totalItems / $perPage));
+        $page = max(1, min($page, $totalPages));
+        $offset = ($page - 1) * $perPage;
+        $paginatedItems = array_slice($filteredItems, $offset, $perPage);
+
+        // 5d. Inject Role Info for UI elements
+        foreach ($paginatedItems as &$item) {
+            $item = array_merge($item, $this->getRequiredRoleInfo($item['approval_level'] ?? 'management'));
+        }
+        unset($item);
+
+        $result['items'] = $paginatedItems;
+        $result['pagination'] = [
+            'current_page' => $page,
+            'per_page' => $perPage,
+            'total' => $totalItems,
+            'last_page' => $totalPages,
+            'has_more' => $page < $totalPages,
+        ];
+
+        // 6. Build Recent Activity (only on first page to save tokens)
+        $result['recent_items'] = ($page === 1)
+            ? $this->buildRecentMobileItems($user, $data)
+            : [];
+
+        // 7. Stats Overview
         $result['stats'] = array_merge(
             $this->getStats($user, isset($data['projectIds']) ? false : true, $data['projectIds'] ?? [], $data),
             [
-                'pending_total' => count($result['items']),
-                'pending_amount' => (float) array_sum(array_column($result['items'], 'amount')),
+                'pending_total' => $totalItems,
+                'pending_amount' => (float) array_sum(array_column($filteredItems, 'amount')),
             ]
         );
 
-        // 8. Inject Role Info for UI elements (icons/labels) - already sorted by building order mostly, but we re-sort by date
-        usort($result['items'], fn($a, $b) => strtotime($b['created_at']) - strtotime($a['created_at']));
-        
-        foreach ($result['items'] as &$item) {
-            $item = array_merge($item, $this->getRequiredRoleInfo($item['approval_level'] ?? 'management'));
-        }
+        // 8. Role Info for recent items (only on first page)
         foreach ($result['recent_items'] as &$item) {
             $item = array_merge($item, $this->getRequiredRoleInfo($item['approval_level'] ?? 'history'));
         }
         unset($item);
 
-        $result['grand_total'] = $result['stats']['pending_total'];
+        $result['grand_total'] = $totalItems;
         $result['user_roles'] = $user->roles->pluck('name')->toArray();
 
-        // 9. Budget Items — for accountant to link costs to project budgets
-        $result['budget_items_by_project'] = $this->getBudgetItemsForContext($user, $result['items'], $canApproveAccountant);
+        // 9. Budget Items — only for accountant context, only on page 1
+        $result['budget_items_by_project'] = ($page === 1)
+            ? $this->getBudgetItemsForContext($user, $filteredItems, $canApproveAccountant)
+            : [];
 
         return $result;
     }
@@ -239,169 +270,76 @@ class ApprovalQueryService
         $data['approvals'] = $allApprovals; // New central source
 
         // ═══════════════════════════════════════════════════════════════
-        // INTEGRATED MODELS (Using Centralized Approvals)
+        // OPTIMIZED: Group approvals ONCE by type, then distribute
+        // (replaces 20+ individual filter() passes → single groupBy)
         // ═══════════════════════════════════════════════════════════════
-        
-        // Distribution of centralized approvals into their respective legacy buckets for compatibility
-        $data['costs_management'] = $allApprovals->filter(fn($a) => 
-            $a->approvable_type === Cost::class && 
-            str_contains($a->approvable->status ?? '', 'management')
-        )->pluck('approvable')->filter();
+        $grouped = $allApprovals->groupBy('approvable_type');
 
-        $data['costs_accountant'] = $allApprovals->filter(fn($a) => 
-            $a->approvable_type === Cost::class && 
-            str_contains($a->approvable->status ?? '', 'accountant')
-        )->pluck('approvable')->filter();
+        // Helper: pluck approvable models from grouped collection
+        $pluckModels = fn($class) => ($grouped[$class] ?? collect())->pluck('approvable')->filter();
 
-        $data['acceptance_supervisor'] = $allApprovals->filter(fn($a) =>
-            $a->approvable_type === Acceptance::class &&
-            ($a->approvable->workflow_status ?? '') === 'submitted'
-        )->pluck('approvable')->filter();
+        // Costs — split by approval level
+        $allCosts = $pluckModels(Cost::class);
+        $data['costs_management'] = $allCosts->filter(fn($c) => str_contains($c->status ?? '', 'management'));
+        $data['costs_accountant'] = $allCosts->filter(fn($c) => str_contains($c->status ?? '', 'accountant'));
 
-        $data['acceptance_customer'] = $allApprovals->filter(fn($a) =>
-            $a->approvable_type === Acceptance::class &&
-            ($a->approvable->workflow_status ?? '') === 'supervisor_approved'
-        )->pluck('approvable')->filter();
-
+        // Acceptances — split by workflow_status
+        $allAcceptances = $pluckModels(Acceptance::class);
+        $data['acceptance_supervisor'] = $allAcceptances->filter(fn($a) => ($a->workflow_status ?? '') === 'submitted');
+        $data['acceptance_customer'] = $allAcceptances->filter(fn($a) => ($a->workflow_status ?? '') === 'supervisor_approved');
         $data['acceptance_pm'] = collect(); // Deprecated — level 2 removed
-
-        $data['additional_costs'] = $allApprovals->filter(fn($a) => 
-            $a->approvable_type === AdditionalCost::class
-        )->pluck('approvable')->filter();
-
-        $data['material_bills_management'] = $allApprovals->filter(fn($a) => 
-            $a->approvable_type === MaterialBill::class && 
-            str_contains($a->approvable->status ?? '', 'management')
-        )->pluck('approvable')->filter();
-
-        $data['material_bills_accountant'] = $allApprovals->filter(fn($a) => 
-            $a->approvable_type === MaterialBill::class && 
-            str_contains($a->approvable->status ?? '', 'accountant')
-        )->pluck('approvable')->filter();
-
-        $data['payments_pending'] = $allApprovals->filter(fn($a) => 
-            $a->approvable_type === ProjectPayment::class && 
-            ($a->approvable->status ?? '') !== 'customer_paid'
-        )->pluck('approvable')->filter();
-
-        $data['payments_paid'] = $allApprovals->filter(fn($a) => 
-            $a->approvable_type === ProjectPayment::class && 
-            ($a->approvable->status ?? '') === 'customer_paid'
-        )->pluck('approvable')->filter();
-
-        // ═══════════════════════════════════════════════════════════════
-        // ALL REMAINING MODELS (via Centralized Approvals)
-        // ═══════════════════════════════════════════════════════════════
-
         $data['acceptance_items'] = collect(); // Deprecated — merged into acceptances
 
-        // Change Requests (Yêu cầu thay đổi)
-        $data['change_requests'] = $allApprovals->filter(fn($a) =>
-            $a->approvable_type === ChangeRequest::class
-        )->pluck('approvable')->filter();
+        // Simple types (no sub-splitting needed)
+        $data['additional_costs'] = $pluckModels(AdditionalCost::class);
+        $data['change_requests'] = $pluckModels(ChangeRequest::class);
+        $data['sub_acceptances'] = $pluckModels(SubcontractorAcceptance::class);
+        $data['supplier_acceptances'] = $pluckModels(SupplierAcceptance::class);
+        $data['contracts'] = $pluckModels(Contract::class);
+        $data['construction_logs'] = collect([]); // BUSINESS RULE: Nhật ký không cần duyệt
+        $data['schedule_adjustments'] = $pluckModels(ScheduleAdjustment::class);
+        $data['defects'] = $pluckModels(Defect::class);
+        $data['budgets'] = $pluckModels(ProjectBudget::class);
+        $data['attendances_pending'] = $pluckModels(Attendance::class);
+        $data['maintenances'] = $pluckModels(ProjectMaintenance::class);
+        $data['warranties'] = $pluckModels(ProjectWarranty::class);
 
-        // Subcontractor Payments (Thanh toán NTP)
-        $data['sub_payments_management'] = $allApprovals->filter(fn($a) =>
-            $a->approvable_type === SubcontractorPayment::class &&
-            str_contains($a->approvable->status ?? '', 'management')
-        )->pluck('approvable')->filter();
+        // Material Bills — split by approval level
+        $allMaterialBills = $pluckModels(MaterialBill::class);
+        $data['material_bills_management'] = $allMaterialBills->filter(fn($b) => str_contains($b->status ?? '', 'management'));
+        $data['material_bills_accountant'] = $allMaterialBills->filter(fn($b) => str_contains($b->status ?? '', 'accountant'));
 
-        $data['sub_payments_accountant'] = $allApprovals->filter(fn($a) =>
-            $a->approvable_type === SubcontractorPayment::class &&
-            str_contains($a->approvable->status ?? '', 'accountant')
-        )->pluck('approvable')->filter();
+        // Payments — split by payment status
+        $allPayments = $pluckModels(ProjectPayment::class);
+        $data['payments_pending'] = $allPayments->filter(fn($p) => ($p->status ?? '') !== 'customer_paid');
+        $data['payments_paid'] = $allPayments->filter(fn($p) => ($p->status ?? '') === 'customer_paid');
 
-        // Subcontractor Acceptances (Nghiệm thu NTP)
-        $data['sub_acceptances'] = $allApprovals->filter(fn($a) =>
-            $a->approvable_type === SubcontractorAcceptance::class
-        )->pluck('approvable')->filter();
+        // Subcontractor Payments — split by approval level
+        $allSubPayments = $pluckModels(SubcontractorPayment::class);
+        $data['sub_payments_management'] = $allSubPayments->filter(fn($p) => str_contains($p->status ?? '', 'management'));
+        $data['sub_payments_accountant'] = $allSubPayments->filter(fn($p) => str_contains($p->status ?? '', 'accountant'));
 
-        // Supplier Acceptances (Nghiệm thu NCC)
-        $data['supplier_acceptances'] = $allApprovals->filter(fn($a) =>
-            $a->approvable_type === SupplierAcceptance::class
-        )->pluck('approvable')->filter();
+        // Equipment Rentals — split by status
+        $allEquipRentals = $pluckModels(EquipmentRental::class);
+        $data['equipment_rentals_management'] = $allEquipRentals->filter(fn($r) => str_contains($r->status ?? '', 'management'));
+        $data['equipment_rentals_accountant'] = $allEquipRentals->filter(fn($r) => str_contains($r->status ?? '', 'accountant'));
+        $data['equipment_rentals_return'] = $allEquipRentals->filter(fn($r) => str_contains($r->status ?? '', 'return'));
 
-        // Contracts (Hợp đồng)
-        $data['contracts'] = $allApprovals->filter(fn($a) =>
-            $a->approvable_type === Contract::class
-        )->pluck('approvable')->filter();
+        // Asset Usages — split by status
+        $allAssetUsages = $pluckModels(AssetUsage::class);
+        $data['asset_usages_management'] = $allAssetUsages->filter(fn($u) => str_contains($u->status ?? '', 'management'));
+        $data['asset_usages_accountant'] = $allAssetUsages->filter(fn($u) => str_contains($u->status ?? '', 'accountant'));
+        $data['asset_usages_return'] = $allAssetUsages->filter(fn($u) => str_contains($u->status ?? '', 'return'));
 
-        // Construction Logs — REMOVED from approval center (BUSINESS RULE: Nhật ký không cần duyệt)
-        $data['construction_logs'] = collect([]);
+        // Equipment Purchases — split by status
+        $allEquipPurchases = $pluckModels(\App\Models\EquipmentPurchase::class);
+        $data['equipment_purchases_management'] = $allEquipPurchases->filter(fn($p) => str_contains($p->status ?? '', 'management'));
+        $data['equipment_purchases_accountant'] = $allEquipPurchases->filter(fn($p) => str_contains($p->status ?? '', 'accountant'));
 
-        // Schedule Adjustments (Điều chỉnh tiến độ)
-        $data['schedule_adjustments'] = $allApprovals->filter(fn($a) =>
-            $a->approvable_type === ScheduleAdjustment::class
-        )->pluck('approvable')->filter();
-
-        // Defects (Lỗi chờ xác nhận)
-        $data['defects'] = $allApprovals->filter(fn($a) =>
-            $a->approvable_type === Defect::class
-        )->pluck('approvable')->filter();
-
-        // Project Budgets (Ngân sách dự án)
-        $data['budgets'] = $allApprovals->filter(fn($a) =>
-            $a->approvable_type === ProjectBudget::class
-        )->pluck('approvable')->filter();
-
-        // Equipment Rentals (Thuê thiết bị)
-        $data['equipment_rentals_management'] = $allApprovals->filter(fn($a) =>
-            $a->approvable_type === EquipmentRental::class &&
-            str_contains($a->approvable->status ?? '', 'management')
-        )->pluck('approvable')->filter();
-
-        $data['equipment_rentals_accountant'] = $allApprovals->filter(fn($a) =>
-            $a->approvable_type === EquipmentRental::class &&
-            str_contains($a->approvable->status ?? '', 'accountant')
-        )->pluck('approvable')->filter();
-
-        $data['equipment_rentals_return'] = $allApprovals->filter(fn($a) =>
-            $a->approvable_type === EquipmentRental::class &&
-            str_contains($a->approvable->status ?? '', 'return')
-        )->pluck('approvable')->filter();
-
-        // Asset Usages (Sử dụng thiết bị)
-        $data['asset_usages_management'] = $allApprovals->filter(fn($a) =>
-            $a->approvable_type === AssetUsage::class &&
-            str_contains($a->approvable->status ?? '', 'management')
-        )->pluck('approvable')->filter();
-
-        $data['asset_usages_accountant'] = $allApprovals->filter(fn($a) =>
-            $a->approvable_type === AssetUsage::class &&
-            str_contains($a->approvable->status ?? '', 'accountant')
-        )->pluck('approvable')->filter();
-
-        $data['asset_usages_return'] = $allApprovals->filter(fn($a) =>
-            $a->approvable_type === AssetUsage::class &&
-            str_contains($a->approvable->status ?? '', 'return')
-        )->pluck('approvable')->filter();
-
-        // Attendances (Chấm công chờ duyệt)
-        $data['attendances_pending'] = $allApprovals->filter(fn($a) =>
-            $a->approvable_type === Attendance::class
-        )->pluck('approvable')->filter();
-
-        // Equipment Purchases (Mua thiết bị mới)
-        $data['equipment_purchases_management'] = $allApprovals->filter(fn($a) =>
-            $a->approvable_type === \App\Models\EquipmentPurchase::class &&
-            str_contains($a->approvable->status ?? '', 'management')
-        )->pluck('approvable')->filter();
-
-        $data['equipment_purchases_accountant'] = $allApprovals->filter(fn($a) =>
-            $a->approvable_type === \App\Models\EquipmentPurchase::class &&
-            str_contains($a->approvable->status ?? '', 'accountant')
-        )->pluck('approvable')->filter();
-
-        // Equipment Inventory (Kho thiết bị - mua trực tiếp)
-        $data['equipment_inventory_management'] = $allApprovals->filter(fn($a) =>
-            $a->approvable_type === \App\Models\Equipment::class &&
-            str_contains($a->approvable->status ?? '', 'management')
-        )->pluck('approvable')->filter();
-
-        $data['equipment_inventory_accountant'] = $allApprovals->filter(fn($a) =>
-            $a->approvable_type === \App\Models\Equipment::class &&
-            str_contains($a->approvable->status ?? '', 'accountant')
-        )->pluck('approvable')->filter();
+        // Equipment Inventory — split by status
+        $allEquipInventory = $pluckModels(\App\Models\Equipment::class);
+        $data['equipment_inventory_management'] = $allEquipInventory->filter(fn($e) => str_contains($e->status ?? '', 'management'));
+        $data['equipment_inventory_accountant'] = $allEquipInventory->filter(fn($e) => str_contains($e->status ?? '', 'accountant'));
 
         // ═══════════════════════════════════════════════════════════════
         // RECENT ACTIVITY (Hoạt động gần đây)
@@ -485,6 +423,8 @@ class ApprovalQueryService
             'defects' => $recentApprovals->filter(fn($a) => $a->approvable_type === Defect::class)->pluck('approvable')->filter(),
             'equipment_purchases' => $recentApprovals->filter(fn($a) => $a->approvable_type === \App\Models\EquipmentPurchase::class)->pluck('approvable')->filter(),
             'attendances' => $recentApprovals->filter(fn($a) => $a->approvable_type === Attendance::class)->pluck('approvable')->filter(),
+            'maintenances' => $recentApprovals->filter(fn($a) => $a->approvable_type === ProjectMaintenance::class)->pluck('approvable')->filter(),
+            'warranties' => $recentApprovals->filter(fn($a) => $a->approvable_type === ProjectWarranty::class)->pluck('approvable')->filter(),
             'acceptance_items' => collect(), // Deprecated
         ];
     }
@@ -530,7 +470,7 @@ class ApprovalQueryService
         })->count();
 
         $realPendingAcceptance = $allApprovals->filter(fn($a) =>
-            $a->approvable_type === Acceptance::class
+            in_array($a->approvable_type, [Acceptance::class, ProjectMaintenance::class, ProjectWarranty::class])
         )->count();
         
         // Stats for TODAY from centralized table
@@ -568,7 +508,7 @@ class ApprovalQueryService
     {
         return match ($status) {
             'draft' => 'Nháp',
-            'pending', 'pending_approval' => 'Chờ duyệt',
+            'pending', 'pending_approval', 'pending_customer' => 'Chờ duyệt',
             'pending_management_approval', 'pending_management' => 'Chờ BĐH duyệt',
             'pending_accountant_approval', 'pending_accountant' => 'Chờ KT xác nhận',
             'pending_accountant_confirmation' => 'Chờ KT xác nhận',
@@ -736,6 +676,36 @@ class ApprovalQueryService
                         'approval_level' => 'management', 'role_group' => 'management',
                         'attachments' => $this->formatAttachments($e),
                         'attachments_count' => $e->attachments->count(),
+                    ];
+                }
+            }
+
+            // Maintenance & Warranty (Technical Bucket)
+            if ($type === 'all' || $type === 'management' || $type === 'maintenance') {
+                foreach ($data['maintenances'] ?? [] as $m) {
+                    $items[] = [
+                        'id' => $m->id, 'type' => 'maintenance', 'title' => 'Bảo trì: ' . ($m->project->name ?? 'Dự án'),
+                        'subtitle' => $m->maintenance_date ? $m->maintenance_date->format('d/m/Y') : 'N/A', 'amount' => 0,
+                        'status' => $m->status, 'status_label' => $this->getStatusLabel($m->status),
+                        'created_by' => $m->creator->name ?? 'N/A', 'created_at' => $m->created_at->toISOString(),
+                        'project_id' => $m->project_id, 'can_approve' => $user->hasPermission(Permissions::WARRANTY_APPROVE) || $user->isSuperAdmin(),
+                        'approval_level' => 'management', 'role_group' => 'management',
+                        'attachments' => $this->formatAttachments($m),
+                        'attachments_count' => $m->attachments->count(),
+                    ];
+                }
+            }
+            if ($type === 'all' || $type === 'management' || $type === 'warranty') {
+                foreach ($data['warranties'] ?? [] as $w) {
+                    $items[] = [
+                        'id' => $w->id, 'type' => 'warranty', 'title' => 'Bàn giao & Bảo hành: ' . ($w->project->name ?? 'Dự án'),
+                        'subtitle' => $w->handover_date ? $w->handover_date->format('d/m/Y') : 'N/A', 'amount' => 0,
+                        'status' => $w->status, 'status_label' => $this->getStatusLabel($w->status),
+                        'created_by' => $w->creator->name ?? 'N/A', 'created_at' => $w->created_at->toISOString(),
+                        'project_id' => $w->project_id, 'can_approve' => $user->hasPermission(Permissions::WARRANTY_APPROVE) || $user->isSuperAdmin(),
+                        'approval_level' => 'management', 'role_group' => 'management',
+                        'attachments' => $this->formatAttachments($w),
+                        'attachments_count' => $w->attachments->count(),
                     ];
                 }
             }

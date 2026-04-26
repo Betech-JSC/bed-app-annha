@@ -33,7 +33,7 @@ class DefectController extends Controller
         $project = Project::findOrFail($projectId);
         $this->apiRequire($request->user(), Permissions::DEFECT_VIEW, $project);
 
-        $defects = $this->defectService->getDefects($project, $request->only(['status', 'severity']));
+        $defects = $this->defectService->getDefects($project, $request->only(['status', 'severity', 'acceptance_stage_id', 'task_id']));
 
         return response()->json([
             'success' => true,
@@ -52,7 +52,7 @@ class DefectController extends Controller
 
         $validated = $request->validate([
             'task_id' => 'nullable|exists:project_tasks,id',
-            'acceptance_stage_id' => 'nullable|exists:acceptance_stages,id',
+            'acceptance_stage_id' => 'nullable|exists:acceptances,id',
             'description' => 'required|string|max:2000',
             'severity' => ['required', 'in:low,medium,high,critical'],
             'before_image_ids' => 'nullable|array',

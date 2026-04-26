@@ -127,6 +127,8 @@ class CrmApprovalController extends Controller
                 ->concat($data['acceptance_customer']->map(fn($i) => array_merge($this->formatAcceptanceItem($i, 'Chờ KH duyệt', 'customer'), ['_approveType' => 'acceptance'])))
                 ->concat($data['contracts']->map(fn($i) => array_merge($this->formatContractItem($i), ['_approveType' => 'contract'])))
                 ->concat($data['payments_pending']->map(fn($i) => array_merge($this->formatPaymentItem($i), ['_approveType' => 'project_payment'])))
+                ->concat($data['maintenances']->map(fn($i) => array_merge($this->formatMaintenanceItem($i), ['_approveType' => 'maintenance'])))
+                ->concat($data['warranties']->map(fn($i) => array_merge($this->formatWarrantyItem($i), ['_approveType' => 'warranty'])))
                 ->concat($defectsByRole['customer'])
                 ->unique(fn($item) => ($item['type'] ?? '') . '_' . $item['id'])->values() : collect([]),
 
@@ -613,6 +615,48 @@ class CrmApprovalController extends Controller
         $this->crmRequire($user, Permissions::GANTT_UPDATE, $adj->project);
 
         return $this->delegateReject($user, 'schedule_adjustment', $id, $request->reason);
+    }
+
+    // =========================================================================
+    // MAINTENANCE & WARRANTY APPROVAL
+    // =========================================================================
+
+    public function approveMaintenance(Request $request, $id)
+    {
+        $item = \App\Models\ProjectMaintenance::findOrFail($id);
+        $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::WARRANTY_APPROVE, $item->project);
+
+        return $this->delegateApprove($user, 'maintenance', $id);
+    }
+
+    public function rejectMaintenance(Request $request, $id)
+    {
+        $request->validate(['reason' => 'required|string']);
+        $item = \App\Models\ProjectMaintenance::findOrFail($id);
+        $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::WARRANTY_APPROVE, $item->project);
+
+        return $this->delegateReject($user, 'maintenance', $id, $request->reason);
+    }
+
+    public function approveWarranty(Request $request, $id)
+    {
+        $item = \App\Models\ProjectWarranty::findOrFail($id);
+        $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::WARRANTY_APPROVE, $item->project);
+
+        return $this->delegateApprove($user, 'warranty', $id);
+    }
+
+    public function rejectWarranty(Request $request, $id)
+    {
+        $request->validate(['reason' => 'required|string']);
+        $item = \App\Models\ProjectWarranty::findOrFail($id);
+        $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::WARRANTY_APPROVE, $item->project);
+
+        return $this->delegateReject($user, 'warranty', $id, $request->reason);
     }
 
     // =========================================================================
@@ -1189,6 +1233,51 @@ class CrmApprovalController extends Controller
         ];
     }
 
+    private function formatMaintenanceItem(\App\Models\ProjectMaintenance $m): array
+    {
+        return [
+            'id' => $m->id,
+            'type' => 'maintenance',
+            'type_label' => 'Bảo trì',
+            'title' => 'Phiếu bảo trì định kỳ',
+            'subtitle' => ($m->project->code ?? '') . ' - ' . ($m->project->name ?? 'Dự án'),
+            'amount' => 0,
+            'status' => $m->status,
+            'status_label' => $this->getStatusLabel($m->status),
+            'created_by' => $m->creator->name ?? 'N/A',
+            'created_by_email' => $m->creator->email ?? '',
+            'created_at' => optional($m->created_at)->format('d/m/Y H:i') ?? '',
+            'description' => $m->notes,
+            'project_id' => $m->project_id,
+            'maintenance_date' => optional($m->maintenance_date)->format('d/m/Y'),
+            'next_maintenance_date' => optional($m->next_maintenance_date)->format('d/m/Y'),
+            'attachments' => $this->formatAttachments($m->attachments),
+            'attachments_count' => $m->attachments->count(),
+        ];
+    }
+
+    private function formatWarrantyItem(\App\Models\ProjectWarranty $w): array
+    {
+        return [
+            'id' => $w->id,
+            'type' => 'warranty',
+            'type_label' => 'Bảo hành',
+            'title' => 'Phiếu bảo hành/Bàn giao',
+            'subtitle' => ($w->project->code ?? '') . ' - ' . ($w->project->name ?? 'Dự án'),
+            'amount' => 0,
+            'status' => $w->status,
+            'status_label' => $this->getStatusLabel($w->status),
+            'created_by' => $w->creator->name ?? 'N/A',
+            'created_by_email' => $w->creator->email ?? '',
+            'created_at' => optional($w->created_at)->format('d/m/Y H:i') ?? '',
+            'description' => $w->warranty_content,
+            'project_id' => $w->project_id,
+            'handover_date' => optional($w->handover_date)->format('d/m/Y'),
+            'attachments' => $this->formatAttachments($w->attachments),
+            'attachments_count' => $w->attachments->count(),
+        ];
+    }
+
     private function formatAttendanceItem(Attendance $att): array
     {
         $statusLabels = [
@@ -1261,6 +1350,8 @@ class CrmApprovalController extends Controller
             ->concat($recent['schedule_adjustments']->map(fn($i) => $this->formatScheduleAdjustmentItem($i)))
             ->concat($recent['defects']->map(fn($i) => $this->formatDefectItem($i)))
             ->concat($recent['attendances']->map(fn($i) => $this->formatAttendanceItem($i)))
+            ->concat($recent['maintenances']->map(fn($i) => $this->formatMaintenanceItem($i)))
+            ->concat($recent['warranties']->map(fn($i) => $this->formatWarrantyItem($i)))
             ->unique(fn($item) => ($item['type'] ?? '') . '_' . $item['id'])->sortByDesc(fn($i) => $i['created_at'])->take(30)->values();
     }
 
@@ -1278,6 +1369,7 @@ class CrmApprovalController extends Controller
             'approved' => 'Đã duyệt', 'active' => 'Đang áp dụng',
             'archived' => 'Đã lưu trữ', 'paid' => 'Đã thanh toán', 'rejected' => 'Chưa đạt',
             'open' => 'Mới', 'in_progress' => 'Đang sửa lỗi', 'fixed' => 'Đã sửa — Chờ xác nhận', 'verified' => 'Đã xác nhận',
+            'pending_customer' => 'Chờ duyệt',
         ];
         return $labels[$status] ?? $status;
     }

@@ -83,7 +83,7 @@ class Defect extends Model
 
     public function acceptanceStage(): BelongsTo
     {
-        return $this->belongsTo(AcceptanceStage::class);
+        return $this->belongsTo(Acceptance::class, 'acceptance_stage_id');
     }
 
     public function acceptanceTemplate(): BelongsTo

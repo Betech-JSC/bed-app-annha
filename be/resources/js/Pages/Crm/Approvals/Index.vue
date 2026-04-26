@@ -505,6 +505,36 @@
           </div>
         </div>
 
+        <!-- 5b. Maintenance Specific -->
+        <div v-if="detailItem.type === 'maintenance'" class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm space-y-4">
+          <div class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+            <CalendarOutlined class="text-indigo-500" /> Thông tin bảo trì
+          </div>
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <div class="text-[10px] text-gray-400 uppercase font-bold mb-1">Ngày bảo trì</div>
+              <div class="text-sm font-semibold text-gray-700">{{ detailItem.maintenance_date }}</div>
+            </div>
+            <div v-if="detailItem.next_maintenance_date">
+              <div class="text-[10px] text-gray-400 uppercase font-bold mb-1">Ngày bảo trì tiếp theo</div>
+              <div class="text-sm font-semibold text-indigo-600">{{ detailItem.next_maintenance_date }}</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 5c. Warranty Specific -->
+        <div v-if="detailItem.type === 'warranty'" class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm space-y-4">
+          <div class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+            <SafetyCertificateOutlined class="text-emerald-500" /> Thông tin bảo hành & Bàn giao
+          </div>
+          <div class="grid grid-cols-1 gap-4">
+            <div v-if="detailItem.handover_date">
+              <div class="text-[10px] text-gray-400 uppercase font-bold mb-1">Ngày bàn giao</div>
+              <div class="text-sm font-semibold text-gray-700">{{ detailItem.handover_date }}</div>
+            </div>
+          </div>
+        </div>
+
         <!-- 6. Generic Attachments (Files/Documents) -->
         <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
           <div class="flex items-center justify-between mb-4">
@@ -886,6 +916,8 @@ const typeColors = {
   equipment_purchase: 'geekblue',
   equipment_inventory: 'green',
   attendance: 'teal',
+  maintenance: 'orange',
+  warranty: 'purple',
 }
 
 const statusViMap = {
@@ -921,6 +953,7 @@ const statusViMap = {
   pending_return: 'Đang dùng — Chờ trả',
   in_use: 'Đang sử dụng',
   returned: 'Đã hoàn trả',
+  pending_customer: 'Chờ duyệt',
 }
 
 const historyStatusColor = (status) => {
@@ -940,8 +973,8 @@ const activeItems = computed(() => {
   if (activeCategory.value !== 'all') {
     items = items.filter(i => {
       if (activeCategory.value === 'finance') return ['project_cost', 'sub_payment', 'project_payment', 'material_bill', 'budget', 'equipment_rental', 'equipment_inventory'].includes(i.type)
-      if (activeCategory.value === 'acceptance') return ['acceptance', 'sub_acceptance', 'supplier_acceptance'].includes(i.type)
-      if (activeCategory.value === 'technical') return ['change_request', 'additional_cost', 'schedule_adjustment', 'defect', 'asset_usage'].includes(i.type)
+      if (activeCategory.value === 'acceptance') return ['acceptance', 'sub_acceptance', 'supplier_acceptance', 'warranty'].includes(i.type)
+      if (activeCategory.value === 'technical') return ['change_request', 'additional_cost', 'schedule_adjustment', 'defect', 'asset_usage', 'maintenance'].includes(i.type)
       if (activeCategory.value === 'hr') return ['attendance'].includes(i.type)
       return true
     })
@@ -950,7 +983,7 @@ const activeItems = computed(() => {
   // Filter by status
   if (activeStatus.value !== 'all') {
     items = items.filter(i => {
-      if (activeStatus.value === 'pending') return ['pending', 'pending_management_approval', 'pending_accountant_approval', 'pending_management', 'pending_accountant', 'pending_return', 'submitted', 'under_review', 'project_manager_approved', 'supervisor_approved', 'fixed', 'customer_paid', 'customer_pending_approval', 'overdue'].includes(i.status)
+      if (activeStatus.value === 'pending') return ['pending', 'pending_management_approval', 'pending_accountant_approval', 'pending_management', 'pending_accountant', 'pending_return', 'submitted', 'under_review', 'project_manager_approved', 'supervisor_approved', 'fixed', 'customer_paid', 'customer_pending_approval', 'overdue', 'pending_customer'].includes(i.status)
       if (activeStatus.value === 'draft') return i.status === 'draft'
       if (activeStatus.value === 'rejected') return i.status === 'rejected'
       if (activeStatus.value === 'approved') return ['approved', 'confirmed', 'paid', 'customer_approved', 'in_use', 'returned'].includes(i.status)
@@ -1058,6 +1091,8 @@ const getDetailUrl = (record) => {
     equipment_purchase: null, // Global equipment purchase
     equipment_inventory: '/equipment', // Kho thiết bị
     attendance: pid ? `/projects/${pid}?tab=attendance` : `/hr/attendance`,
+    maintenance: pid ? `/projects/${pid}?tab=technical` : null,
+    warranty: pid ? `/projects/${pid}?tab=acceptance` : null,
   }
   return typeUrlMap[record.type] || typeUrlMap[record._approveType] || null
 }
@@ -1102,6 +1137,8 @@ const approveUrlMap = {
   equipment_inventory_management: (r) => `/equipment/${r.id}/approve-management`,
   equipment_inventory_accountant: (r) => `/equipment/${r.id}/confirm-accountant`,
   attendance: (r) => `/approvals/attendance/${r.id}/approve`,
+  maintenance: (r) => `/approvals/maintenance/${r.id}/approve`,
+  warranty: (r) => `/approvals/warranty/${r.id}/approve`,
 }
 
 const openPaymentProofModal = (record) => {
@@ -1177,6 +1214,8 @@ const approveLabels = {
   equipment_inventory_management: 'BĐH duyệt nhập kho thiết bị',
   equipment_inventory_accountant: 'KT xác nhận chi & nhập kho',
   attendance: 'Duyệt chấm công',
+  maintenance: 'Duyệt bảo trì',
+  warranty: 'Duyệt bảo hành',
 }
 
 const handleApproveByType = (record) => {
@@ -1277,6 +1316,8 @@ const rejectUrlMap = {
   equipment_inventory_management: (r) => `/equipment/${r.id}/reject`,
   equipment_inventory_accountant: (r) => `/equipment/${r.id}/reject`,
   attendance: (r) => `/approvals/attendance/${r.id}/reject`,
+  maintenance: (r) => `/approvals/maintenance/${r.id}/reject`,
+  warranty: (r) => `/approvals/warranty/${r.id}/reject`,
 }
 
 const openRejectModal = (record) => {

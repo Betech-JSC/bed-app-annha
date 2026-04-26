@@ -44,7 +44,7 @@ class AcceptanceController extends Controller
     {
         $project    = Project::findOrFail($projectId);
         $acceptance = Acceptance::where('project_id', $project->id)
-            ->with(['task.parent', 'submitter', 'supervisorApprover', 'customerApprover', 'rejector', 'attachments', 'defects'])
+            ->with(['task.parent', 'template.criteria', 'submitter', 'supervisorApprover', 'customerApprover', 'rejector', 'attachments', 'defects'])
             ->findOrFail($id);
         $user = auth()->user();
 
@@ -63,7 +63,7 @@ class AcceptanceController extends Controller
         $project = Project::findOrFail($projectId);
         $user    = auth()->user();
 
-        if (!$user->hasPermission(Permissions::ACCEPTANCE_CREATE)) {
+        if (!$this->authService->can($user, Permissions::ACCEPTANCE_CREATE, $project)) {
             return $this->forbidden('Bạn không có quyền tạo nghiệm thu.');
         }
 
@@ -114,7 +114,7 @@ class AcceptanceController extends Controller
         $acceptance = Acceptance::where('project_id', $project->id)->findOrFail($id);
         $user       = auth()->user();
 
-        if (!$user->hasPermission(Permissions::ACCEPTANCE_UPDATE)) {
+        if (!$this->authService->can($user, Permissions::ACCEPTANCE_UPDATE, $project)) {
             return $this->forbidden('Bạn không có quyền cập nhật nghiệm thu.');
         }
 
@@ -151,7 +151,7 @@ class AcceptanceController extends Controller
         $acceptance = Acceptance::where('project_id', $project->id)->findOrFail($id);
         $user       = auth()->user();
 
-        if (!$user->hasPermission(Permissions::ACCEPTANCE_DELETE)) {
+        if (!$this->authService->can($user, Permissions::ACCEPTANCE_DELETE, $project)) {
             return $this->forbidden('Bạn không có quyền xóa nghiệm thu.');
         }
 
@@ -241,13 +241,35 @@ class AcceptanceController extends Controller
         $acceptance = Acceptance::where('project_id', $project->id)->findOrFail($id);
         $user       = $request->user();
 
-        if (!$user->hasPermission(Permissions::ACCEPTANCE_REVERT)) {
+        if (!$this->authService->can($user, Permissions::ACCEPTANCE_REVERT, $project)) {
             return $this->forbidden('Bạn không có quyền hoàn duyệt nghiệm thu.');
         }
 
         try {
             $this->acceptanceService->revertToDraft($acceptance, $user);
             return response()->json(['success' => true, 'message' => 'Đã hoàn duyệt về nháp.', 'data' => $acceptance->fresh()]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 400);
+        }
+    }
+
+    /**
+     * Submit an acceptance record (draft → submitted).
+     */
+    public function submit(Request $request, string $projectId, string $id): JsonResponse
+    {
+        $project    = Project::findOrFail($projectId);
+        $acceptance = Acceptance::where('project_id', $project->id)->findOrFail($id);
+        $user       = $request->user();
+
+        // Staff can submit if they have update permission or created it
+        if (!$this->authService->can($user, Permissions::ACCEPTANCE_UPDATE, $project)) {
+            return $this->forbidden('Bạn không có quyền gửi duyệt.');
+        }
+
+        try {
+            $this->acceptanceService->submit($acceptance, $user);
+            return response()->json(['success' => true, 'message' => 'Đã gửi duyệt nghiệm thu thành công.', 'data' => $acceptance->fresh()]);
         } catch (\Exception $e) {
             return response()->json(['success' => false, 'message' => $e->getMessage()], 400);
         }

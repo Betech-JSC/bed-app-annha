@@ -49,8 +49,10 @@ class ApprovalCenterController extends Controller
     {
         $user = Auth::user();
         $type = $request->get('type', 'all');
+        $page = max(1, (int) $request->get('page', 1));
+        $perPage = min(50, max(1, (int) $request->get('per_page', 20)));
 
-        $result = $this->approvalQueryService->getMobileDashboardData($user, $type);
+        $result = $this->approvalQueryService->getMobileDashboardData($user, $type, $page, $perPage);
 
         return response()->json([
             'success' => true,

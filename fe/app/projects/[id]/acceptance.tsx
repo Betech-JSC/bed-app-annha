@@ -75,6 +75,19 @@ export default function AcceptanceScreen() {
     }
   };
 
+  // Background refresh: không set loading nên AcceptanceChecklist không unmount,
+  // tránh race condition khi refresh sau các thao tác duyệt/hoàn duyệt.
+  const silentRefresh = async () => {
+    try {
+      const response = await newAcceptanceApi.getAll(id!);
+      if (response.success) {
+        setStages(response.data || []);
+      }
+    } catch (error) {
+      console.error("Error refreshing stages:", error);
+    }
+  };
+
   const loadPersonnel = async () => {
     if (!id || !user?.id) return;
     try {
@@ -143,8 +156,9 @@ export default function AcceptanceScreen() {
         canCreate={canCreate}
         canUpdate={canUpdate}
         canDelete={hasPermission(Permissions.ACCEPTANCE_DELETE)}
+        canRevert={hasPermission(Permissions.ACCEPTANCE_REVERT)}
         canCreateDefect={hasPermission(Permissions.DEFECT_CREATE)}
-        onRefresh={loadStages}
+        onRefresh={silentRefresh}
         onNavigateToDefects={(stageId?: number) => {
           if (stageId) {
             router.push(`/projects/${id}/defects?acceptance_stage_id=${stageId}`);

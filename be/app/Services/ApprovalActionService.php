@@ -19,6 +19,8 @@ use App\Models\EquipmentRental;
 use App\Models\AssetUsage;
 use App\Models\MaterialBill;
 use App\Models\Attendance;
+use App\Models\ProjectMaintenance;
+use App\Models\ProjectWarranty;
 use App\Models\Approval;
 use App\Models\ApprovalLog;
 use App\Models\User;
@@ -255,6 +257,24 @@ class ApprovalActionService
                     $result = $this->attendanceService->approve($att, $user);
                     $message = "Đã duyệt chấm công của " . ($att->user->name ?? "nhân viên") . " ngày " . optional($att->work_date)->format('d/m/Y');
                     break;
+                
+                case 'maintenance':
+                    $m = ProjectMaintenance::findOrFail($id);
+                    $m->status = ProjectMaintenance::STATUS_APPROVED;
+                    $m->approved_by = $user->id;
+                    $result = $m->save();
+                    $message = "Đã duyệt phiếu bảo trì dự án";
+                    $m->notifyEvent('approved', $user);
+                    break;
+
+                case 'warranty':
+                    $w = ProjectWarranty::findOrFail($id);
+                    $w->status = ProjectWarranty::STATUS_APPROVED;
+                    $w->approved_by = $user->id;
+                    $result = $w->save();
+                    $message = "Đã duyệt phiếu bàn giao & bảo hành";
+                    $w->notifyEvent('approved', $user);
+                    break;
 
                 default:
                     throw new Exception("Loại phê duyệt không hợp lệ: {$type}");
@@ -337,6 +357,8 @@ class ApprovalActionService
                     $this->attendanceService->reject($att, $user, $reason);
                     DB::commit();
                     return ['success' => true, 'message' => 'Đã từ chối chấm công của ' . ($att->user->name ?? 'nhân viên')];
+                case 'maintenance': $model = ProjectMaintenance::findOrFail($id); break;
+                case 'warranty': $model = ProjectWarranty::findOrFail($id); break;
                 default:
                     throw new Exception("Loại cần từ chối không hợp lệ: {$type}");
             }
@@ -407,6 +429,11 @@ class ApprovalActionService
 
             // Thông báo cho người tạo biết yêu cầu bị từ chối
             $this->dispatchApprovalResultNotification($type, $id, 'rejected', $reason);
+
+            // Trigger NotifiesUsers if implemented
+            if ($result && method_exists($model, 'notifyEvent')) {
+                $model->notifyEvent('rejected', $user, ['reason' => $reason]);
+            }
 
             return ['success' => true, 'message' => 'Đã từ chối yêu cầu thành công'];
 
@@ -501,6 +528,20 @@ class ApprovalActionService
                     $this->acceptanceService->revertToDraft($acceptance, $user);
                     $result = true;
                     $message = "Đã hoàn duyệt nghiệm thu \"{$acceptance->name}\"";
+                    break;
+
+                case 'maintenance':
+                    $m = ProjectMaintenance::findOrFail($id);
+                    $m->status = ProjectMaintenance::STATUS_DRAFT;
+                    $result = $m->save();
+                    $message = "Đã hoàn duyệt bảo trì về nháp";
+                    break;
+
+                case 'warranty':
+                    $w = ProjectWarranty::findOrFail($id);
+                    $w->status = ProjectWarranty::STATUS_DRAFT;
+                    $result = $w->save();
+                    $message = "Đã hoàn duyệt bàn giao & bảo hành về nháp";
                     break;
 
                 default:
@@ -671,6 +712,8 @@ class ApprovalActionService
                 'asset_usage_management', 'asset_usage_accountant', 'asset_usage_return' => AssetUsage::class,
                 'equipment_purchase_management', 'equipment_purchase_accountant' => \App\Models\EquipmentPurchase::class,
                 'attendance' => Attendance::class,
+                'maintenance' => ProjectMaintenance::class,
+                'warranty' => ProjectWarranty::class,
                 default => null,
             };
 
