@@ -6361,7 +6361,7 @@
     <a-form layout="vertical" class="mt-4">
       <a-form-item label="Thiết bị từ kho" required>
         <a-select v-model:value="usageForm.equipment_id" show-search option-filter-prop="label" placeholder="Tìm thiết bị..." size="large" class="w-full">
-          <a-select-option v-for="e in allEquipment" :key="e.id" :value="e.id" :label="e.name">
+          <a-select-option v-for="e in allEquipment.filter(eq => eq.status === 'available' || eq.id === usageForm.equipment_id)" :key="e.id" :value="e.id" :label="e.name">
             {{ e.name }} <span class="text-gray-400 text-xs">({{ e.code || '' }} — {{ eqStatusLabel(e.status) }})</span>
             <div v-if="e.remaining_quantity !== undefined" class="text-[10px] text-blue-500 font-medium">Tồn kho: {{ e.remaining_quantity }}</div>
           </a-select-option>

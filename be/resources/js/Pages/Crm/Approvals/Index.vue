@@ -120,6 +120,7 @@
         <div class="flex gap-2">
           <a-tag v-if="activeStatus === 'pending'" color="orange" class="rounded-lg">Đang chờ xử lý</a-tag>
           <a-tag v-else-if="activeStatus === 'rejected'" color="error" class="rounded-lg">Đã từ chối</a-tag>
+          <a-tag v-else-if="activeStatus === 'approved'" color="success" class="rounded-lg">Đã duyệt (30 gần nhất)</a-tag>
         </div>
       </div>
       <a-table
@@ -890,10 +891,52 @@ const historyStatusColor = (status) => {
 }
 
 
+// Types visible per role (for filtering approved/rejected history)
+const roleTypeMap = {
+  management: ['project_cost', 'company_cost', 'additional_cost', 'material_bill', 'budget', 'equipment_rental', 'asset_usage', 'equipment_purchase', 'equipment_inventory', 'maintenance', 'warranty'],
+  accountant: ['project_cost', 'company_cost', 'sub_payment', 'project_payment', 'material_bill', 'equipment_rental', 'asset_usage', 'equipment_purchase'],
+  project_manager: ['acceptance', 'change_request', 'schedule_adjustment', 'defect', 'equipment_rental', 'asset_usage'],
+  supervisor: ['acceptance', 'sub_acceptance', 'supplier_acceptance', 'defect'],
+  customer: ['acceptance', 'contract', 'project_payment', 'maintenance', 'warranty', 'defect'],
+  hr: ['attendance'],
+}
+
 // Sort and Filter active items
 const activeItems = computed(() => {
+  const APPROVED_STATUSES = ['approved', 'confirmed', 'paid', 'customer_approved', 'in_use', 'returned', 'implemented', 'verified',
+    'pending_accountant_approval', 'pending_accountant', 'pending_accountant_confirmation', 'supervisor_approved', 'project_manager_approved', 'customer_paid']
+
+  // "Đã duyệt" and "Từ chối" tabs: use recentItems filtered by role and status
+  if (activeStatus.value === 'approved' || activeStatus.value === 'rejected') {
+    let items = [...(props.recentItems || [])]
+
+    // Filter by role (same visibility as pending tab)
+    const allowedTypes = roleTypeMap[activeRole.value]
+    if (allowedTypes) {
+      items = items.filter(i => allowedTypes.includes(i.type))
+    }
+
+    if (activeStatus.value === 'approved') {
+      items = items.filter(i => APPROVED_STATUSES.includes(i.status))
+    } else {
+      items = items.filter(i => i.status === 'rejected')
+    }
+
+    // Apply category filter
+    if (activeCategory.value !== 'all') {
+      items = items.filter(i => {
+        if (activeCategory.value === 'finance') return ['project_cost', 'company_cost', 'sub_payment', 'project_payment', 'material_bill', 'budget', 'equipment_rental', 'equipment_inventory'].includes(i.type)
+        if (activeCategory.value === 'acceptance') return ['acceptance', 'sub_acceptance', 'supplier_acceptance', 'warranty'].includes(i.type)
+        if (activeCategory.value === 'technical') return ['change_request', 'additional_cost', 'schedule_adjustment', 'defect', 'asset_usage', 'maintenance'].includes(i.type)
+        if (activeCategory.value === 'hr') return ['attendance'].includes(i.type)
+        return true
+      })
+    }
+    return items
+  }
+
   let items = roleItemsMap.value[activeRole.value] || []
-  
+
   // Filter by category
   if (activeCategory.value !== 'all') {
     items = items.filter(i => {
@@ -905,15 +948,11 @@ const activeItems = computed(() => {
     })
   }
 
-  // Filter by status
-  if (activeStatus.value !== 'all') {
-    items = items.filter(i => {
-      if (activeStatus.value === 'pending') return ['pending', 'pending_management_approval', 'pending_accountant_approval', 'pending_management', 'pending_accountant', 'pending_return', 'submitted', 'under_review', 'project_manager_approved', 'supervisor_approved', 'fixed', 'customer_paid', 'customer_pending_approval', 'overdue', 'pending_customer'].includes(i.status)
-      if (activeStatus.value === 'draft') return i.status === 'draft'
-      if (activeStatus.value === 'rejected') return i.status === 'rejected'
-      if (activeStatus.value === 'approved') return ['approved', 'confirmed', 'paid', 'customer_approved', 'in_use', 'returned'].includes(i.status)
-      return true
-    })
+  // Filter by status (pending / draft / all)
+  if (activeStatus.value === 'pending') {
+    items = items.filter(i => ['pending', 'pending_management_approval', 'pending_accountant_approval', 'pending_management', 'pending_accountant', 'pending_return', 'submitted', 'under_review', 'project_manager_approved', 'supervisor_approved', 'fixed', 'customer_paid', 'customer_pending_approval', 'overdue', 'pending_customer'].includes(i.status))
+  } else if (activeStatus.value === 'draft') {
+    items = items.filter(i => i.status === 'draft')
   }
 
   return [...items].sort((a, b) => {
