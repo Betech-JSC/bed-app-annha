@@ -249,13 +249,13 @@
           </a-popconfirm>
 
           <!-- Approve: Management -->
-          <template v-if="selectedCost.status === 'pending_management_approval' && $page.props.auth.permissions.includes('company_cost_approve_management')">
+          <template v-if="selectedCost.status === 'pending_management_approval' && $can('cost.approve_management')">
             <a-button type="primary" size="small" @click="approveCost(selectedCost.id)"><CheckCircleOutlined /> Duyệt</a-button>
             <a-button danger size="small" @click="rejectCost(selectedCost.id)"><CloseCircleOutlined /> Từ chối</a-button>
           </template>
 
           <!-- Approve: Accountant -->
-          <template v-if="selectedCost.status === 'pending_accountant_approval' && $page.props.auth.permissions.includes('company_cost_approve_accountant')">
+          <template v-if="selectedCost.status === 'pending_accountant_approval' && $can('cost.approve_accountant')">
             <a-button type="primary" size="small" @click="approveCost(selectedCost.id)"><CheckCircleOutlined /> Xác nhận chi</a-button>
             <a-button danger size="small" @click="rejectCost(selectedCost.id)"><CloseCircleOutlined /> Từ chối</a-button>
           </template>
