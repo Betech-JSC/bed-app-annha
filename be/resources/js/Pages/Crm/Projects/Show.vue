@@ -6938,10 +6938,9 @@ const can = (perm) => {
 // Tab group → sub-tab mapping
 const tabGroupTabs = {
   overview: ['overview'],
-  schedule: ['gantt', 'progress'],
   finance: ['contract', 'costs', 'payments', 'additional_costs', 'budgets', 'finance', 'invoices'],
   expense: ['subcontractors', 'materials', 'equipment'],
-  monitor: ['logs', 'acceptance', 'defects', 'change_requests', 'comments', 'risks'],
+  monitor: ['gantt', 'progress', 'logs', 'acceptance', 'defects', 'change_requests', 'comments', 'risks'],
   hr: ['personnel', 'attendance', 'labor'],
   warranty: ['warranty', 'maintenances'],
   other: ['documents'],
@@ -7068,10 +7067,9 @@ const getInitialTab = () => {
   
   // Smart landing: find first group with data
   const groups = [
-    { key: 'schedule', tabs: ['gantt', 'progress'] },
+    { key: 'monitor', tabs: ['gantt', 'progress', 'logs', 'acceptance', 'defects', 'change_requests'] },
     { key: 'finance', tabs: ['contract', 'costs', 'payments'] },
     { key: 'expense', tabs: ['subcontractors', 'materials', 'equipment'] },
-    { key: 'monitor', tabs: ['logs', 'acceptance', 'defects', 'change_requests'] },
     { key: 'hr', tabs: ['personnel', 'attendance'] },
     { key: 'warranty', tabs: ['warranty', 'maintenances'] },
     { key: 'other', tabs: ['documents'] },
@@ -7095,7 +7093,7 @@ const getInitialTab = () => {
 const getGroupForTab = (tab) => {
   const groupMap = {
     overview: 'overview',
-    gantt: 'schedule', progress: 'schedule',
+    gantt: 'monitor', progress: 'monitor',
     contract: 'finance', costs: 'finance', payments: 'finance', additional_costs: 'finance', budgets: 'finance', finance: 'finance', invoices: 'finance',
     subcontractors: 'expense', materials: 'expense', equipment: 'expense',
     logs: 'monitor', acceptance: 'monitor', defects: 'monitor', change_requests: 'monitor', comments: 'monitor', risks: 'monitor',
@@ -7103,7 +7101,7 @@ const getGroupForTab = (tab) => {
     warranty: 'warranty', maintenances: 'warranty',
     documents: 'other',
   }
-  return groupMap[tab] || 'schedule'
+  return groupMap[tab] || 'monitor'
 }
 
 const initialTab = getInitialTab()
@@ -7352,10 +7350,9 @@ const isLoading = (key) => !!actionLoading[key]
 // Tab groups with dynamic badge counts and permission filtering
 const tabGroups = computed(() => {
   const groups = [
-    { key: 'schedule', icon: '📅', label: 'Kế hoạch', defaultTab: 'gantt', badge: props.counts?.tasks || 0, perms: ['gantt.view', 'project.task.view'] },
+    { key: 'monitor', icon: '📋', label: 'Giám sát', defaultTab: 'gantt', badge: (props.counts?.tasks || 0) + (props.counts?.construction_logs || 0) + (props.counts?.acceptance_stages || 0) + (props.counts?.defects || 0) + (props.counts?.additional_costs || 0) + (props.counts?.change_requests || 0), perms: ['gantt.view', 'project.task.view', 'log.view', 'acceptance.view', 'defect.view', 'change_request.view', 'additional_cost.view', 'project.comment.view', 'project.risk.view'] },
     { key: 'finance', icon: '💰', label: 'Tài chính', defaultTab: 'contract', badge: (props.counts?.costs || 0) + (props.counts?.payments || 0) + (props.counts?.budgets || 0), perms: ['contract.view', 'payment.view', 'invoice.view', 'cost.view', 'budgets.view', 'finance.view'] },
     { key: 'expense', icon: '🏗️', label: 'Chi phí', defaultTab: 'subcontractors', badge: (props.counts?.subcontractors || 0) + (props.counts?.material_bills || 0) + (props.counts?.equipment || 0), perms: ['subcontractor.view', 'material.view', 'equipment.view'] },
-    { key: 'monitor', icon: '📋', label: 'Giám sát', defaultTab: 'logs', badge: (props.counts?.construction_logs || 0) + (props.counts?.acceptance_stages || 0) + (props.counts?.defects || 0) + (props.counts?.additional_costs || 0) + (props.counts?.change_requests || 0), perms: ['log.view', 'acceptance.view', 'defect.view', 'change_request.view', 'additional_cost.view', 'project.comment.view', 'project.risk.view'] },
     { key: 'hr', icon: '👥', label: 'Nhân sự', defaultTab: 'personnel', badge: props.counts?.personnel || 0, perms: ['personnel.view', 'attendance.view', 'labor_productivity.view'] },
     { key: 'warranty', icon: '🛡️', label: 'Bảo hành', defaultTab: 'warranty', badge: (props.counts?.warranties || 0) + (props.counts?.maintenances || 0), perms: ['warranty.view'] },
     { key: 'other', icon: '📁', label: 'Khác', defaultTab: 'documents', badge: props.counts?.attachments || 0, perms: ['document.view'] },
