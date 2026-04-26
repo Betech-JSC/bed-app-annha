@@ -260,6 +260,13 @@ class ProjectTask extends Model
                 $task->updateProjectProgress();
             }
         });
+
+        static::deleted(function ($task) {
+            // Cascade soft delete to children
+            $task->children()->each(function ($child) {
+                $child->delete();
+            });
+        });
     }
 }
 

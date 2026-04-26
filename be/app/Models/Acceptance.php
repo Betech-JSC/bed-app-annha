@@ -193,5 +193,21 @@ class Acceptance extends Model
                 $model->uuid = (string) Str::uuid();
             }
         });
+
+        static::saved(function (self $model) {
+            if ($model->wasChanged('workflow_status')) {
+                $task = $model->task;
+                if ($task) {
+                    app(\App\Services\TaskProgressService::class)->updateTaskFromLogs($task);
+                }
+            }
+        });
+
+        static::deleted(function (self $model) {
+            $task = $model->task;
+            if ($task) {
+                app(\App\Services\TaskProgressService::class)->updateTaskFromLogs($task);
+            }
+        });
     }
 }

@@ -409,6 +409,22 @@ class Defect extends Model
                 $defect->uuid = Str::uuid();
             }
         });
+
+        static::saved(function ($defect) {
+            if ($defect->wasChanged('status')) {
+                $task = ProjectTask::find($defect->task_id);
+                if ($task) {
+                    app(\App\Services\TaskProgressService::class)->updateTaskFromLogs($task);
+                }
+            }
+        });
+
+        static::deleted(function ($defect) {
+            $task = ProjectTask::find($defect->task_id);
+            if ($task) {
+                app(\App\Services\TaskProgressService::class)->updateTaskFromLogs($task);
+            }
+        });
     }
 
     // ==================================================================
