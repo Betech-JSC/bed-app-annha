@@ -8614,10 +8614,10 @@ const taskStatusColors = { pending: 'default', not_started: 'default', in_progre
 // Build tree: root = tasks with no parent_id
 const rootTasks = computed(() => {
   const sortFn = (a, b) => {
-    const dateA = a.start_date ? new Date(a.start_date).getTime() : 0
-    const dateB = b.start_date ? new Date(b.start_date).getTime() : 0
-    if (dateA !== dateB) return dateB - dateA
-    return (b.id || 0) - (a.id || 0)
+    const dateA = a.start_date ? new Date(a.start_date).getTime() : Number.MAX_SAFE_INTEGER
+    const dateB = b.start_date ? new Date(b.start_date).getTime() : Number.MAX_SAFE_INTEGER
+    if (dateA !== dateB) return dateA - dateB
+    return (a.id || 0) - (b.id || 0)
   }
 
   const sortRecursive = (tasks) => {
