@@ -135,30 +135,11 @@ class CrmApprovalController extends Controller
             'hr' => $userPermissions['can_hr'] ? ($data['attendances_pending'] ?? collect([]))->map(fn($i) => array_merge($this->formatAttendanceItem($i), ['_approveType' => 'attendance']))->values() : collect([]),
         ];
 
-        // 4. Budget Mapping for Accountant
-        $budgetItemsByProject = [];
-        if ($userPermissions['can_accountant']) {
-            $accountantProjectIds = $data['costs_accountant']->pluck('project_id')->filter()->unique()->values();
-            if ($accountantProjectIds->isNotEmpty()) {
-                $budgets = ProjectBudget::whereIn('project_id', $accountantProjectIds)->whereIn('status', ['approved', 'active'])->with(['items.costGroup'])->get();
-                foreach ($budgets as $budget) {
-                    foreach ($budget->items as $item) {
-                        $budgetItemsByProject[$budget->project_id][] = [
-                            'id' => $item->id, 'name' => $item->name, 'budget_name' => $budget->name, 'cost_group' => $item->costGroup?->name,
-                            'estimated_amount' => (float)$item->estimated_amount, 'actual_amount' => (float)$item->actual_amount,
-                            'remaining_amount' => (float)($item->estimated_amount - $item->actual_amount),
-                        ];
-                    }
-                }
-            }
-        }
-
         return Inertia::render('Crm/Approvals/Index', [
             'roleGroups' => $roleGroups,
             'recentItems' => $this->formatRecentActivity($data['recent']),
             'stats' => $data['stats'],
             'userPermissions' => $userPermissions,
-            'budgetItemsByProject' => $budgetItemsByProject,
         ]);
     }
 
@@ -194,17 +175,6 @@ class CrmApprovalController extends Controller
             $this->crmRequire($user, Permissions::COST_APPROVE_ACCOUNTANT, $cost->project);
         } else {
             $this->crmRequire($user, Permissions::COMPANY_COST_APPROVE_ACCOUNTANT);
-        }
-
-        // Kế toán phải chọn ngân sách cho chi phí dự án
-        if ($cost->project_id) {
-            $request->validate([
-                'budget_item_id' => 'required|exists:budget_items,id',
-            ], [
-                'budget_item_id.required' => 'Vui lòng chọn hạng mục ngân sách cho khoản chi này.',
-                'budget_item_id.exists' => 'Hạng mục ngân sách không hợp lệ.',
-            ]);
-            $cost->update(['budget_item_id' => $request->budget_item_id]);
         }
 
         $result = $this->approvalActionService->approve($user, 'accountant', $id);

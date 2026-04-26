@@ -327,10 +327,6 @@ class FinancialService
         }
 
         return DB::transaction(function () use ($payment, $data, $user) {
-            if (isset($data['budget_item_id'])) {
-                $payment->budget_item_id = $data['budget_item_id'];
-            }
-
             $payment->status = 'paid';
             if ($user instanceof User) {
                 $payment->paid_by = $user->id;
@@ -358,6 +354,11 @@ class FinancialService
     /**
      * Reject Sub Payment
      */
+    public function confirmSubPayment(SubcontractorPayment $payment, $user = null): bool
+    {
+        return $this->processSubPayment($payment, [], $user);
+    }
+
     public function rejectSubPayment(SubcontractorPayment $payment, string $reason, $user = null): bool
     {
         if (!in_array($payment->status, ['pending_management_approval', 'pending_accountant_confirmation'])) {

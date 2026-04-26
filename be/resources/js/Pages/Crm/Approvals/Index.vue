@@ -643,69 +643,6 @@
     </div>
   </a-modal>
 
-  <!-- ─── Budget Selection Modal (KT duyệt chi phí) ─── -->
-  <a-modal
-    v-model:open="budgetModalVisible"
-    title="Chọn hạng mục ngân sách"
-    :width="560"
-    @ok="confirmBudgetApproval"
-    :confirm-loading="budgetApprovalLoading"
-    ok-text="Xác nhận duyệt"
-    cancel-text="Hủy"
-    :ok-button-props="{ disabled: !selectedBudgetItemId, style: { background: '#10B981', borderColor: '#10B981' } }"
-    centered
-    destroy-on-close
-    class="crm-modal"
-  >
-    <div class="mt-4">
-      <!-- Cost info summary -->
-      <div v-if="budgetApprovalTarget" class="p-3 mb-4 bg-blue-50 rounded-xl border border-blue-100">
-        <div class="text-sm font-bold text-gray-800">{{ budgetApprovalTarget.title }}</div>
-        <div class="text-xs text-gray-500 mt-1">{{ budgetApprovalTarget.subtitle }}</div>
-        <div v-if="budgetApprovalTarget.amount" class="text-sm font-bold text-emerald-600 mt-1">{{ formatCurrency(budgetApprovalTarget.amount) }}</div>
-      </div>
-
-      <!-- Budget item selection -->
-      <div class="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-1">
-        <WalletOutlined /> Chọn hạng mục ngân sách <span class="text-red-500">*</span>
-      </div>
-      <a-select
-        v-model:value="selectedBudgetItemId"
-        placeholder="Chọn hạng mục ngân sách cho khoản chi này..."
-        size="large"
-        class="w-full"
-        show-search
-        option-filter-prop="label"
-        :options="budgetItemsForTarget.map(item => ({
-          value: item.id,
-          label: `${item.name} — ${item.budget_name}`,
-        }))"
-      />
-      <!-- Selected budget item details -->
-      <div v-if="selectedBudgetItemId" class="mt-3 p-3 bg-gray-50 rounded-lg border text-xs space-y-1">
-        <template v-for="item in budgetItemsForTarget" :key="item.id">
-          <template v-if="item.id === selectedBudgetItemId">
-            <div class="font-semibold text-gray-700">{{ item.name }}</div>
-            <div class="text-gray-500">Ngân sách: {{ item.budget_name }}</div>
-            <div v-if="item.cost_group" class="text-gray-500">Nhóm chi phí: {{ item.cost_group }}</div>
-            <div class="flex gap-4 mt-1">
-              <span>Dự toán: <b class="text-blue-600">{{ formatCurrency(item.estimated_amount) }}</b></span>
-              <span>Đã chi: <b class="text-orange-600">{{ formatCurrency(item.actual_amount) }}</b></span>
-              <span>Còn lại: <b :class="item.remaining_amount >= 0 ? 'text-emerald-600' : 'text-red-600'">{{ formatCurrency(item.remaining_amount) }}</b></span>
-            </div>
-          </template>
-        </template>
-      </div>
-
-      <!-- Warning if no budgets available -->
-      <a-empty v-if="!budgetItemsForTarget.length" :image="null" class="mt-3">
-        <template #description>
-          <span class="text-gray-400 text-xs">Dự án chưa có ngân sách được duyệt.<br/>Vui lòng tạo và duyệt ngân sách trước.</span>
-        </template>
-      </a-empty>
-    </div>
-  </a-modal>
-
   <!-- ─── Payment Report Modal (KH báo cáo thanh toán) ─── -->
   <a-modal
     v-model:open="showPaymentProofModal"
@@ -810,7 +747,6 @@ import {
   AppstoreOutlined,
   FilterOutlined,
   EyeOutlined,
-  WalletOutlined,
   UserOutlined,
   CameraOutlined,
   WarningOutlined,
@@ -830,7 +766,6 @@ const props = defineProps({
   stats: { type: Object, default: () => ({}) },
   auth: { type: Object, required: true },
   userPermissions: { type: Object, default: () => ({}) },
-  budgetItemsByProject: { type: Object, default: () => ({}) },
 })
 
 const currentUserRole = computed(() => props.auth.user.role)
@@ -879,21 +814,11 @@ const rejectLoading = ref(false)
 const showHistory = ref(false)
 const detailItem = ref(null)
 
-// Budget selection for accountant approval
-const budgetModalVisible = ref(false)
-const budgetApprovalTarget = ref(null)
-const selectedBudgetItemId = ref(null)
-const budgetApprovalLoading = ref(false)
 const showPaymentProofModal = ref(false)
 const paymentProofTarget = ref(null)
 const paymentProofFiles = ref([])
 const paymentProofForm = ref({ paid_date: new Date().toISOString().slice(0, 10), actual_amount: null })
 const paymentProofLoading = ref(false)
-
-const budgetItemsForTarget = computed(() => {
-  if (!budgetApprovalTarget.value?.project_id) return []
-  return props.budgetItemsByProject[budgetApprovalTarget.value.project_id] || []
-})
 
 const typeColors = {
   project_cost: 'blue',
@@ -1241,14 +1166,6 @@ const handleApproveByType = (record) => {
     return
   }
 
-  // KT phải chọn ngân sách khi duyệt chi phí dự án
-  if (type === 'accountant' && record.project_id) {
-    budgetApprovalTarget.value = record
-    selectedBudgetItemId.value = null
-    budgetModalVisible.value = true
-    return
-  }
-
   Modal.confirm({
     title: label,
     content: `Duyệt "${record.title}"?${record.amount ? `\n\nSố tiền: ${formatCurrency(record.amount)}` : ''}`,
@@ -1261,27 +1178,6 @@ const handleApproveByType = (record) => {
         onSuccess: () => message.success(`Đã duyệt "${record.title}"`),
         onError: (errors) => message.error(Object.values(errors).flat()[0] || 'Không thể duyệt yêu cầu này'),
       })
-    },
-  })
-}
-
-const confirmBudgetApproval = () => {
-  if (!selectedBudgetItemId.value || !budgetApprovalTarget.value) return
-  budgetApprovalLoading.value = true
-  const record = budgetApprovalTarget.value
-  const urlFn = approveUrlMap['accountant']
-  router.post(urlFn(record), { budget_item_id: selectedBudgetItemId.value }, {
-    preserveScroll: true,
-    onSuccess: () => {
-      message.success(`Đã xác nhận chi phí "${record.title}"`)
-      budgetModalVisible.value = false
-      budgetApprovalTarget.value = null
-      selectedBudgetItemId.value = null
-      budgetApprovalLoading.value = false
-    },
-    onError: (errors) => {
-      message.error(Object.values(errors).flat()[0] || 'Không thể duyệt yêu cầu này')
-      budgetApprovalLoading.value = false
     },
   })
 }
