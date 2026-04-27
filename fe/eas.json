@@ -18,7 +18,7 @@
         "SENTRY_DISABLE_AUTO_UPLOAD": "true"
       }
     },
-    "production-store2": {
+    "app-store": {
       "autoIncrement": true,
       "env": {
         "API_URL": "https://annha.betech-digital.com/api",
@@ -30,9 +30,8 @@
   },
   "submit": {
     "production": {},
-    "production-store2": {
+    "app-store": {
       "ios": {
-        "ascAppId": "6761600746"
       }
     }
   }

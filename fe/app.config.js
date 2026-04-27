@@ -1,9 +1,9 @@
-const bundleId = process.env.APP_BUNDLE_ID || "com.toannguyen112.annha";
-const androidPackage = process.env.APP_PACKAGE || "com.toannguyen112.annha";
+const bundleId = process.env.APP_BUNDLE_ID || "com.annha.app";
+const androidPackage = process.env.APP_PACKAGE || "com.annha.app";
 
 export default {
   expo: {
-    name: "Annha",
+    name: "Annha JSC",
     scheme: "Annha",
     slug: "annha",
     version: "1.0.0",
@@ -54,13 +54,12 @@ export default {
       bundleIdentifier: bundleId,
       infoPlist: {
         ITSAppUsesNonExemptEncryption: false,
+        NSCameraUsageDescription: "Ứng dụng cần quyền truy cập Camera để chụp ảnh minh chứng nghiệm thu công trình và ghi nhận lỗi tại hiện trường.",
+        NSPhotoLibraryUsageDescription: "Ứng dụng cần quyền truy cập Thư viện ảnh để tải lên các tài liệu, ảnh minh chứng nghiệm thu và báo cáo sự cố.",
       },
       usesNonExemptEncryption: false,
       config: {
         usesPushNotifications: true,
-        googleSignIn: {
-          reservedClientId: "YOUR_IOS_REVERSED_CLIENT_ID",
-        },
       },
       googleServicesFile: "./GoogleService-Info.plist",
     },

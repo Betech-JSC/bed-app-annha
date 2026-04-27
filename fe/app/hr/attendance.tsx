@@ -148,11 +148,14 @@ export default function AttendanceScreen() {
     try {
       setCheckingIn(true);
       let location: any = null;
+      // GPS temporarily disabled for App Store Review
+      /*
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status === "granted") {
         const loc = await Location.getCurrentPositionAsync({});
         location = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
       }
+      */
 
       const res = await attendanceApi.checkIn({
         ...location,

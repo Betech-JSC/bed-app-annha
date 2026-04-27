@@ -40,5 +40,10 @@ Route::get('/img/{path}', [ImagesController::class, 'show'])
     ->where('path', '.*')
     ->name('image');
 
+// Privacy Policy for App Store Review
+Route::get('/privacy-policy', function () {
+    return view('privacy');
+})->name('privacy-policy');
+
 // Admin routes
 require __DIR__ . '/admin.php';

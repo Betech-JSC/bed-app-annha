@@ -1364,9 +1364,6 @@ export default function AcceptanceChecklist({
             {/* Sticky Approval Footer */}
             {detailAcceptance && detailAcceptance.workflow_status !== 'customer_approved' && (
               <View style={[styles.detailFooter, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-                <View style={[styles.workflowStatusBadge, { backgroundColor: getWorkflowStatusInfo(detailAcceptance.workflow_status).bgColor, borderColor: getWorkflowStatusInfo(detailAcceptance.workflow_status).borderColor }]}>
-                  <Text style={[styles.workflowStatusText, { color: getWorkflowStatusInfo(detailAcceptance.workflow_status).color }]}>{getWorkflowStatusInfo(detailAcceptance.workflow_status).label}</Text>
-                </View>
                 <View style={{ flexDirection: 'row', gap: 8, flex: 1, justifyContent: 'flex-end' }}>
                   {detailAcceptance.workflow_status === 'draft' && canUpdate && (
                     <TouchableOpacity style={[styles.footerBtn, { backgroundColor: '#3B82F6', borderColor: '#3B82F6' }]} onPress={() => { handleSubmit(detailAcceptance); setDetailVisible(false); }}>
