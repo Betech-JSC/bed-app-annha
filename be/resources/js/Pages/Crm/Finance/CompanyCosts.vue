@@ -12,8 +12,8 @@
 
   <!-- ═══ Stats ═══ -->
   <div class="crm-stats-grid">
-    <StatCard :value="fmtCurrency(stats.totalAmount)" label="Tổng chi phí" :icon="DollarOutlined" variant="primary" format="text" />
-    <StatCard :value="fmtCurrency(stats.approvedAmount)" label="Đã duyệt" :icon="CheckCircleOutlined" variant="success" format="text" />
+    <StatCard :value="fmtCurrency(stats.totalAmount)" label="Tổng chi phí (Đã duyệt)" :icon="DollarOutlined" variant="primary" format="text" />
+    <StatCard :value="fmtCurrency(stats.approvedAmount)" label="Thực chi" :icon="CheckCircleOutlined" variant="success" format="text" />
     <StatCard :value="stats.pendingCount" label="Chờ duyệt" :icon="ClockCircleOutlined" variant="warning" />
     <StatCard :value="stats.draftCount" label="Nháp" :icon="FileTextOutlined" variant="accent" />
   </div>
@@ -96,7 +96,25 @@
           <span class="text-sm text-gray-600">{{ record.creator?.name || '—' }}</span>
         </template>
         <template v-if="column.dataIndex === 'actions'">
-          <a-button type="link" size="small" @click="showDetail(record)">Xem</a-button>
+          <div class="flex items-center gap-2">
+            <a-button type="link" size="small" @click="showDetail(record)" class="px-1">Xem</a-button>
+            
+            <!-- Quick Approve Management -->
+            <a-button 
+              v-if="record.status === 'pending_management_approval' && can('company_cost.approve.management')"
+              type="link" size="small" @click="approveCost(record.id)" class="px-1 text-green-600"
+            >
+              Duyệt
+            </a-button>
+
+            <!-- Quick Approve Accountant -->
+            <a-button 
+              v-if="record.status === 'pending_accountant_approval' && can('company_cost.approve.accountant')"
+              type="link" size="small" @click="approveCost(record.id)" class="px-1 text-green-600"
+            >
+              Xác nhận chi
+            </a-button>
+          </div>
         </template>
       </template>
     </a-table>
@@ -253,13 +271,13 @@
           </a-popconfirm>
 
           <!-- Approve: Management -->
-          <template v-if="selectedCost.status === 'pending_management_approval' && $can('company_cost.approve.management')">
+          <template v-if="selectedCost.status === 'pending_management_approval' && can('company_cost.approve.management')">
             <a-button type="primary" size="small" @click="approveCost(selectedCost.id)"><CheckCircleOutlined /> Duyệt</a-button>
             <a-button danger size="small" @click="rejectCost(selectedCost.id)"><CloseCircleOutlined /> Từ chối</a-button>
           </template>
-
+ 
           <!-- Approve: Accountant -->
-          <template v-if="selectedCost.status === 'pending_accountant_approval' && $can('company_cost.approve.accountant')">
+          <template v-if="selectedCost.status === 'pending_accountant_approval' && can('company_cost.approve.accountant')">
             <a-button type="primary" size="small" @click="approveCost(selectedCost.id)"><CheckCircleOutlined /> Xác nhận chi</a-button>
             <a-button danger size="small" @click="rejectCost(selectedCost.id)"><CloseCircleOutlined /> Từ chối</a-button>
           </template>
@@ -345,7 +363,7 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
-import { Head, router, useForm } from '@inertiajs/vue3'
+import { Head, router, useForm, usePage } from '@inertiajs/vue3'
 import { Bar, Doughnut } from 'vue-chartjs'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend,
@@ -376,6 +394,9 @@ const props = defineProps({
   suppliers: Array,
   filters: Object,
 })
+
+const user = computed(() => usePage().props.auth.user)
+const can = (permission) => user.value?.super_admin || (user.value?.permissions || []).includes(permission)
 
 onMounted(() => {
   const urlParams = new URLSearchParams(window.location.search)

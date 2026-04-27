@@ -98,7 +98,8 @@ class CrmFinanceController extends Controller
         $costs = $query->paginate(20)->withQueryString();
 
         // Stats
-        $totalAmount = Cost::companyCosts()->where('status', '!=', 'rejected')->sum('amount') ?: 0;
+        // Stats: Total amount now ONLY includes APPROVED costs per user request "Duyệt mới + vào báo cáo"
+        $totalAmount = Cost::companyCosts()->approved()->sum('amount') ?: 0;
         $approvedAmount = Cost::companyCosts()->approved()->sum('amount') ?: 0;
         $pendingCount = Cost::companyCosts()->pending()->count();
         $draftCount = Cost::companyCosts()->draft()->count();
@@ -113,14 +114,14 @@ class CrmFinanceController extends Controller
             $month = $now->copy()->subMonths($i);
             $monthLabels[] = 'T' . $month->format('m');
             $monthlyCosts[] = Cost::companyCosts()
-                ->where('status', '!=', 'rejected')
+                ->approved()
                 ->whereBetween('cost_date', [$month->copy()->startOfMonth(), $month->copy()->endOfMonth()])
                 ->sum('amount') ?: 0;
         }
 
         // Chart: By Expense Category
         $byExpenseCategory = Cost::companyCosts()
-            ->where('status', '!=', 'rejected')
+            ->approved()
             ->whereNotNull('expense_category')
             ->selectRaw('expense_category, SUM(amount) as total')
             ->groupBy('expense_category')
