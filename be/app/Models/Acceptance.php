@@ -200,7 +200,9 @@ class Acceptance extends Model
         });
 
         static::saved(function (self $model) {
-            if ($model->wasChanged('workflow_status')) {
+            // Skip when reverting to draft — updateTaskFromLogs would call pushFromTask,
+            // which re-submits the acceptance and undoes the revert.
+            if ($model->wasChanged('workflow_status') && $model->workflow_status !== 'draft') {
                 $task = $model->task;
                 if ($task) {
                     app(\App\Services\TaskProgressService::class)->updateTaskFromLogs($task);
