@@ -195,47 +195,29 @@
         <template v-if="column.key === 'created_at'">
           <span class="text-xs text-gray-500">{{ record.created_at }}</span>
         </template>
-        <!-- Thao tác -->
-        <template v-if="column.key === 'actions'">
+        <template v-else-if="column.key === 'actions'">
           <a-space :size="6">
-            <a-tooltip v-if="getDetailUrl(record)" title="Vào xem chi tiết">
+            <a-tooltip title="Xem nhanh thông tin">
               <a-button
                 size="small"
-                class="ac-btn-detail"
-                @click="navigateToDetail(record)"
-              >
-                <template #icon><ArrowRightOutlined /></template>
-              </a-button>
-            </a-tooltip>
-            <a-tooltip title="Xem nhanh">
-              <a-button
-                size="small"
-                class="ac-btn-eye"
+                class="ac-btn-peek"
                 @click="openDetailDrawer(record)"
               >
                 <template #icon><EyeOutlined /></template>
               </a-button>
             </a-tooltip>
-            <a-tooltip :title="record.type === 'acceptance' && record.metadata?.open_defects_count > 0 ? 'Không thể duyệt vì còn lỗi chưa xác nhận' : ''">
+            <a-tooltip v-if="getDetailUrl(record)" title="Vào module xử lý chi tiết">
               <a-button
-                type="primary"
                 size="small"
-                class="ac-btn-approve"
-                :disabled="record.type === 'acceptance' && record.metadata?.open_defects_count > 0"
-                @click="handleApproveByType(record)"
+                type="primary"
+                ghost
+                class="ac-btn-detail"
+                @click="navigateToDetail(record)"
               >
-                <template #icon><CheckOutlined /></template>
-                Duyệt
+                <template #icon><ArrowRightOutlined /></template>
+                Vào module
               </a-button>
             </a-tooltip>
-            <a-button
-              danger
-              size="small"
-              class="ac-btn-reject"
-              @click="openRejectModal(record)"
-            >
-              <template #icon><CloseOutlined /></template>
-            </a-button>
           </a-space>
         </template>
       </template>
@@ -280,7 +262,7 @@
               </div>
 
               <!-- Timeline Content -->
-              <div class="ac-timeline-content group" @click="openDetailDrawer(item)">
+              <div class="ac-timeline-content group" @click="navigateToDetail(item)">
                 <div class="flex justify-between items-start mb-1">
                   <div class="flex flex-col">
                     <div class="flex items-center gap-2">
@@ -537,11 +519,20 @@
         </div>
 
         <!-- 6. Generic Attachments (Files/Documents) -->
-        <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
+        <div class="p-5 bg-white rounded-2xl border shadow-sm" :class="isAccountantApproveType(detailItem) && !detailItem.attachments?.length ? 'border-red-200 bg-red-50/30' : 'border-gray-100'">
           <div class="flex items-center justify-between mb-4">
-            <div class="text-xs font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
-              <PaperClipOutlined class="text-gray-400" /> Tài liệu & Đính kèm 
+            <div class="text-xs font-bold uppercase tracking-widest flex items-center gap-2" :class="isAccountantApproveType(detailItem) && !detailItem.attachments?.length ? 'text-red-500' : 'text-gray-500'">
+              <PaperClipOutlined :class="isAccountantApproveType(detailItem) && !detailItem.attachments?.length ? 'text-red-400' : 'text-gray-400'" /> Tài liệu & Đính kèm 
               <span v-if="detailItem.attachments_count" class="bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full text-[10px]">{{ detailItem.attachments_count }}</span>
+            </div>
+          </div>
+          
+          <!-- Missing Attachments Warning for Accountant -->
+          <div v-if="isAccountantApproveType(detailItem) && !detailItem.attachments?.length" class="mb-4 p-3 bg-red-50 rounded-xl border border-red-200 flex items-start gap-3">
+            <ExclamationCircleOutlined class="text-red-500 mt-0.5" />
+            <div class="text-[11px] text-red-600 leading-relaxed">
+              <strong>Bắt buộc phải có chứng từ!</strong> Phiếu này chưa được đính kèm chứng từ (hóa đơn, phiếu chi, biên lai...). 
+              Kế toán không thể duyệt phiếu khi chưa có chứng từ đối chiếu. Vui lòng yêu cầu người tạo phiếu bổ sung.
             </div>
           </div>
           
@@ -585,25 +576,21 @@
       </div>
 
       <!-- Action Footer (Sticky) -->
-      <div class="fixed bottom-0 right-0 w-[560px] p-4 bg-white border-t border-gray-100 flex justify-between items-center shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-40 transition-all rounded-br-2xl">
-        <div class="flex gap-2">
+      <div class="fixed bottom-0 right-0 w-[560px] p-4 bg-white border-t border-gray-100 flex justify-end items-center shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-40 transition-all rounded-br-2xl">
+        <div class="flex gap-2 w-full">
            <a-button v-if="getDetailUrl(detailItem)" 
-                     class="rounded-xl h-12 px-6 font-bold text-blue-600 bg-blue-50 border-blue-100" @click="navigateToDetail(detailItem)">
-             <EyeOutlined /> Chi tiết module
+                     type="primary"
+                     block
+                     class="rounded-xl h-12 px-6 font-bold bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-100 border-0" 
+                     @click="navigateToDetail(detailItem)">
+             <ArrowRightOutlined /> Vào module để xử lý phiếu
            </a-button>
-        </div>
-        
-        <div class="flex gap-3 min-w-[300px]">
-           <a-button danger block size="large" class="rounded-xl h-12 font-bold shadow-sm" @click="openRejectModal(detailItem); detailItem = null;">
-             <CloseOutlined /> Từ chối
+           <a-button v-else
+                     block
+                     class="rounded-xl h-12 px-6 font-bold"
+                     @click="detailItem = null">
+             Đóng
            </a-button>
-           <a-tooltip :title="detailItem.type === 'acceptance' && detailItem.metadata?.open_defects_count > 0 ? 'Vui lòng xác nhận hoàn thành tất cả các lỗi (Defects) liên quan trước khi phê duyệt giai đoạn này' : ''" class="w-full">
-             <a-button type="primary" block size="large" class="rounded-xl h-12 font-bold bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-100 border-0" 
-                       :disabled="detailItem.type === 'acceptance' && detailItem.metadata?.open_defects_count > 0"
-                       @click="handleApproveByType(detailItem); detailItem = null;">
-               <CheckOutlined /> Duyệt yêu cầu
-             </a-button>
-           </a-tooltip>
         </div>
       </div>
     </template>
@@ -756,6 +743,8 @@ import {
   AuditOutlined,
   FileTextOutlined,
   CreditCardOutlined,
+  ExclamationCircleOutlined,
+  CloudUploadOutlined,
 } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 
@@ -779,6 +768,18 @@ const rolePermissionMap = {
   supervisor: 'can_supervisor',
   customer: 'can_customer',
   hr: 'can_hr',
+}
+
+// ─── Accountant approve type checker (for attachment enforcement) ───
+const ACCOUNTANT_APPROVE_TYPES = [
+  'accountant', 'sub_payment_confirm', 'project_payment_confirm',
+  'material_bill', 'equipment_rental_accountant', 'asset_usage_accountant',
+  'equipment_purchase_accountant', 'equipment_inventory_accountant',
+]
+const isAccountantApproveType = (record) => {
+  if (!record) return false
+  const type = record._approveType || record.approval_level || ''
+  return ACCOUNTANT_APPROVE_TYPES.includes(type) || activeRole.value === 'accountant'
 }
 
 // ─── Role-based items mapping (Simplified from Backend) ───
@@ -1031,32 +1032,33 @@ const openDetailDrawer = (record) => { detailItem.value = record }
 const getDetailUrl = (record) => {
   if (!record) return null
   const pid = record.project_id
+  const id = record.id
   const typeUrlMap = {
-    project_cost: pid ? `/projects/${pid}?tab=costs` : null,
-    company_cost: null, // company costs have no project tab
-    acceptance: pid ? `/projects/${pid}?tab=acceptance&id=${record.id}` : null,
-    change_request: pid ? `/projects/${pid}?tab=change_requests` : null,
-    additional_cost: pid ? `/projects/${pid}?tab=additional_costs` : null,
-    sub_payment: pid ? `/projects/${pid}?tab=subcontractors` : null,
-    contract: pid ? `/projects/${pid}?tab=contract` : null,
-    project_payment: pid ? `/projects/${pid}?tab=payments` : null,
-    material_bill: pid ? `/projects/${pid}?tab=materials` : null,
-    sub_acceptance: pid ? `/projects/${pid}?tab=subcontractors` : null,
-    supplier_acceptance: pid ? `/projects/${pid}?tab=subcontractors` : null,
-    construction_log: pid ? `/projects/${pid}?tab=logs` : null,
-    schedule_adjustment: pid ? `/projects/${pid}?tab=logs` : null, // Logs often contain schedule adjustments
-    defect: pid ? `/projects/${pid}?tab=defects` : null,
-    defect_verify: pid ? `/projects/${pid}?tab=defects` : null,
-    budget: pid ? `/projects/${pid}?tab=budgets` : null,
-    equipment_rental: pid ? `/projects/${pid}?tab=equipment` : null,
-    equipment_rental_return: pid ? `/projects/${pid}?tab=equipment` : null,
-    asset_usage: pid ? `/projects/${pid}?tab=equipment` : null,
-    asset_usage_return: pid ? `/projects/${pid}?tab=equipment` : null,
-    equipment_purchase: null, // Global equipment purchase
-    equipment_inventory: '/equipment', // Kho thiết bị
-    attendance: pid ? `/projects/${pid}?tab=attendance` : `/hr/attendance`,
-    maintenance: pid ? `/projects/${pid}?tab=technical` : null,
-    warranty: pid ? `/projects/${pid}?tab=acceptance` : null,
+    project_cost: pid ? `/projects/${pid}?tab=costs&id=${id}` : null,
+    company_cost: `/finance/company-costs?id=${id}`, 
+    acceptance: pid ? `/projects/${pid}?tab=acceptance&id=${id}` : null,
+    change_request: pid ? `/projects/${pid}?tab=change_requests&id=${id}` : null,
+    additional_cost: pid ? `/projects/${pid}?tab=additional_costs&id=${id}` : null,
+    sub_payment: pid ? `/projects/${pid}?tab=subcontractors&id=${id}` : null,
+    contract: pid ? `/projects/${pid}?tab=contract&id=${id}` : null,
+    project_payment: pid ? `/projects/${pid}?tab=payments&id=${id}` : null,
+    material_bill: pid ? `/projects/${pid}?tab=materials&id=${id}` : null,
+    sub_acceptance: pid ? `/projects/${pid}?tab=subcontractors&id=${id}` : null,
+    supplier_acceptance: pid ? `/projects/${pid}?tab=subcontractors&id=${id}` : null,
+    construction_log: pid ? `/projects/${pid}?tab=logs&id=${id}` : null,
+    schedule_adjustment: pid ? `/projects/${pid}?tab=logs&id=${id}` : null,
+    defect: pid ? `/projects/${pid}?tab=defects&id=${id}` : null,
+    defect_verify: pid ? `/projects/${pid}?tab=defects&id=${id}` : null,
+    budget: pid ? `/projects/${pid}?tab=budgets&id=${id}` : null,
+    equipment_rental: pid ? `/projects/${pid}?tab=equipment&id=${id}` : null,
+    equipment_rental_return: pid ? `/projects/${pid}?tab=equipment&id=${id}` : null,
+    asset_usage: pid ? `/projects/${pid}?tab=equipment&id=${id}` : null,
+    asset_usage_return: pid ? `/projects/${pid}?tab=equipment&id=${id}` : null,
+    equipment_purchase: null,
+    equipment_inventory: `/equipment?id=${id}`,
+    attendance: pid ? `/projects/${pid}?tab=attendance&id=${id}` : `/hr/attendance?id=${id}`,
+    maintenance: pid ? `/projects/${pid}?tab=technical&id=${id}` : null,
+    warranty: pid ? `/projects/${pid}?tab=acceptance&id=${id}` : null,
   }
   return typeUrlMap[record.type] || typeUrlMap[record._approveType] || null
 }
@@ -1194,11 +1196,20 @@ const handleApproveByType = (record) => {
     return
   }
 
-  // Enforce mandatory attachments for Accountant level on financial items (skip for HR items and labor costs from attendance)
-  if (type !== 'attendance' && record.category !== 'labor' && activeRole.value === 'accountant' && (record.attachments_count === 0 || !record.attachments_count)) {
+  // Accountant-level approve types that MUST have attachments
+  const accountantApproveTypes = [
+    'accountant', 'sub_payment_confirm', 'project_payment_confirm',
+    'material_bill', 'equipment_rental_accountant', 'asset_usage_accountant',
+    'equipment_purchase_accountant', 'equipment_inventory_accountant',
+  ]
+  const isAccountantStep = accountantApproveTypes.includes(type) || activeRole.value === 'accountant'
+  const isExempt = type === 'attendance' || record.category === 'labor'
+  
+  // Enforce mandatory attachments for Accountant level on financial items
+  if (isAccountantStep && !isExempt && (record.attachments_count === 0 || !record.attachments_count)) {
     Modal.warning({
       title: 'Thiếu chứng từ đính kèm',
-      content: 'Cảnh báo: Yêu cầu tài chính này chưa có tệp chứng từ đính kèm. Kế toán bắt buộc phải kiểm tra chứng từ trước khi xác nhận để đảm bảo tính chính xác của dòng tiền.',
+      content: 'Phiếu này chưa có tệp chứng từ đính kèm. Kế toán bắt buộc phải kiểm tra chứng từ (hóa đơn, phiếu chi, biên lai...) trước khi xác nhận duyệt phiếu để đảm bảo tính chính xác và minh bạch tài chính. Vui lòng yêu cầu người tạo phiếu bổ sung chứng từ.',
       okText: 'Tôi đã hiểu',
       centered: true
     })

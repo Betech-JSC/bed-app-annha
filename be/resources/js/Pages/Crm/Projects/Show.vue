@@ -3789,6 +3789,12 @@
         <a-empty v-else :image="null" description="Không có tệp" class="my-0" />
       </div>
 
+      <!-- Warning: Missing attachments for rental accountant step -->
+      <div v-if="selectedRental.status === 'pending_accountant' && !selectedRental.attachments?.length" class="p-4 bg-red-50 rounded-2xl border-2 border-red-200">
+        <div class="text-xs font-bold text-red-500 uppercase tracking-wider mb-2 flex items-center gap-2"><ExclamationCircleOutlined /> Thiếu chứng từ</div>
+        <div class="text-sm text-red-700">Phiếu thuê thiết bị chưa có file chứng từ đính kèm. <span class="font-bold">Kế toán không thể xác nhận</span> khi thiếu chứng từ. Vui lòng yêu cầu người tạo phiếu bổ sung.</div>
+      </div>
+
       <div class="fixed bottom-0 right-0 w-[560px] p-4 bg-white/80 backdrop-blur-md border-t border-gray-100 flex justify-between items-center z-20">
          <div>
            <a-popconfirm v-if="selectedRental.status === 'draft'" title="Xóa phiếu thuê này?" @confirm="deleteRental(selectedRental); showRentalDetailDrawer = false">
@@ -3800,7 +3806,9 @@
            <a-button v-if="selectedRental.status === 'draft' && can('equipment.update')" @click="openRentalModal(selectedRental)"><EditOutlined /> Sửa</a-button>
            <a-button v-if="selectedRental.status === 'draft' && can('equipment.update')" type="primary" @click="submitRental(selectedRental)">Gửi duyệt</a-button>
            <a-button v-if="selectedRental.status === 'pending_management' && can('equipment.approve')" type="primary" class="!bg-green-500 !border-green-500 hover:!bg-green-600" @click="approveRentalMgmt(selectedRental)"><CheckCircleOutlined /> BĐH Duyệt</a-button>
-            <a-button v-if="selectedRental.status === 'pending_accountant' && can('equipment.approve')" type="primary" @click="confirmRentalKT(selectedRental)"><CheckOutlined /> KT Xác nhận</a-button>
+            <a-tooltip v-if="selectedRental.status === 'pending_accountant' && can('equipment.approve')" :title="!selectedRental.attachments?.length ? 'Thiếu chứng từ — Không thể xác nhận' : ''">
+              <a-button type="primary" :disabled="!selectedRental.attachments?.length" @click="confirmRentalKT(selectedRental)"><CheckOutlined /> KT Xác nhận</a-button>
+            </a-tooltip>
             <a-button v-if="selectedRental.status === 'in_use' && can('equipment.update')" type="primary" class="!bg-orange-500 !border-orange-500 hover:!bg-orange-600" @click="requestReturnRental(selectedRental)">Đánh dấu đã trả</a-button>
             <a-button v-if="selectedRental.status === 'pending_return' && can('equipment.approve')" type="primary" @click="confirmReturnRentalAction(selectedRental)"><CheckOutlined /> KT Xác nhận trả</a-button>
             <a-button v-if="['pending_management', 'pending_accountant', 'available', 'rejected'].includes(selectedRental.status) && can('equipment.revert')" danger ghost @click="revertRentalAction && revertRentalAction(selectedRental)">Hoàn duyệt</a-button>
@@ -3938,6 +3946,12 @@
         </div>
       </div>
 
+      <!-- Warning: Missing attachments for accountant step -->
+      <div v-if="selectedUsage.status === 'pending_accountant' && !selectedUsage.attachments?.length" class="p-4 bg-red-50 rounded-2xl border-2 border-red-200">
+        <div class="text-xs font-bold text-red-500 uppercase tracking-wider mb-2 flex items-center gap-2"><ExclamationCircleOutlined /> Thiếu chứng từ</div>
+        <div class="text-sm text-red-700">Phiếu này chưa có file chứng từ đính kèm. <span class="font-bold">Kế toán không thể xác nhận</span> khi thiếu chứng từ (hóa đơn, phiếu chi, biên lai...). Vui lòng yêu cầu người tạo phiếu bổ sung.</div>
+      </div>
+
       <!-- Rejection reason -->
       <div v-if="selectedUsage.rejection_reason" class="p-4 bg-red-50 rounded-2xl border border-red-100">
         <div class="text-xs font-bold text-red-500 uppercase tracking-wider mb-2 flex items-center gap-2"><ExclamationCircleOutlined /> Lý do từ chối</div>
@@ -3982,7 +3996,9 @@
            </a-popconfirm>
 
            <!-- Pending Accountant: KT xác nhận / Từ chối -->
-           <a-button v-if="selectedUsage.status === 'pending_accountant' && can('cost.approve.accountant')" type="primary" class="!bg-purple-500 !border-purple-500 hover:!bg-purple-600" @click="confirmUsageAccountant(selectedUsage)"><CheckOutlined /> KT Xác nhận</a-button>
+           <a-tooltip v-if="selectedUsage.status === 'pending_accountant' && can('cost.approve.accountant')" :title="!selectedUsage.attachments?.length ? 'Thiếu chứng từ — Không thể xác nhận' : ''">
+             <a-button type="primary" class="!bg-purple-500 !border-purple-500 hover:!bg-purple-600" :disabled="!selectedUsage.attachments?.length" @click="confirmUsageAccountant(selectedUsage)"><CheckOutlined /> KT Xác nhận</a-button>
+           </a-tooltip>
            <a-popconfirm v-if="selectedUsage.status === 'pending_accountant' && can('cost.approve.accountant')" title="Từ chối phiếu?" @confirm="rejectUsage(selectedUsage)" ok-text="Từ chối" cancel-text="Hủy">
              <template #description>
                <a-input v-model:value="rejectReason" placeholder="Nhập lý do từ chối..." class="mt-2" />
@@ -7352,8 +7368,45 @@ onMounted(() => {
   const openId = urlParams.get('id')
   if (openId) {
     if (activeTab.value === 'acceptance') {
-      const stage = acceptanceStages.value.find(s => s.id == openId)
+      const stage = (acceptanceStages.value || []).find(s => s.id == openId)
       if (stage) openAcceptDetailModal(stage)
+    } else if (activeTab.value === 'costs') {
+      const cost = (project.value.costs || []).find(c => c.id == openId)
+      if (cost) openCostDetail(cost)
+    } else if (activeTab.value === 'materials') {
+      const bill = (project.value.material_bills || []).find(b => b.id == openId)
+      if (bill) openMaterialDetail(bill)
+    } else if (activeTab.value === 'subcontractors') {
+      const payment = (allSubcontractorPayments.value || []).find(p => p.id == openId)
+      if (payment) {
+        openSubPaymentDetail(payment)
+      } else {
+        const sub = (project.value.subcontractors || []).find(s => s.id == openId)
+        if (sub) openSubDetail(sub)
+      }
+    } else if (activeTab.value === 'payments') {
+      const pay = (project.value.payments || []).find(p => p.id == openId)
+      if (pay) openPaymentDetail(pay)
+    } else if (activeTab.value === 'defects') {
+      const def = (project.value.defects || []).find(d => d.id == openId)
+      if (def) openDefectDetail(def)
+    } else if (activeTab.value === 'budgets') {
+      const bud = (project.value.budgets || []).find(b => b.id == openId)
+      if (bud) openBudgetDetail(bud)
+    } else if (activeTab.value === 'equipment') {
+      const rental = (project.value.equipment_rentals || []).find(r => r.id == openId)
+      if (rental) {
+        openRentalDetail(rental)
+      } else {
+        const usage = (project.value.asset_usages || []).find(u => u.id == openId)
+        if (usage) openUsageDetail(usage)
+      }
+    } else if (activeTab.value === 'logs') {
+      const log = (project.value.construction_logs || []).find(l => l.id == openId)
+      if (log) openLogDetailDrawer(log)
+    } else if (activeTab.value === 'technical') {
+      const maintenance = (project.value.maintenances || []).find(m => m.id == openId)
+      if (maintenance) openMaintenanceDetail(maintenance)
     }
   }
 })

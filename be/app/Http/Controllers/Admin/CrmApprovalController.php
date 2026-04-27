@@ -177,6 +177,11 @@ class CrmApprovalController extends Controller
             $this->crmRequire($user, Permissions::COMPANY_COST_APPROVE_ACCOUNTANT);
         }
 
+        // Financial Gatekeeper: Accountant MUST have attachments (skip labor costs from attendance)
+        if ($cost->category !== 'labor' && !$cost->attendance_id && $cost->attachments()->count() === 0) {
+            return back()->with('error', 'Phiếu chi phí này bắt buộc phải có file chứng từ đính kèm (hóa đơn, phiếu chi, biên lai...) trước khi kế toán xác nhận duyệt.');
+        }
+
         $result = $this->approvalActionService->approve($user, 'accountant', $id);
 
         if ($result['success']) {
@@ -499,6 +504,11 @@ class CrmApprovalController extends Controller
         $user = Auth::guard('admin')->user();
         $this->crmRequire($user, Permissions::PAYMENT_CONFIRM, $payment->project);
 
+        // Financial Gatekeeper: Accountant MUST have attachments
+        if ($payment->attachments()->count() === 0) {
+            return back()->with('error', 'Đợt thanh toán này bắt buộc phải có file chứng từ đính kèm (UNC/Bill chuyển khoản) trước khi kế toán xác nhận.');
+        }
+
         return $this->delegateApprove($user, 'project_payment_confirm', $id);
     }
 
@@ -642,6 +652,13 @@ class CrmApprovalController extends Controller
     public function approveEquipmentPurchaseAccountant(Request $request, $id)
     {
         $user = Auth::guard('admin')->user();
+
+        // Financial Gatekeeper: Accountant MUST have attachments
+        $purchase = \App\Models\EquipmentPurchase::findOrFail($id);
+        if ($purchase->attachments()->count() === 0) {
+            return back()->with('error', 'Phiếu mua thiết bị này bắt buộc phải có file chứng từ đính kèm trước khi kế toán xác nhận.');
+        }
+
         return $this->delegateApprove($user, 'equipment_purchase_accountant', $id);
     }
 

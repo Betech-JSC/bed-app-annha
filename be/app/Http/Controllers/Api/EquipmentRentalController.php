@@ -317,6 +317,14 @@ class EquipmentRentalController extends Controller
 
         $rental = EquipmentRental::where('project_id', $projectId)->findOrFail($id);
 
+        // Financial Gatekeeper: Mandatory attachments for accountant confirmation
+        if ($rental->attachments()->count() === 0) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Phiếu thuê thiết bị bắt buộc phải có file chứng từ đính kèm trước khi kế toán xác nhận.',
+            ], 422);
+        }
+
         if ($this->equipmentService->confirmRentalByAccountant($rental, $user)) {
             return response()->json([
                 'success' => true,

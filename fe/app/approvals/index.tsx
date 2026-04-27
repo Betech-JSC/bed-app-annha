@@ -147,12 +147,12 @@ export default function ApprovalCenterScreen() {
     const handleApprove = async (item: ApprovalItem, notes?: string) => {
         // Business Rule: Mandatory attachments for Accountant (skip attendance/labor costs)
         if (selectedRole === 'accountant' && item.type !== 'attendance' && (item.attachments_count === 0 || !item.attachments_count)) {
-            // Check if it's a financial item
-            const financialTypes = ['project_cost', 'company_cost', 'sub_payment', 'material_bill', 'budget'];
-            if (financialTypes.includes(item.type)) {
+            // Check if it's a type that requires document verification
+            const accountantTypes = ['project_cost', 'company_cost', 'sub_payment', 'material_bill', 'budget', 'equipment_rental', 'asset_usage', 'payment'];
+            if (accountantTypes.includes(item.type)) {
                 Alert.alert(
-                    'Thiếu chứng từ',
-                    'Cảnh báo: Yêu cầu tài chính này chưa có tệp chứng từ đính kèm. Kế toán bắt buộc phải kiểm tra chứng từ trước khi xác nhận.',
+                    '⚠️ Thiếu chứng từ',
+                    'Phiếu này bắt buộc phải có file chứng từ đính kèm (hóa đơn, phiếu chi, biên lai...) trước khi kế toán xác nhận duyệt.\n\nVui lòng yêu cầu người lập phiếu bổ sung chứng từ.',
                     [{ text: 'Đã hiểu' }]
                 );
                 return;
@@ -605,6 +605,21 @@ export default function ApprovalCenterScreen() {
                                         )}
                                     </View>
 
+                                    {/* Warning: Missing attachments for accountant approval */}
+                                    {selectedRole === 'accountant' && 
+                                     (!detailItem.attachments_count || detailItem.attachments_count === 0) &&
+                                     ['project_cost', 'company_cost', 'sub_payment', 'material_bill', 'budget', 'equipment_rental', 'asset_usage', 'payment'].includes(detailItem.type) && (
+                                        <View style={styles.missingAttachWarning}>
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                                                <Ionicons name="warning-outline" size={18} color="#EF4444" />
+                                                <Text style={{ fontSize: 12, fontWeight: '800', color: '#EF4444', textTransform: 'uppercase' }}>Thiếu chứng từ</Text>
+                                            </View>
+                                            <Text style={{ fontSize: 13, color: '#B91C1C', lineHeight: 20 }}>
+                                                Phiếu này chưa có file chứng từ đính kèm. Kế toán không thể xác nhận duyệt khi thiếu chứng từ (hóa đơn, phiếu chi, biên lai...).
+                                            </Text>
+                                        </View>
+                                    )}
+
                                 </View>
                             )}
                         </ScrollView>
@@ -789,6 +804,7 @@ const styles = StyleSheet.create({
     fileSize: { fontSize: 11, color: '#94A3B8' },
     noAttach: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, backgroundColor: '#F8FAFC', borderRadius: 12, borderStyle: 'dashed', borderWidth: 1, borderColor: '#CBD5E1' },
     noAttachText: { fontSize: 12, color: '#94A3B8' },
+    missingAttachWarning: { backgroundColor: '#FEF2F2', borderWidth: 2, borderColor: '#FECACA', borderRadius: 16, padding: 16, marginBottom: 24 },
     
     sheetActions: { flexDirection: 'row', padding: 24, gap: 12, borderTopWidth: 1, borderTopColor: '#F1F5F9' },
     actionBtnReject: { flex: 1.2, paddingVertical: 16, borderRadius: 16, backgroundColor: '#FEF2F2', alignItems: 'center' },

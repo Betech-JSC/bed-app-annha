@@ -257,6 +257,14 @@ class CrmEquipmentController extends Controller
                 : back()->with('error', $msg);
         }
 
+        // Financial Gatekeeper: Accountant MUST have attachments
+        if ($eq->attachments()->count() === 0) {
+            $msg = 'Phiếu mua thiết bị này bắt buộc phải có file chứng từ đính kèm (hóa đơn, phiếu chi...) trước khi kế toán xác nhận nhập kho.';
+            return request()->wantsJson() 
+                ? response()->json(['success' => false, 'message' => $msg], 422)
+                : back()->with('error', $msg);
+        }
+
         $eq->update([
             'status'       => 'available',
             'confirmed_by' => $user->id,

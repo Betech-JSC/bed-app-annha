@@ -255,6 +255,7 @@ const selectedKeys = computed(() => {
   if (url.startsWith('/hr/departments')) return ['departments']
   if (url.startsWith('/hr/attendance')) return ['attendance']
   if (url.includes('mode=salary')) return ['payrolls']
+  if (url.includes('type=customer')) return ['customers']
   if (url.startsWith('/hr')) return ['employees']
   if (url.startsWith('/finance/company-costs')) return ['company-costs']
   if (url.startsWith('/finance')) return ['finance']
@@ -346,7 +347,8 @@ const menuItems = computed(() => {
       icon: () => h(TeamOutlined),
       label: 'Nhân sự & Tổ chức',
       children: [
-        { key: 'employees', label: 'Danh sách nhân viên', perm: 'personnel.view' },
+        { key: 'employees', label: 'Nhân viên', perm: 'personnel.view' },
+        { key: 'customers', label: 'Khách hàng', perm: 'personnel.view' },
         { key: 'payrolls', label: 'Cấu hình lương', perm: 'personnel.view' },
         { key: 'departments', label: 'Phòng ban', perm: 'personnel.view' },
         { key: 'org-chart', label: 'Sơ đồ tổ chức', icon: () => h(ApartmentOutlined), perm: 'personnel.view' },
@@ -405,7 +407,8 @@ const handleMenuClick = ({ key }) => {
     'cost-groups': '/cost-groups',
     materials: '/materials',
     equipment: '/equipment',
-    employees: '/hr/employees',
+    employees: '/hr/employees?type=employee',
+    customers: '/hr/employees?type=customer',
     payrolls: '/hr/employees?mode=salary',
     departments: '/hr/departments',
     kpi: '/hr/kpi',

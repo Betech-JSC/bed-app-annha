@@ -232,7 +232,7 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { Head, useForm, router, usePage } from '@inertiajs/vue3'
 import CrmLayout from '@/Layouts/CrmLayout.vue'
 import PageHeader from '@/Components/Crm/PageHeader.vue'
@@ -241,6 +241,17 @@ import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined, UploadOutlined
 
 defineOptions({ layout: CrmLayout })
 const props = defineProps({ equipment: Object, stats: Object, filters: Object })
+
+onMounted(() => {
+  const urlParams = new URLSearchParams(window.location.search)
+  const id = urlParams.get('id')
+  if (id) {
+    const item = props.equipment.data.find(e => e.id == id)
+    if (item) {
+      openDetail(item)
+    }
+  }
+})
 
 // Permission helper
 const can = (perm) => {

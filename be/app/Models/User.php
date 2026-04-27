@@ -69,12 +69,41 @@ class User extends Authenticatable
     }
 
     // ───── User Type Scopes ─────
-    public function scopeEmployees($q) { return $q->where('user_type', 'employee'); }
-    public function scopeCustomers($q) { return $q->where('user_type', 'customer'); }
+    // ───── User Type Scopes (Dynamic based on permissions) ─────
+    public function scopeEmployees($q) 
+    { 
+        // Staff: Does not have customer-only permissions OR has internal management permissions
+        return $q->where(function($query) {
+            $query->whereDoesntHave('roles.permissions', function($sq) {
+                $sq->where('name', \App\Constants\Permissions::ACCEPTANCE_APPROVE_LEVEL_3);
+            })->orWhereHas('roles.permissions', function($sq) {
+                $sq->where('name', \App\Constants\Permissions::PERSONNEL_VIEW);
+            });
+        });
+    }
+
+    public function scopeCustomers($q) 
+    { 
+        // Customers: Have level 3 approval AND NO internal personnel view permission
+        return $q->whereHas('roles.permissions', function($sq) {
+            $sq->where('name', \App\Constants\Permissions::ACCEPTANCE_APPROVE_LEVEL_3);
+        })->whereDoesntHave('roles.permissions', function($sq) {
+            $sq->where('name', \App\Constants\Permissions::PERSONNEL_VIEW);
+        });
+    }
 
     // ───── User Type Helpers ─────
-    public function isEmployee(): bool { return $this->user_type === 'employee' || !$this->user_type; }
-    public function isCustomer(): bool { return $this->user_type === 'customer'; }
+    public function isEmployee(): bool 
+    { 
+        return !$this->isCustomer();
+    }
+
+    public function isCustomer(): bool 
+    { 
+        // Check permissions array directly to avoid recursion or multiple queries if already loaded
+        return $this->hasPermission(\App\Constants\Permissions::ACCEPTANCE_APPROVE_LEVEL_3) 
+               && !$this->hasPermission(\App\Constants\Permissions::PERSONNEL_VIEW);
+    }
 
     public function resolveRouteBinding($value, $field = null)
     {

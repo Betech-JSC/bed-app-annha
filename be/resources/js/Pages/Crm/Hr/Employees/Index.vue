@@ -1,18 +1,21 @@
 <template>
-  <Head title="Quản lý nhân sự" />
+  <Head :title="filters.type === 'customer' ? 'Quản lý Khách hàng' : 'Quản lý nhân sự'" />
 
-  <PageHeader title="Quản lý nhân sự" subtitle="Danh sách và quản lý nhân viên trong hệ thống">
+  <PageHeader 
+    :title="filters.type === 'customer' ? 'Quản lý Khách hàng' : 'Quản lý nhân sự'" 
+    :subtitle="filters.type === 'customer' ? 'Danh sách tài khoản khách hàng và chủ đầu tư' : 'Danh sách và quản lý nhân viên trong hệ thống'"
+  >
     <template #actions>
       <a-button type="primary" size="large" @click="openCreateModal">
         <template #icon><PlusOutlined /></template>
-        Thêm nhân viên
+        Thêm {{ filters.type === 'customer' ? 'khách hàng' : 'nhân viên' }}
       </a-button>
     </template>
   </PageHeader>
 
   <!-- Stats -->
   <div class="crm-stats-grid">
-    <StatCard label="Tổng nhân viên" :value="stats.total" icon="TeamOutlined" variant="primary" />
+    <StatCard :label="filters.type === 'customer' ? 'Tổng khách hàng' : 'Tổng nhân viên'" :value="stats.total" icon="TeamOutlined" variant="primary" />
     <StatCard label="Đang hoạt động" :value="stats.active" icon="UserOutlined" variant="success" />
     <StatCard label="Đã khóa" :value="stats.banned" icon="StopOutlined" variant="warning" />
   </div>
@@ -22,13 +25,14 @@
     <div class="p-4 border-b border-gray-100 flex items-center gap-4 flex-wrap">
       <a-input-search
         v-model:value="filters.search"
-        placeholder="Tìm nhân viên..."
+        :placeholder="filters.type === 'customer' ? 'Tìm khách hàng...' : 'Tìm nhân viên...'"
         class="max-w-xs"
         allow-clear
         @search="applyFilters"
         @change="debounceSearch"
       />
       <a-select
+        v-if="filters.type === 'employee'"
         v-model:value="filters.department_id"
         placeholder="Phòng ban"
         allow-clear
@@ -40,14 +44,14 @@
     </div>
 
     <a-table
-      :columns="columns"
+      :columns="dynamicColumns"
       :data-source="employees.data"
       :pagination="{
         current: employees.current_page,
         pageSize: employees.per_page,
         total: employees.total,
         showSizeChanger: false,
-        showTotal: (t) => `Tổng ${t} nhân viên`,
+        showTotal: (t) => `Tổng ${t} ${filters.type === 'customer' ? 'khách hàng' : 'nhân viên'}`,
       }"
       :loading="loading"
       row-key="id"
@@ -57,7 +61,7 @@
       <template #bodyCell="{ column, record }">
         <template v-if="column.key === 'name'">
           <div class="flex items-center gap-3">
-            <a-avatar :size="36" class="bg-crm-primary text-white font-semibold flex-shrink-0">
+            <a-avatar :size="36" :class="[filters.type === 'customer' ? 'bg-blue-500' : 'bg-crm-primary', 'text-white font-semibold flex-shrink-0']">
               {{ record.name?.charAt(0)?.toUpperCase() || '?' }}
             </a-avatar>
             <div>
@@ -109,14 +113,14 @@
                 <template #icon><EditOutlined /></template>
               </a-button>
             </a-tooltip>
-            <a-popconfirm title="Xóa nhân viên này?" ok-text="Xóa" cancel-text="Hủy" @confirm="deleteEmployee(record)">
+            <a-popconfirm :title="`Xóa ${filters.type === 'customer' ? 'khách hàng' : 'nhân viên'} này?`" ok-text="Xóa" cancel-text="Hủy" @confirm="deleteEmployee(record)">
               <a-tooltip title="Xóa">
                 <a-button type="text" size="small" danger>
                   <template #icon><DeleteOutlined /></template>
                 </a-button>
               </a-tooltip>
             </a-popconfirm>
-            <a-tooltip title="Cấu hình lương & Đơn giá">
+            <a-tooltip v-if="filters.type === 'employee'" title="Cấu hình lương & Đơn giá">
               <a-button type="link" size="small" @click="$inertia.visit(`/hr/employees/${record.id}/salary`)" class="flex items-center">
                 <template #icon><DollarOutlined /></template>
                 Lương
@@ -131,7 +135,7 @@
   <!-- Create/Edit Modal -->
   <a-modal
     v-model:open="showModal"
-    :title="editingEmployee ? 'Chỉnh sửa nhân viên' : 'Thêm nhân viên mới'"
+    :title="editingEmployee ? (filters.type === 'customer' ? 'Sửa khách hàng' : 'Sửa nhân viên') : (filters.type === 'customer' ? 'Thêm khách hàng' : 'Thêm nhân viên')"
     :width="640"
     @ok="handleSubmit"
     @cancel="resetForm"
@@ -169,14 +173,14 @@
       </a-row>
 
       <a-row :gutter="16">
-        <a-col :span="12">
+        <a-col :span="12" v-if="filters.type === 'employee'">
           <a-form-item label="Phòng ban">
             <a-select v-model:value="form.department_id" placeholder="Chọn phòng ban" allow-clear size="large">
               <a-select-option v-for="d in departments" :key="d.id" :value="d.id">{{ d.name }}</a-select-option>
             </a-select>
           </a-form-item>
         </a-col>
-        <a-col :span="12">
+        <a-col :span="filters.type === 'employee' ? 12 : 24">
           <a-form-item :label="editingEmployee ? 'Mật khẩu mới (để trống nếu không đổi)' : 'Mật khẩu'" :validate-status="form.errors.password ? 'error' : ''" :help="form.errors.password" :required="!editingEmployee">
             <a-input-password v-model:value="form.password" placeholder="Mật khẩu..." size="large" />
           </a-form-item>
@@ -185,7 +189,7 @@
 
       <a-form-item label="Vai trò">
         <a-select v-model:value="form.role_ids" mode="multiple" placeholder="Chọn vai trò" size="large">
-          <a-select-option v-for="r in roles" :key="r.id" :value="r.id">{{ r.name }}</a-select-option>
+          <a-select-option v-for="r in filteredRoles" :key="r.id" :value="r.id">{{ r.name }}</a-select-option>
         </a-select>
       </a-form-item>
     </a-form>
@@ -198,7 +202,7 @@ import { Head, useForm, router } from '@inertiajs/vue3'
 import CrmLayout from '@/Layouts/CrmLayout.vue'
 import PageHeader from '@/Components/Crm/PageHeader.vue'
 import StatCard from '@/Components/Crm/StatCard.vue'
-import { PlusOutlined, EditOutlined, DeleteOutlined, DollarOutlined } from '@ant-design/icons-vue'
+import { PlusOutlined, EditOutlined, DeleteOutlined, DollarOutlined, TeamOutlined, UserOutlined } from '@ant-design/icons-vue'
 
 defineOptions({ layout: CrmLayout })
 
@@ -229,26 +233,41 @@ const roleLabels = {
   warehouse: 'Thủ kho',
 }
 
-const columns = [
-  { title: 'Nhân viên', key: 'name', width: 280 },
-  { title: 'SĐT', key: 'phone', width: 140 },
-  { title: 'Phòng ban', key: 'department', width: 160 },
-  { title: 'Vai trò', key: 'roles', width: 200 },
-  { title: 'Trạng thái', key: 'status', width: 120, align: 'center' },
-  { title: '', key: 'actions', width: 100, align: 'center', fixed: 'right' },
-]
-
-const mode = computed(() => new URLSearchParams(window.location.search).get('mode'))
-
-if (mode.value === 'salary') {
-  // Insert salary column before roles
-  const rolesIndex = columns.findIndex(c => c.key === 'roles')
-  columns.splice(rolesIndex, 0, { title: 'Lương/Đơn giá', key: 'salary', width: 160 })
-}
-
 const filters = ref({
   search: props.filters?.search || '',
   department_id: props.filters?.department_id ? Number(props.filters.department_id) : undefined,
+  type: props.filters?.type || 'employee',
+})
+
+const dynamicColumns = computed(() => {
+  const base = [
+    { title: filters.value.type === 'customer' ? 'Khách hàng' : 'Nhân viên', key: 'name', width: 280 },
+    { title: 'SĐT', key: 'phone', width: 140 },
+  ]
+  
+  if (filters.value.type === 'employee') {
+    base.push({ title: 'Phòng ban', key: 'department', width: 160 })
+  }
+  
+  base.push({ title: 'Vai trò', key: 'roles', width: 200 })
+  
+  const mode = new URLSearchParams(window.location.search).get('mode')
+  if (mode === 'salary' && filters.value.type === 'employee') {
+    base.push({ title: 'Lương/Đơn giá', key: 'salary', width: 160 })
+  }
+  
+  base.push({ title: 'Trạng thái', key: 'status', width: 120, align: 'center' })
+  base.push({ title: '', key: 'actions', width: 100, align: 'center', fixed: 'right' })
+  
+  return base
+})
+
+const filteredRoles = computed(() => {
+  const customerRoles = ['Khách Hàng', 'Giám sát (KH)', 'client', 'project_owner']
+  if (filters.value.type === 'customer') {
+    return props.roles.filter(r => customerRoles.includes(r.name))
+  }
+  return props.roles.filter(r => !customerRoles.includes(r.name))
 })
 
 let searchTimeout = null
@@ -262,6 +281,7 @@ const applyFilters = () => {
   router.get('/hr/employees', {
     search: filters.value.search || undefined,
     department_id: filters.value.department_id || undefined,
+    type: filters.value.type,
   }, {
     preserveState: true,
     replace: true,
@@ -275,6 +295,7 @@ const handleTableChange = (pagination) => {
     page: pagination.current,
     search: filters.value.search || undefined,
     department_id: filters.value.department_id || undefined,
+    type: filters.value.type,
   }, {
     preserveState: true,
     replace: true,
@@ -290,11 +311,13 @@ const form = useForm({
   password: '',
   department_id: undefined,
   role_ids: [],
+  user_type: 'employee',
 })
 
 const openCreateModal = () => {
   editingEmployee.value = null
   form.reset()
+  form.user_type = filters.value.type
   form.clearErrors()
   showModal.value = true
 }
@@ -308,6 +331,7 @@ const openEditModal = (emp) => {
   form.password = ''
   form.department_id = emp.department_id || undefined
   form.role_ids = (emp.roles || []).map(r => r.id)
+  form.user_type = emp.user_type || filters.value.type
   form.clearErrors()
   showModal.value = true
 }
@@ -365,6 +389,13 @@ const getMainRate = (record) => {
   border-radius: 16px;
   border: 1px solid #E8ECF1;
   overflow: hidden;
+}
+.crm-tabs :deep(.ant-tabs-nav) {
+  margin-bottom: 0;
+}
+.crm-tabs :deep(.ant-tabs-tab) {
+  padding: 16px 8px;
+  font-weight: 500;
 }
 .crm-table :deep(.ant-table-thead > tr > th) {
   background: #FAFBFC;

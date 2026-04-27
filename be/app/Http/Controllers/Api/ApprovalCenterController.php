@@ -80,6 +80,12 @@ class ApprovalCenterController extends Controller
         $permCheck = $this->checkApprovalPermission($user, $type, $id);
         if ($permCheck !== true) return $permCheck;
 
+        // ─── Financial Gatekeeper: Accountant must verify attachments ───
+        $attachmentError = $this->checkAccountantAttachments($type, $id);
+        if ($attachmentError) {
+            return response()->json(['success' => false, 'message' => $attachmentError], 422);
+        }
+
         // Budget Linking (Legacy support for accountant workflow)
         $this->handleBudgetLinking($type, $id, $request->budget_item_id);
 
@@ -323,5 +329,70 @@ class ApprovalCenterController extends Controller
             'supervisor_approved' => Permissions::ACCEPTANCE_APPROVE_LEVEL_3,
             default               => Permissions::ACCEPTANCE_APPROVE_LEVEL_3,
         };
+    }
+
+    /**
+     * Financial Gatekeeper: Enforce mandatory attachments for accountant-level approvals.
+     * Returns error message string if validation fails, null if OK.
+     */
+    private function checkAccountantAttachments(string $type, int $id): ?string
+    {
+        $msg = 'Phiếu này bắt buộc phải có file chứng từ đính kèm (hóa đơn, phiếu chi, biên lai...) trước khi kế toán xác nhận duyệt.';
+
+        // Cost (project or company) — skip labor/attendance costs
+        if (in_array($type, ['project_cost', 'company_cost'])) {
+            $cost = Cost::find($id);
+            if ($cost && $cost->status === 'pending_accountant_approval' && $cost->category !== 'labor' && !$cost->attendance_id) {
+                if ($cost->attachments()->count() === 0) return $msg;
+            }
+            return null;
+        }
+
+        // Subcontractor Payment (accountant confirm step)
+        if ($type === 'sub_payment') {
+            $p = SubcontractorPayment::find($id);
+            if ($p && $p->status === 'pending_accountant_confirmation' && $p->attachments()->count() === 0) {
+                return 'Yêu cầu thanh toán NTP bắt buộc phải có file chứng từ (UNC/Hóa đơn) trước khi kế toán xác nhận.';
+            }
+            return null;
+        }
+
+        // Project Payment (accountant confirm step)
+        if ($type === 'payment') {
+            $p = ProjectPayment::find($id);
+            if ($p && $p->status === 'customer_paid' && $p->attachments()->count() === 0) {
+                return 'Đợt thanh toán bắt buộc phải có file chứng từ (UNC/Bill chuyển khoản) trước khi kế toán xác nhận.';
+            }
+            return null;
+        }
+
+        // Material Bill (accountant step)
+        if ($type === 'material_bill') {
+            $b = \App\Models\MaterialBill::find($id);
+            if ($b && $b->status === 'pending_accountant' && $b->attachments()->count() === 0) {
+                return 'Phiếu vật tư bắt buộc phải có file chứng từ đính kèm trước khi kế toán xác nhận.';
+            }
+            return null;
+        }
+
+        // Equipment Rental (accountant confirm step)
+        if ($type === 'equipment_rental') {
+            $r = EquipmentRental::find($id);
+            if ($r && $r->status === 'pending_accountant' && $r->attachments()->count() === 0) {
+                return 'Phiếu thuê thiết bị bắt buộc phải có file chứng từ trước khi kế toán xác nhận.';
+            }
+            return null;
+        }
+
+        // Asset Usage (accountant confirm step)
+        if ($type === 'asset_usage') {
+            $u = AssetUsage::find($id);
+            if ($u && $u->status === 'pending_accountant' && $u->attachments()->count() === 0) {
+                return 'Phiếu sử dụng thiết bị bắt buộc phải có file chứng từ trước khi kế toán xác nhận.';
+            }
+            return null;
+        }
+
+        return null;
     }
 }

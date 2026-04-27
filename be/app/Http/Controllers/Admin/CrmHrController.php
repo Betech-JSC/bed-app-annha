@@ -26,9 +26,19 @@ class CrmHrController extends Controller
     {
         $admin = Auth::guard('admin')->user();
         $this->crmRequire($admin, Permissions::PERSONNEL_VIEW);
-        $query = User::employees()->with(['roles', 'department', 'salaryConfigs' => function($q) {
-            $q->current();
-        }]);
+        
+        $type = $request->get('type', 'employee');
+        
+        $query = User::query()
+            ->with(['roles', 'department', 'salaryConfigs' => function($q) {
+                $q->current();
+            }]);
+
+        if ($type === 'customer') {
+            $query->customers();
+        } else {
+            $query->employees();
+        }
 
         if ($search = $request->query('search')) {
             $query->where(function ($q) use ($search) {
@@ -45,9 +55,11 @@ class CrmHrController extends Controller
         $employees = $query->orderByDesc('created_at')->paginate(20)->withQueryString();
 
         $stats = [
-            'total' => User::employees()->count(),
-            'active' => User::employees()->whereNull('deleted_at')->count(),
-            'banned' => User::employees()->onlyTrashed()->count(),
+            'total' => ($type === 'customer' ? User::customers() : User::employees())->count(),
+            'active' => ($type === 'customer' ? User::customers() : User::employees())->whereNull('deleted_at')->count(),
+            'banned' => ($type === 'customer' ? User::customers() : User::employees())->onlyTrashed()->count(),
+            'employee_count' => User::employees()->count(),
+            'customer_count' => User::customers()->count(),
         ];
 
         $departments = Department::select('id', 'name')->orderBy('name')->get();
@@ -58,7 +70,7 @@ class CrmHrController extends Controller
             'stats' => $stats,
             'departments' => $departments,
             'roles' => $roles,
-            'filters' => $request->only(['search', 'department_id']),
+            'filters' => $request->only(['search', 'department_id', 'type']),
         ]);
     }
 
@@ -85,7 +97,7 @@ class CrmHrController extends Controller
             'phone' => $validated['phone'] ?? null,
             'password' => Hash::make($validated['password']),
             'department_id' => $validated['department_id'] ?? null,
-            'user_type' => 'employee',
+            'user_type' => $request->get('user_type', 'employee'),
         ]);
 
         if (!empty($validated['role_ids'])) {
@@ -110,6 +122,7 @@ class CrmHrController extends Controller
             'department_id' => 'nullable|exists:departments,id',
             'role_ids' => 'nullable|array',
             'role_ids.*' => 'exists:roles,id',
+            'user_type' => 'nullable|in:employee,customer',
         ]);
 
         if (isset($validated['password']) && $validated['password']) {

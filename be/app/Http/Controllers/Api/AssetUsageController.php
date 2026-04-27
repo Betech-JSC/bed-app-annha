@@ -253,6 +253,14 @@ class AssetUsageController extends Controller
         $user = auth()->user();
         $usage = AssetUsage::where('project_id', $projectId)->findOrFail($id);
 
+        // Financial Gatekeeper: Mandatory attachments for accountant confirmation
+        if ($usage->attachments()->count() === 0) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Phiếu sử dụng thiết bị bắt buộc phải có file chứng từ đính kèm trước khi kế toán xác nhận.',
+            ], 422);
+        }
+
         if ($this->equipmentService->confirmUsageByAccountant($usage, $user)) {
             return response()->json([
                 'success' => true,

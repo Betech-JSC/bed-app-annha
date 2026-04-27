@@ -344,7 +344,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { Head, router, useForm } from '@inertiajs/vue3'
 import { Bar, Doughnut } from 'vue-chartjs'
 import {
@@ -362,6 +362,7 @@ import {
   UploadOutlined, InboxOutlined, PaperClipOutlined, EyeOutlined, InfoCircleOutlined,
   CloseCircleOutlined,
 } from '@ant-design/icons-vue'
+import { message } from 'ant-design-vue'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend)
 
@@ -374,6 +375,17 @@ const props = defineProps({
   costGroups: Array,
   suppliers: Array,
   filters: Object,
+})
+
+onMounted(() => {
+  const urlParams = new URLSearchParams(window.location.search)
+  const id = urlParams.get('id')
+  if (id) {
+    const cost = props.costs.data.find(c => c.id == id)
+    if (cost) {
+      showDetail(cost)
+    }
+  }
 })
 
 const { defaultOptions, doughnutOptions } = useChart()
