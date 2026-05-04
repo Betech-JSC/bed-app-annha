@@ -5,9 +5,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { useSelector } from "react-redux";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { RootState } from "@/reducers/index";
-import { NotificationBadge } from "./NotificationBadge";
-import { useUnreadCount } from "@/hooks/useUnreadCount";
-import { useApprovalCount } from "@/hooks/useApprovalCount";
 
 import { Permissions } from "@/constants/Permissions";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -55,28 +52,6 @@ const tabs: TabItem[] = [
     ],
   },
   {
-    name: "Duyệt",
-    route: "/approvals",
-    icon: "shield-checkmark-outline",
-    iconFocused: "shield-checkmark",
-    permissionList: [
-      Permissions.COST_APPROVE_MANAGEMENT,
-      Permissions.COST_APPROVE_ACCOUNTANT,
-      Permissions.CONTRACT_APPROVE_LEVEL_1,
-      Permissions.CONTRACT_APPROVE_LEVEL_2,
-      Permissions.ACCEPTANCE_APPROVE_LEVEL_1,
-      Permissions.ACCEPTANCE_APPROVE_LEVEL_2,
-      Permissions.ACCEPTANCE_APPROVE_LEVEL_3,
-      Permissions.MATERIAL_APPROVE,
-      Permissions.CHANGE_REQUEST_APPROVE,
-      Permissions.SUBCONTRACTOR_PAYMENT_APPROVE,
-      Permissions.ADDITIONAL_COST_APPROVE,
-      Permissions.SUPPLIER_CONTRACT_APPROVE,
-      Permissions.LOG_UPDATE,
-      Permissions.GANTT_UPDATE,
-    ],
-  },
-  {
     name: "Cấu Hình",
     route: "/(tabs)/settings",
     icon: "settings-outline",
@@ -91,9 +66,6 @@ export default function CustomTabBar() {
   const user = useSelector((state: RootState) => state.user);
   const insets = useSafeAreaInsets();
   const { hasPermission, hasAnyPermission, loading: permissionsLoading } = usePermissions();
-  // Tăng interval lên 60 giây để giảm số lần gọi API
-  const { unreadCount } = useUnreadCount({ autoRefresh: true, refreshInterval: 60000 });
-  const { pendingCount: approvalPendingCount } = useApprovalCount({ autoRefresh: true, refreshInterval: 60000 });
 
   // Ẩn tab bar ở các màn hình auth
   const hideTabBarRoutes = [
@@ -132,16 +104,11 @@ export default function CustomTabBar() {
     if (route === "/(tabs)/hr") {
       return pathname?.startsWith("/hr") || pathname === "/(tabs)/hr";
     }
-    if (route === "/approvals") {
-      return pathname?.startsWith("/approvals");
-    }
     if (route === "/(tabs)/settings") {
       return pathname?.startsWith("/settings") || pathname === "/(tabs)/settings";
     }
     return pathname === route;
   };
-
-  const isNotificationsActive = pathname?.startsWith("/notifications");
 
   // Don't render while loading permissions to avoid flickering tabs
   if (permissionsLoading) {
@@ -163,16 +130,11 @@ export default function CustomTabBar() {
             onPress={() => router.push(tab.route as any)}
             activeOpacity={0.7}
           >
-            <View style={styles.notificationIconContainer}>
-              <Ionicons
-                name={active ? (tab.iconFocused as any) : (tab.icon as any)}
-                size={active ? 26 : 24}
-                color={active ? "#3B82F6" : "#9CA3AF"}
-              />
-              {tab.route === "/approvals" && approvalPendingCount > 0 && (
-                <NotificationBadge count={approvalPendingCount} size="small" style={styles.notificationBadge} />
-              )}
-            </View>
+            <Ionicons
+              name={active ? (tab.iconFocused as any) : (tab.icon as any)}
+              size={active ? 26 : 24}
+              color={active ? "#3B82F6" : "#9CA3AF"}
+            />
             <Text
               style={[
                 styles.label,
@@ -184,31 +146,6 @@ export default function CustomTabBar() {
           </TouchableOpacity>
         );
       })}
-      {/* Notification Button */}
-      <TouchableOpacity
-        style={styles.tab}
-        onPress={() => router.push("/notifications" as any)}
-        activeOpacity={0.7}
-      >
-        <View style={styles.notificationIconContainer}>
-          <Ionicons
-            name={isNotificationsActive ? "notifications" : "notifications-outline"}
-            size={isNotificationsActive ? 26 : 24}
-            color={isNotificationsActive ? "#3B82F6" : "#9CA3AF"}
-          />
-          {unreadCount > 0 && (
-            <NotificationBadge count={unreadCount} size="small" style={styles.notificationBadge} />
-          )}
-        </View>
-        <Text
-          style={[
-            styles.label,
-            isNotificationsActive && styles.labelActive,
-          ]}
-        >
-          Thông báo
-        </Text>
-      </TouchableOpacity>
     </View>
   );
 }
@@ -247,13 +184,6 @@ const styles = StyleSheet.create({
   labelActive: {
     color: "#3B82F6",
   },
-  notificationIconContainer: {
-    position: "relative",
-  },
-  notificationBadge: {
-    position: "absolute",
-    top: -4,
-    right: -8,
-  },
+
 });
 

@@ -50,12 +50,14 @@ export default {
     },
     assetBundlePatterns: ["**/*"],
     ios: {
-      supportsTablet: true,
+      supportsTablet: false,
+      isTabletOnly: false,
       bundleIdentifier: bundleId,
       infoPlist: {
         ITSAppUsesNonExemptEncryption: false,
         NSCameraUsageDescription: "Ứng dụng cần quyền truy cập Camera để chụp ảnh minh chứng nghiệm thu công trình và ghi nhận lỗi tại hiện trường.",
         NSPhotoLibraryUsageDescription: "Ứng dụng cần quyền truy cập Thư viện ảnh để tải lên các tài liệu, ảnh minh chứng nghiệm thu và báo cáo sự cố.",
+        UIRequiredDeviceCapabilities: ["armv7", "telephony"],
       },
       usesNonExemptEncryption: false,
       config: {
