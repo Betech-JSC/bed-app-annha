@@ -1,5 +1,5 @@
 {
-  "name": "skysend",
+  "name": "annha-smart-management",
   "version": "1.0.0",
   "scripts": {
     "android": "expo run:android",

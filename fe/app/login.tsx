@@ -156,9 +156,9 @@ export default function LoginScreen() {
               style={styles.logo}
               resizeMode="contain"
             />
-            <Text style={styles.title}>Đăng Nhập</Text>
+            <Text style={styles.title}>Annha Smart Management</Text>
             <Text style={styles.subtitle}>
-              Chào mừng bạn trở lại!
+              Nền tảng quản lý thi công chuyên nghiệp
             </Text>
           </View>
 
@@ -247,6 +247,13 @@ export default function LoginScreen() {
                 <Text style={styles.loginButtonText}>Đăng Nhập</Text>
               )}
             </TouchableOpacity>
+
+            <View style={styles.registerContainer}>
+              <Text style={styles.registerText}>Chưa có tài khoản? </Text>
+              <TouchableOpacity onPress={() => router.push("/register")}>
+                <Text style={styles.registerLink}>Đăng ký ngay</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </ScrollView>
@@ -279,13 +286,14 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   title: {
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: "700",
     color: "#1F2937",
     marginBottom: 8,
+    textAlign: "center",
   },
   subtitle: {
-    fontSize: 16,
+    fontSize: 14,
     color: "#6B7280",
   },
   form: {
@@ -369,5 +377,18 @@ const styles = StyleSheet.create({
     color: "#DC2626",
     fontSize: 14,
     fontWeight: "500",
+  },
+  registerContainer: {
+    flexDirection: "row",
+    justifyContent: "center",
+  },
+  registerText: {
+    color: "#6B7280",
+    fontSize: 14,
+  },
+  registerLink: {
+    color: "#3B82F6",
+    fontSize: 14,
+    fontWeight: "600",
   },
 });

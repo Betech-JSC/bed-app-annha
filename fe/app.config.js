@@ -3,7 +3,7 @@ const androidPackage = process.env.APP_PACKAGE || "com.annha.app";
 
 export default {
   expo: {
-    name: "Annha JSC",
+    name: "Annha Smart Management",
     scheme: "Annha",
     slug: "annha",
     version: "1.0.0",

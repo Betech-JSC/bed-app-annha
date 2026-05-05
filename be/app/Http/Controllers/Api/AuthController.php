@@ -78,7 +78,68 @@ class AuthController extends Controller
         return ApiResponse::success(null, 'Logged out successfully');
     }
 
+    /**
+     * Public self-registration (SaaS — App Store requirement)
+     */
+    public function register(Request $request)
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'name' => 'required|string|max:255',
+                'email' => 'required|string|email|max:255|unique:users',
+                'password' => 'required|string|min:8|confirmed',
+                'phone' => 'nullable|string|max:20',
+            ], [
+                'name.required' => 'Vui lòng nhập họ và tên.',
+                'email.required' => 'Vui lòng nhập email.',
+                'email.email' => 'Email không hợp lệ.',
+                'email.unique' => 'Email đã được sử dụng.',
+                'password.required' => 'Vui lòng nhập mật khẩu.',
+                'password.min' => 'Mật khẩu phải có ít nhất 8 ký tự.',
+                'password.confirmed' => 'Xác nhận mật khẩu không khớp.',
+            ]);
 
+            if ($validator->fails()) {
+                return ApiResponse::validationError($validator);
+            }
+
+            // Tạo người dùng mới
+            $user = User::create([
+                'name' => $request->name,
+                'email' => $request->email,
+                'password' => Hash::make($request->password),
+                'phone' => $request->phone,
+            ]);
+
+            // Lưu FCM token nếu có
+            if ($request->has('fcm_token') && !empty($request->fcm_token)) {
+                $user->fcm_token = $request->fcm_token;
+                $user->save();
+            }
+
+            $token = $user->createToken('MyApp')->plainTextToken;
+
+            // Load roles relationship
+            $user->load('roles');
+
+            $userData = $user->toArray();
+            $userData['token'] = $token;
+            $userData['roles'] = $user->roles->map(function ($role) {
+                return [
+                    'id' => $role->id,
+                    'name' => $role->name,
+                    'description' => $role->description,
+                ];
+            })->toArray();
+
+            return ApiResponse::success([
+                'user' => $userData,
+            ], 'Đăng ký thành công');
+        } catch (\Exception $e) {
+            Log::error('Registration error: ' . $e->getMessage());
+            return ApiResponse::error('Có lỗi xảy ra khi đăng ký. Vui lòng thử lại.');
+        }
+    }
 
     /**
      * Send password reset link

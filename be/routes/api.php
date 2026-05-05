@@ -72,6 +72,7 @@ use App\Http\Controllers\Api\EquipmentCategoryController;
 
 Route::middleware('throttle:10,1')->group(function () {
     Route::post('login', [AuthController::class, 'login']);
+    Route::post('register', [AuthController::class, 'register']);
     Route::post('forgot-password', [AuthController::class, 'forgotPassword']);
     Route::post('reset-password', [AuthController::class, 'resetPassword']);
 });
