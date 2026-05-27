@@ -164,7 +164,10 @@ class CrmProjectsController extends Controller
             'projects' => $projects,
             'stats' => $stats,
             'filters' => $request->only(['search', 'status']),
+            // Users used for project managers / internal selections
             'users' => User::employees()->select('id', 'name', 'email', 'phone')->orderBy('name')->get(),
+            // Customers list specifically for the customer picker (only customer users)
+            'customers' => User::customers()->select('id', 'name', 'email', 'phone')->orderBy('name')->get(),
         ]);
     }
 

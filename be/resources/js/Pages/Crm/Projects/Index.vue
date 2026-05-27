@@ -289,7 +289,7 @@
               :filter-option="filterUser"
               size="large"
             >
-              <a-select-option v-for="u in users" :key="u.id" :value="u.id">
+              <a-select-option v-for="u in customers" :key="u.id" :value="u.id">
                 {{ u.name }} ({{ u.email }})
               </a-select-option>
             </a-select>
@@ -364,6 +364,7 @@ const props = defineProps({
   stats: Object,
   filters: Object,
   users: Array,
+  customers: Array,
 })
 
 const page = usePage()
