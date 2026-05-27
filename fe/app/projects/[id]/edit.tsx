@@ -124,21 +124,21 @@ export default function EditProjectScreen() {
   const loadCustomers = async () => {
     try {
       setLoadingCustomers(true);
-      // Lấy toàn bộ danh sách users hệ thống
-      const response = await projectApi.getAllUsers();
+      // Lấy danh sách khách hàng
+      const response = await projectApi.getCustomers();
       if (response.success) {
-        const usersList = response.data || [];
-        setCustomers(usersList);
-        if (usersList.length === 0) {
-          console.warn("Không tìm thấy user nào. Vui lòng kiểm tra lại dữ liệu.");
+        const customersList = response.data || [];
+        setCustomers(customersList);
+        if (customersList.length === 0) {
+          console.warn("Không tìm thấy khách hàng nào. Vui lòng kiểm tra lại dữ liệu.");
         }
       } else {
-        console.error("Error loading users:", response.message);
-        Alert.alert("Lỗi", response.message || "Không thể tải danh sách users");
+        console.error("Error loading customers:", response.message);
+        Alert.alert("Lỗi", response.message || "Không thể tải danh sách khách hàng");
       }
     } catch (error: any) {
-      console.error("Error loading users:", error);
-      Alert.alert("Lỗi", error.response?.data?.message || "Không thể tải danh sách users");
+      console.error("Error loading customers:", error);
+      Alert.alert("Lỗi", error.response?.data?.message || "Không thể tải danh sách khách hàng");
     } finally {
       setLoadingCustomers(false);
     }
