@@ -19,10 +19,10 @@ class FinanceService
     {
         $project = Project::findOrFail($projectId);
 
-        $from = $fromDate ? Carbon::parse($fromDate) : ($project->start_date ?: now()->subMonths(6));
-        $to   = $toDate ? Carbon::parse($toDate) : ($project->end_date ?: now()->addMonths(6));
+        $from = $fromDate ? Carbon::parse($fromDate) : ($project->start_date ? Carbon::parse($project->start_date) : now()->subMonths(6));
+        $to   = $toDate ? Carbon::parse($toDate) : ($project->end_date ? Carbon::parse($project->end_date) : now()->addMonths(6));
 
-        // Lấy tất cả cash flow records
+        // 1. Lấy tất cả cash flow records thủ công
         $flows = CashFlow::where('project_id', $projectId)
             ->where(function ($q) use ($from, $to) {
                 $q->whereBetween('planned_date', [$from, $to])
@@ -31,23 +31,45 @@ class FinanceService
             ->orderBy('planned_date')
             ->get();
 
+        // 2. Lấy các phiếu thanh toán thực tế của khách hàng (Inflow)
+        $actualPayments = ProjectPayment::where('project_id', $projectId)
+            ->whereIn('status', ['paid', 'confirmed'])
+            ->whereBetween('paid_date', [$from, $to])
+            ->get();
+
+        // 3. Lấy các chi phí thực tế đã được duyệt (Outflow)
+        $actualCosts = Cost::where('project_id', $projectId)
+            ->where('status', 'approved')
+            ->whereBetween('cost_date', [$from, $to])
+            ->get();
+
         // Aggregate theo tháng
         $months = [];
         $cursor = $from->copy()->startOfMonth();
         while ($cursor->lte($to)) {
             $monthKey = $cursor->format('Y-m');
-            $monthFlows = $flows->filter(function ($f) use ($monthKey) {
-                $date = $f->actual_date ?: $f->planned_date;
-                return $date instanceof \DateTimeInterface && $date->format('Y-m') === $monthKey;
-            });
+
+            // Planned/Manual
+            $plannedIn = $flows->where('type', 'inflow')->filter(fn($f) => $f->planned_date instanceof \DateTimeInterface && $f->planned_date->format('Y-m') === $monthKey)->sum('amount');
+            $plannedOut = $flows->where('type', 'outflow')->filter(fn($f) => $f->planned_date instanceof \DateTimeInterface && $f->planned_date->format('Y-m') === $monthKey)->sum('amount');
+            
+            // Actual Inflow = manual actual inflow + actual project payments
+            $manualActualIn = $flows->where('type', 'inflow')->filter(fn($f) => $f->actual_date instanceof \DateTimeInterface && $f->actual_date->format('Y-m') === $monthKey)->sum('amount');
+            $paymentActualIn = $actualPayments->filter(fn($p) => $p->paid_date instanceof \DateTimeInterface && $p->paid_date->format('Y-m') === $monthKey)->sum('amount');
+            $actualIn = $manualActualIn + $paymentActualIn;
+
+            // Actual Outflow = manual actual outflow + approved costs
+            $manualActualOut = $flows->where('type', 'outflow')->filter(fn($f) => $f->actual_date instanceof \DateTimeInterface && $f->actual_date->format('Y-m') === $monthKey)->sum('amount');
+            $costActualOut = $actualCosts->filter(fn($c) => $c->cost_date instanceof \DateTimeInterface && $c->cost_date->format('Y-m') === $monthKey)->sum('amount');
+            $actualOut = $manualActualOut + $costActualOut;
 
             $months[] = [
                 'month'           => $monthKey,
                 'label'           => $cursor->format('m/Y'),
-                'planned_inflow'  => $flows->where('type', 'inflow')->filter(fn($f) => $f->planned_date instanceof \DateTimeInterface && $f->planned_date->format('Y-m') === $monthKey)->sum('amount'),
-                'planned_outflow' => $flows->where('type', 'outflow')->filter(fn($f) => $f->planned_date instanceof \DateTimeInterface && $f->planned_date->format('Y-m') === $monthKey)->sum('amount'),
-                'actual_inflow'   => $flows->where('type', 'inflow')->filter(fn($f) => $f->actual_date instanceof \DateTimeInterface && $f->actual_date->format('Y-m') === $monthKey)->sum('amount'),
-                'actual_outflow'  => $flows->where('type', 'outflow')->filter(fn($f) => $f->actual_date instanceof \DateTimeInterface && $f->actual_date->format('Y-m') === $monthKey)->sum('amount'),
+                'planned_inflow'  => (float) $plannedIn,
+                'planned_outflow' => (float) $plannedOut,
+                'actual_inflow'   => (float) $actualIn,
+                'actual_outflow'  => (float) $actualOut,
             ];
             $cursor->addMonth();
         }
@@ -64,10 +86,13 @@ class FinanceService
             $m['cumulative_actual_net']  = $cumActualIn - $cumActualOut;
         }
 
+        $totalInflow = $flows->where('type', 'inflow')->sum('amount') + $actualPayments->sum('amount');
+        $totalOutflow = $flows->where('type', 'outflow')->sum('amount') + $actualCosts->sum('amount');
+
         $totals = [
-            'total_inflow'  => $flows->where('type', 'inflow')->sum('amount'),
-            'total_outflow' => $flows->where('type', 'outflow')->sum('amount'),
-            'net_cash_flow' => $flows->where('type', 'inflow')->sum('amount') - $flows->where('type', 'outflow')->sum('amount'),
+            'total_inflow'  => (float) $totalInflow,
+            'total_outflow' => (float) $totalOutflow,
+            'net_cash_flow' => (float) ($totalInflow - $totalOutflow),
         ];
 
         return [

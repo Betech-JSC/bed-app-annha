@@ -75,8 +75,8 @@
       <template #bodyCell="{ column, record }">
         <!-- Name -->
         <template v-if="column.dataIndex === 'name'">
-          <div>
-            <div class="font-semibold text-gray-800 text-sm">{{ record.name }}</div>
+          <div class="cursor-pointer hover:text-blue-600 transition-colors flex flex-col gap-0.5" @click="openSubDetail(record)">
+            <div class="font-semibold text-gray-800 text-sm hover:text-blue-600">{{ record.name }}</div>
             <div v-if="record.category" class="text-xs text-gray-400 mt-0.5">{{ record.category }}</div>
           </div>
         </template>
@@ -137,6 +137,9 @@
         <!-- Actions -->
         <template v-if="column.dataIndex === 'actions'">
           <div class="flex gap-1">
+            <a-tooltip title="Chi tiết">
+              <a-button type="text" size="small" @click="openSubDetail(record)"><EyeOutlined /></a-button>
+            </a-tooltip>
             <a-tooltip title="Sửa">
               <a-button type="text" size="small" @click="showEditModal(record)"><EditOutlined /></a-button>
             </a-tooltip>
@@ -175,10 +178,17 @@
     centered
   >
     <div class="space-y-4 mt-4">
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Chọn từ danh sách hệ thống (không bắt buộc)</label>
+        <a-select v-model:value="form.global_subcontractor_id" style="width: 100%;" size="large" allow-clear placeholder="Tìm nhà thầu đã có..." @change="onGlobalSubChange" show-search option-filter-prop="label">
+          <a-select-option v-for="gs in globalSubcontractors" :key="gs.id" :value="gs.id" :label="gs.name">{{ gs.name }}</a-select-option>
+        </a-select>
+      </div>
+
       <div class="grid grid-cols-2 gap-4">
         <div class="col-span-2">
           <label class="block text-sm font-medium text-gray-700 mb-1">Tên nhà thầu phụ <span class="text-red-500">*</span></label>
-          <a-input v-model:value="form.name" placeholder="VD: Cty TNHH Xây Dựng ABC" size="large" />
+          <a-input v-model:value="form.name" :disabled="!!form.global_subcontractor_id" placeholder="VD: Cty TNHH Xây Dựng ABC" size="large" />
           <div v-if="form.errors.name" class="text-red-500 text-xs mt-1">{{ form.errors.name }}</div>
         </div>
       </div>
@@ -246,8 +256,117 @@
           </div>
         </a-collapse-panel>
       </a-collapse>
+
+      <div v-if="!editingSub" class="border-t pt-4 mt-4">
+        <a-checkbox v-model:checked="form.create_cost" class="mb-2 text-sm font-medium">Tự động tạo chi phí dự án cho NTP này</a-checkbox>
+        <div v-if="form.create_cost" class="mt-2">
+          <label class="block text-sm font-medium text-gray-700 mb-1">Nhóm chi phí</label>
+          <a-select v-model:value="form.cost_group_id" style="width: 100%;" size="large" allow-clear placeholder="Tự động tìm nhóm 'Nhà thầu phụ'">
+            <a-select-option v-for="g in costGroups" :key="g.id" :value="g.id">{{ g.name }}</a-select-option>
+          </a-select>
+        </div>
+      </div>
     </div>
   </a-modal>
+
+  <!-- ==================== SUBCONTRACTOR DETAIL DRAWER ==================== -->
+  <a-drawer v-model:open="showSubDetailDrawer" title="Chi tiết Nhà thầu phụ" :width="560" @close="subDetail = null" destroy-on-close class="crm-drawer">
+    <div v-if="subDetail" class="space-y-6 pb-24">
+      <!-- Subcontractor Info -->
+      <div class="bg-gray-50 p-4 rounded-2xl border border-gray-100 flex items-center gap-4">
+        <div class="w-12 h-12 rounded-xl bg-blue-600 flex items-center justify-center text-white font-bold text-lg">{{ (subDetail.name || '?').charAt(0) }}</div>
+        <div class="flex-1">
+          <div class="text-xs text-gray-400 uppercase font-bold tracking-wider mb-0.5">Nhà thầu phụ</div>
+          <div class="text-lg font-bold text-gray-800">{{ subDetail.name }}</div>
+          <div class="flex items-center gap-2 mt-1">
+             <a-tag class="rounded-full text-[10px]">{{ subDetail.category || 'N/A' }}</a-tag>
+             <a-tag :color="progressStatusTagColor(subDetail.progress_status)" class="rounded-full text-[10px]">{{ progressStatusLabel(subDetail.progress_status) }}</a-tag>
+          </div>
+        </div>
+      </div>
+
+      <!-- Financial Status -->
+      <div class="grid grid-cols-3 gap-3">
+        <div class="bg-blue-50 p-3 rounded-2xl border border-blue-100 text-center">
+          <div class="text-[10px] text-blue-400 font-bold uppercase tracking-wider mb-1">Báo giá</div>
+          <div class="text-sm font-bold text-blue-600">{{ fmtVal(subDetail.total_quote) }}</div>
+        </div>
+        <div class="bg-green-50 p-3 rounded-2xl border border-green-100 text-center">
+          <div class="text-[10px] text-green-400 font-bold uppercase tracking-wider mb-1">Đã trả</div>
+          <div class="text-sm font-bold text-green-600">{{ fmtVal(subDetail.total_paid || 0) }}</div>
+        </div>
+        <div class="bg-amber-50 p-3 rounded-2xl border border-amber-100 text-center">
+          <div class="text-[10px] text-amber-400 font-bold uppercase tracking-wider mb-1">Còn lại</div>
+          <div class="text-sm font-bold text-amber-600">{{ fmtVal((subDetail.total_quote || 0) - (subDetail.total_paid || 0)) }}</div>
+        </div>
+      </div>
+
+      <!-- Payment Progress Bar -->
+      <div class="px-1">
+        <div class="text-xs text-gray-400 mb-1 flex justify-between font-medium">
+          <span>Tiến độ thanh toán</span>
+          <span>{{ Math.round(((subDetail.total_paid || 0) / (subDetail.total_quote || 1)) * 100) }}%</span>
+        </div>
+        <a-progress :percent="Math.round(((subDetail.total_paid || 0) / (subDetail.total_quote || 1)) * 100)" :stroke-width="8" stroke-color="#10b981" trail-color="#f3f4f6" :show-info="false" />
+      </div>
+
+      <!-- Project & Bank Info -->
+      <div class="p-4 bg-white rounded-2xl border border-gray-100 shadow-sm">
+        <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2 text-blue-500"><BankOutlined /> Thông tin chung & Thanh toán</div>
+        <div class="grid grid-cols-1 gap-1 text-sm">
+          <div class="flex justify-between items-center py-2 border-b border-gray-50">
+            <span class="text-gray-400">Dự án thi công</span>
+            <span class="font-semibold text-gray-800" v-if="subDetail.project">
+              <a-tag color="blue" class="rounded-lg text-xs">{{ subDetail.project.code }}</a-tag> {{ subDetail.project.name }}
+            </span>
+            <span class="font-medium text-gray-700" v-else>—</span>
+          </div>
+          <div class="flex justify-between items-center py-2 border-b border-gray-50">
+            <span class="text-gray-400">Ngân hàng</span>
+            <span class="font-medium text-gray-700">{{ subDetail.bank_name || '—' }}</span>
+          </div>
+          <div class="flex justify-between items-center py-2 border-b border-gray-50">
+            <span class="text-gray-400">Số tài khoản</span>
+            <span class="font-bold text-blue-600">{{ subDetail.bank_account_number || '—' }}</span>
+          </div>
+          <div class="flex justify-between items-center py-2">
+            <span class="text-gray-400">Chủ tài khoản</span>
+            <span class="font-medium text-gray-700 uppercase">{{ subDetail.bank_account_name || '—' }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Payment History -->
+      <div class="p-4 bg-white rounded-2xl border border-gray-100 shadow-sm">
+        <div class="text-xs font-bold uppercase tracking-wider mb-4 flex items-center gap-2 text-emerald-600">💳 Lịch sử thanh toán ({{ subDetail.payments?.length || 0 }})</div>
+        <div v-if="!subDetail.payments || subDetail.payments.length === 0" class="text-center py-8 text-gray-400 text-xs">
+          Chưa có giao dịch thanh toán nào
+        </div>
+        <div v-else class="space-y-3">
+          <div v-for="p in subDetail.payments" :key="p.id" class="p-3 bg-gray-50 rounded-xl border border-gray-100">
+            <div class="flex justify-between items-start mb-1">
+              <div>
+                <span class="text-xs font-bold text-gray-700">{{ p.payment_stage || 'Thanh toán' }}</span>
+                <span class="text-[10px] text-gray-400 ml-2">{{ formatDate(p.payment_date) }}</span>
+              </div>
+              <span class="text-xs font-bold text-emerald-600">+{{ fmtVal(p.amount) }}</span>
+            </div>
+            <div class="text-[11px] text-gray-500">{{ p.description || 'Không có mô tả' }}</div>
+            <div class="flex justify-between items-center mt-2 pt-2 border-t border-gray-200/50">
+              <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full" :class="paymentStatusTag(p.status)">
+                {{ paymentStatusLabel(p.status) }}
+              </span>
+              <div v-if="p.attachments?.length" class="flex gap-1">
+                <a v-for="att in p.attachments" :key="att.id" :href="att.file_path" target="_blank" class="text-[10px] text-blue-500 hover:underline">
+                  📄 Đính kèm
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </a-drawer>
 </template>
 
 <script setup>
@@ -266,7 +385,7 @@ import { useChart, CHART_COLORS } from '@/Composables/useChart'
 import { useStatusFormat } from '@/Composables/useStatusFormat'
 import {
   PlusOutlined, TeamOutlined, DollarOutlined, CheckCircleOutlined, WarningOutlined,
-  EditOutlined, DeleteOutlined,
+  EditOutlined, DeleteOutlined, EyeOutlined, BankOutlined,
 } from '@ant-design/icons-vue'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend)
@@ -279,6 +398,8 @@ const props = defineProps({
   charts: Object,
   projects: Array,
   filters: Object,
+  globalSubcontractors: Array,
+  costGroups: Array,
 })
 
 const { defaultOptions, doughnutOptions } = useChart()
@@ -410,6 +531,43 @@ const editingSub = ref(null)
 const formStartDate = ref(null)
 const formEndDate = ref(null)
 
+const showSubDetailDrawer = ref(false)
+const subDetail = ref(null)
+const openSubDetail = (s) => {
+  subDetail.value = s
+  showSubDetailDrawer.value = true
+}
+
+const progressStatusTagColor = (s) => {
+  const map = {
+    not_started: 'gray',
+    in_progress: 'blue',
+    completed: 'green',
+    delayed: 'red',
+  }
+  return map[s] || 'blue'
+}
+
+const fmtVal = (val) => {
+  if (!val && val !== 0) return '0 đ'
+  return new Intl.NumberFormat('vi-VN').format(val) + ' đ'
+}
+
+const onGlobalSubChange = (id) => {
+  if (!id) {
+    form.name = '';
+    return;
+  }
+  const gs = (props.globalSubcontractors || []).find(g => g.id === id)
+  if (gs) { 
+    form.name = gs.name; 
+    form.bank_name = gs.bank_name || ''; 
+    form.bank_account_number = gs.bank_account_number || ''; 
+    form.bank_account_name = gs.bank_account_name || ''; 
+    form.category = gs.category || '' 
+  }
+}
+
 const form = useForm({
   project_id: null,
   name: '',
@@ -421,12 +579,18 @@ const form = useForm({
   progress_start_date: '',
   progress_end_date: '',
   progress_status: 'not_started',
+  global_subcontractor_id: null,
+  create_cost: true,
+  cost_group_id: null,
 })
 
 const showCreateModal = () => {
   editingSub.value = null
   form.reset()
   form.progress_status = 'not_started'
+  form.create_cost = true
+  form.cost_group_id = null
+  form.global_subcontractor_id = null
   formStartDate.value = null
   formEndDate.value = null
   formModalVisible.value = true
@@ -442,6 +606,9 @@ const showEditModal = (record) => {
   form.bank_account_number = record.bank_account_number || ''
   form.bank_account_name = record.bank_account_name || ''
   form.progress_status = record.progress_status || 'not_started'
+  form.global_subcontractor_id = record.global_subcontractor_id || null
+  form.create_cost = false
+  form.cost_group_id = null
   formStartDate.value = record.progress_start_date ? dayjs(record.progress_start_date) : null
   formEndDate.value = record.progress_end_date ? dayjs(record.progress_end_date) : null
   formModalVisible.value = true

@@ -26,7 +26,7 @@ class MaterialInventoryService
      */
     public function deleteTransactionFromCost(Cost $cost): bool
     {
-        if (!$cost->material_id) {
+        if (!$cost->material_id && !$cost->material_bill_id) {
             return false;
         }
 

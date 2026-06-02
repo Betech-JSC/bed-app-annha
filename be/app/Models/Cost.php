@@ -534,9 +534,23 @@ class Cost extends Model
         });
 
         static::saved(function ($cost) {
-            // Cập nhật budget và side effects khi trạng thái thay đổi sang approved
-            if ($cost->wasChanged('status') && $cost->status === 'approved') {
-                $cost->triggerApprovalSideEffects();
+            // Cập nhật budget và side effects khi trạng thái thay đổi
+            if ($cost->wasChanged('status')) {
+                if ($cost->status === 'approved') {
+                    $cost->triggerApprovalSideEffects();
+                } elseif ($cost->getOriginal('status') === 'approved') {
+                    // Reverted or rejected from approved status - clean up side effects
+                    if ($cost->subcontractor_id) {
+                        $cost->updateSubcontractorStatus();
+                    }
+                    if ($cost->material_id || $cost->material_bill_id) {
+                        $inventoryService = app(\App\Services\MaterialInventoryService::class);
+                        $inventoryService->deleteTransactionFromCost($cost);
+                    }
+                    if ($cost->project_id) {
+                        $cost->updateBudgetItems();
+                    }
+                }
             } elseif ($cost->project_id && $cost->wasChanged('amount')) {
                 $cost->updateBudgetItems();
             }

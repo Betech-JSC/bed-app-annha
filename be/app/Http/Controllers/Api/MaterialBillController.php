@@ -339,19 +339,37 @@ class MaterialBillController extends Controller
         $bill = MaterialBill::where('project_id', $projectId)->findOrFail($id);
         $user = $request->user();
 
-        if (!$this->authService->can($user, Permissions::MATERIAL_REVERT, $project)) {
+        $isGlobalAdmin = false;
+        if ($user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) {
+            $isGlobalAdmin = true;
+        } elseif ($user instanceof \App\Models\User) {
+            $isGlobalAdmin = $user->owner;
+        }
+
+        $canRevert = $isGlobalAdmin 
+            || $this->authService->can($user, Permissions::MATERIAL_REVERT, $project)
+            || ($bill->status === 'pending_management' && $bill->created_by === $user->id)
+            || ($bill->status === 'pending_accountant' && $this->authService->can($user, Permissions::COST_APPROVE_MANAGEMENT, $project))
+            || ($bill->status === 'approved' && $this->authService->can($user, Permissions::COST_APPROVE_ACCOUNTANT, $project))
+            || ($bill->status === 'rejected' && $bill->created_by === $user->id);
+
+        if (!$canRevert) {
             return response()->json([
                 'success' => false,
-                'message' => 'Bạn không có quyền hoàn duyệt phiếu vật liệu này.'
+                'message' => 'Bạn không có quyền hoàn duyệt phiếu vật tư ở trạng thái này.'
             ], 403);
         }
 
         try {
             $this->materialBillService->revertToDraft($bill, $user);
 
+            $msg = $bill->status === 'pending_accountant' 
+                ? 'Đã đưa phiếu vật tư về trạng thái chờ Kế toán xác nhận.' 
+                : 'Đã đưa phiếu vật tư về trạng thái nháp.';
+
             return response()->json([
                 'success' => true,
-                'message' => 'Đã đưa phiếu vật liệu về trạng thái nháp.',
+                'message' => $msg,
                 'data' => $bill->fresh(['items.material', 'supplier', 'costGroup', 'creator'])
             ]);
         } catch (\Exception $e) {

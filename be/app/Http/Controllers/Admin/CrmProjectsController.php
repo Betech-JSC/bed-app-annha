@@ -232,7 +232,7 @@ class CrmProjectsController extends Controller
         $materials = class_exists(\App\Models\Material::class) ? \App\Models\Material::select('id', 'name', 'code', 'unit', 'unit_price')->orderBy('name')->get() : [];
         $suppliers = \App\Models\Supplier::select('id', 'name', 'phone', 'email')->orderBy('name')->get();
         $acceptanceTemplates = \App\Models\AcceptanceTemplate::with(['documents', 'images', 'criteria'])->select('id', 'name', 'standard', 'description')->orderBy('name')->get();
-        $globalSubcontractors = class_exists(\App\Models\GlobalSubcontractor::class) ? \App\Models\GlobalSubcontractor::select('id', 'name', 'category')->orderBy('name')->get() : [];
+        $globalSubcontractors = class_exists(\App\Models\GlobalSubcontractor::class) ? \App\Models\GlobalSubcontractor::select('id', 'name', 'category', 'bank_name', 'bank_account_number', 'bank_account_name')->orderBy('name')->get() : [];
 
         return Inertia::render('Crm/Projects/Show', [
             'project' => $project,
@@ -535,15 +535,26 @@ class CrmProjectsController extends Controller
         
         $cost = Cost::where('project_id', $project->id)->findOrFail($costId);
         
-        // Permission: Requires dedicated revert permission
         $isSuperAdmin = method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
-        if (!$user->can(Permissions::COST_REVERT) && !$isSuperAdmin) {
-            return back()->with('error', 'Bạn không có quyền hoàn duyệt phiếu chi này.');
+        
+        $canRevert = $isSuperAdmin 
+            || $user->can(Permissions::COST_REVERT)
+            || ($cost->status === 'pending_management_approval' && $cost->created_by === $user->id)
+            || ($cost->status === 'pending_accountant_approval' && $user->can(Permissions::COST_APPROVE_MANAGEMENT))
+            || ($cost->status === 'approved' && $user->can(Permissions::COST_APPROVE_ACCOUNTANT));
+
+        if (!$canRevert) {
+            return back()->with('error', 'Bạn không có quyền hoàn duyệt phiếu chi ở trạng thái này.');
         }
 
         try {
             $this->financialService->revertCostToDraft($cost, $user);
-            return back()->with('success', 'Đã đưa phiếu chi về trạng thái nháp.');
+            
+            $msg = $cost->status === 'pending_accountant_approval' 
+                ? 'Đã đưa phiếu chi về trạng thái chờ Kế toán xác nhận.' 
+                : 'Đã đưa phiếu chi về trạng thái nháp.';
+                
+            return back()->with('success', $msg);
         } catch (\Exception $e) {
             return back()->with('error', 'Lỗi: ' . $e->getMessage());
         }
@@ -694,9 +705,9 @@ class CrmProjectsController extends Controller
 
         $payment = ProjectPayment::where('project_id', $project->id)->findOrFail($paymentId);
 
-        // Status guard: only edit when draft/pending/overdue (before KH marks as paid)
-        if (!($user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) && !in_array($payment->status, ['draft', 'pending', 'overdue'])) {
-            return back()->with('error', 'Chỉ có thể chỉnh sửa thanh toán ở trạng thái nháp hoặc chờ thanh toán.');
+        // Status guard: only edit when draft
+        if (!($user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) && $payment->status !== 'draft') {
+            return back()->with('error', 'Chỉ có thể chỉnh sửa thanh toán ở trạng thái nháp.');
         }
 
         $validated = $request->validate([
@@ -1046,6 +1057,11 @@ class CrmProjectsController extends Controller
         $user = auth('admin')->user();
 
         $payment = ProjectPayment::where('project_id', $project->id)->findOrFail($paymentId);
+
+        if (!($user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) && $payment->status !== 'draft') {
+            return back()->with('error', 'Chỉ có thể đính kèm chứng từ ở trạng thái nháp.');
+        }
+
         $count = $this->attachFilesToEntity($request, $payment, "payments/{$project->id}/{$paymentId}");
         return back()->with('success', "Đã đính kèm {$count} chứng từ thanh toán.");
     }
@@ -1784,6 +1800,10 @@ class CrmProjectsController extends Controller
         $this->crmRequire($user, Permissions::CONTRACT_UPDATE, $project);
 
         $contract = Contract::where('project_id', $project->id)->firstOrFail();
+
+        if ($contract->status === 'approved' && !($user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin())) {
+            return back()->with('error', 'Hợp đồng đã được duyệt, không thể chỉnh sửa.');
+        }
         $validated = $request->validate([
             'contract_value' => 'sometimes|numeric|min:0',
             'signed_date' => 'nullable|date',
@@ -1866,6 +1886,8 @@ class CrmProjectsController extends Controller
             'progress_start_date' => 'nullable|date',
             'progress_end_date' => 'nullable|date|after_or_equal:progress_start_date',
             'progress_status' => ['nullable', 'in:not_started,in_progress,completed,delayed'],
+            'create_cost' => 'nullable|boolean',
+            'cost_group_id' => 'nullable|exists:cost_groups,id',
         ]);
 
         // Pull from global subcontractor if selected
@@ -1878,11 +1900,26 @@ class CrmProjectsController extends Controller
         }
 
         try {
+            $subData = collect($validated)->except(['create_cost', 'cost_group_id'])->toArray();
             $subcontractor = $this->subcontractorService->upsert(
-                array_merge($validated, ['project_id' => $project->id]),
+                array_merge($subData, ['project_id' => $project->id]),
                 null,
                 $user
             );
+
+            if ($request->input('create_cost') && $request->input('cost_group_id')) {
+                \App\Models\Cost::create([
+                    'project_id' => $project->id,
+                    'subcontractor_id' => $subcontractor->id,
+                    'name' => "Hợp đồng thầu phụ: " . $subcontractor->name,
+                    'amount' => $subcontractor->total_quote,
+                    'cost_date' => $subcontractor->progress_start_date ?: now(),
+                    'cost_group_id' => $request->input('cost_group_id'),
+                    'category' => 'other',
+                    'status' => 'draft',
+                    'created_by' => $user->id,
+                ]);
+            }
 
             // Handle file uploads
             $this->attachFilesToEntity($request, $subcontractor, "subcontractors/{$project->id}/{$subcontractor->id}", false);
@@ -4032,15 +4069,26 @@ class CrmProjectsController extends Controller
 
         $bill = MaterialBill::where('project_id', $project->id)->findOrFail($billId);
 
-        if (!$isSuperAdmin && !$user->can(Permissions::MATERIAL_REVERT)) {
-            return back()->with('error', 'Bạn không có quyền hoàn duyệt phiếu vật tư này.');
+        $canRevert = $isSuperAdmin 
+            || $user->can(Permissions::MATERIAL_REVERT)
+            || ($bill->status === 'pending_management' && $bill->created_by === $user->id)
+            || ($bill->status === 'pending_accountant' && $user->can(Permissions::MATERIAL_APPROVE_MANAGEMENT))
+            || ($bill->status === 'approved' && $user->can(Permissions::MATERIAL_APPROVE_ACCOUNTANT));
+
+        if (!$canRevert) {
+            return back()->with('error', 'Bạn không có quyền hoàn duyệt phiếu vật tư ở trạng thái này.');
         }
 
         try {
             $this->materialBillService->revertToDraft($bill, $user);
-            return back()->with('success', 'Đã hoàn duyệt phiếu vật tư về trạng thái nháp.');
+            
+            $msg = $bill->status === 'pending_accountant' 
+                ? 'Đã đưa phiếu vật tư về trạng thái chờ Kế toán xác nhận.' 
+                : 'Đã đưa phiếu vật tư về trạng thái nháp.';
+                
+            return back()->with('success', $msg);
         } catch (\Exception $e) {
-            return back()->with('error', $e->getMessage());
+            return back()->with('error', 'Lỗi: ' . $e->getMessage());
         }
     }
 

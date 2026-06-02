@@ -468,7 +468,7 @@
               <a-button v-if="!project.contract && can('contract.create')" type="primary" size="small" @click="openContractModal(null)">
                 <template #icon><PlusOutlined /></template>Tạo hợp đồng
               </a-button>
-              <a-button v-if="project.contract && can('contract.update')" size="small" @click="openContractModal(project.contract)">
+              <a-button v-if="project.contract && can('contract.update') && (project.contract.status !== 'approved' || permissions.includes('*'))" size="small" @click="openContractModal(project.contract)">
                 <template #icon><EditOutlined /></template>Sửa
               </a-button>
             </div>
@@ -502,6 +502,52 @@
               <div class="text-xs text-gray-400 flex items-center gap-1">
                 <FileOutlined /> Chưa có tệp đính kèm — bấm "Sửa" để upload file hợp đồng
               </div>
+            </div>
+
+            <!-- Nút hành động phê duyệt hợp đồng trực tiếp trên giao diện -->
+            <div class="flex justify-end gap-2 mt-4 pt-4 border-t border-gray-100">
+              <!-- Nút Gửi duyệt cho tài khoản tạo (draft -> pending_customer_approval) -->
+              <a-button 
+                v-if="project.contract.status === 'draft' && can('contract.update')" 
+                type="primary" 
+                :loading="actionLoading['submit-contract']" 
+                @click="submitContractForApproval(project.contract)"
+              >
+                <template #icon><SendOutlined /></template>
+                Gửi duyệt
+              </a-button>
+
+              <!-- Nút Duyệt / Từ chối cho tài khoản khách hàng (pending_customer_approval) -->
+              <template v-if="project.contract.status === 'pending_customer_approval' && can('contract.approve.level_1')">
+                <a-button 
+                  type="primary" 
+                  class="bg-green-600 border-green-600 text-white hover:bg-green-700 hover:border-green-700" 
+                  :loading="actionLoading['approve-contract']" 
+                  @click="approveContract(project.contract)"
+                >
+                  <template #icon><CheckOutlined /></template>
+                  Phê duyệt
+                </a-button>
+                <a-button 
+                  danger 
+                  ghost 
+                  @click="openRejectContractModal(project.contract)"
+                >
+                  <template #icon><CloseOutlined /></template>
+                  Từ chối
+                </a-button>
+              </template>
+
+              <!-- Nút Hoàn duyệt về nháp -->
+              <a-button 
+                v-if="['pending_customer_approval', 'rejected', 'approved'].includes(project.contract.status) && can('contract.revert')" 
+                danger 
+                ghost 
+                @click="revertContractAction(project.contract)"
+              >
+                <template #icon><ReloadOutlined /></template>
+                Hoàn duyệt
+              </a-button>
             </div>
           </div>
           <a-empty v-else description="Chưa có hợp đồng" />
@@ -3273,7 +3319,12 @@
           </template>
 
           <!-- Hoàn duyệt action -->
-          <a-button v-if="['pending_management_approval', 'pending_accountant_approval', 'rejected'].includes(costDetailRecord.status) && can('cost.revert')"
+          <a-button v-if="
+            (costDetailRecord.status === 'pending_management_approval' && (costDetailRecord.created_by === page.props.auth?.user?.id || can('cost.revert'))) ||
+            (costDetailRecord.status === 'pending_accountant_approval' && (can('cost.approve.management') || can('cost.revert'))) ||
+            (costDetailRecord.status === 'approved' && (can('cost.approve.accountant') || can('cost.revert'))) ||
+            (costDetailRecord.status === 'rejected' && can('cost.revert'))
+          "
                     danger ghost @click="revertCostAction(costDetailRecord)">
             <ReloadOutlined /> Hoàn duyệt
           </a-button>
@@ -3364,7 +3415,7 @@
     <template #footer>
       <div v-if="contractDetailRecord" class="flex justify-between items-center w-full">
         <div class="flex gap-2">
-           <a-button v-if="contractDetailRecord.status === 'draft' && can('contract.update')" @click="openContractModal(contractDetailRecord); showContractDetail = false"><EditOutlined /> Sửa</a-button>
+           <a-button v-if="(contractDetailRecord.status === 'draft' || (contractDetailRecord.status === 'approved' && permissions.includes('*'))) && can('contract.update')" @click="openContractModal(contractDetailRecord); showContractDetail = false"><EditOutlined /> Sửa</a-button>
         </div>
         <div class="flex gap-2">
           <template v-if="contractDetailRecord.status === 'draft' && can('contract.update')">
@@ -3510,7 +3561,12 @@
             <a-button danger ghost @click="openRejectBillModal(materialDetail)">Từ chối</a-button>
           </template>
           <!-- Hoàn duyệt phiếu vật liệu -->
-          <a-button v-if="['pending_management', 'pending_accountant', 'rejected'].includes(materialDetail.status) && can('material.revert')" danger ghost @click="revertMaterialBillAction(materialDetail)">Hoàn duyệt</a-button>
+          <a-button v-if="
+            (materialDetail.status === 'pending_management' && (materialDetail.created_by === page.props.auth?.user?.id || can('material.revert'))) ||
+            (materialDetail.status === 'pending_accountant' && (can('cost.approve.management') || can('material.revert'))) ||
+            (materialDetail.status === 'approved' && (can('cost.approve.accountant') || can('material.revert'))) ||
+            (materialDetail.status === 'rejected' && can('material.revert'))
+          " danger ghost @click="revertMaterialBillAction(materialDetail)">Hoàn duyệt</a-button>
         </div>
       </div>
     </div>
@@ -4768,7 +4824,7 @@
       <!-- Status Header -->
       <div class="bg-gray-50 p-5 rounded-2xl border border-gray-100 flex items-center justify-between">
         <div class="flex items-center gap-4">
-          <div class="w-12 h-12 rounded-xl bg-green-500 flex items-center justify-center text-white shrink-0 shadow-lg shadow-green-100"><DollarOutlined class="text-2xl" /></div>
+            <div class="w-12 h-12 rounded-xl bg-green-500 flex items-center justify-center text-white shrink-0 shadow-lg shadow-green-100"><DollarOutlined class="text-2xl" /></div>
           <div>
              <div class="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-0.5">Đợt số: #{{ paymentDetailRecord.payment_number }}</div>
              <div class="text-lg font-bold text-gray-800">Thanh toán đợt {{ paymentDetailRecord.payment_number }}</div>
@@ -4832,7 +4888,7 @@
       <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
         <div class="flex justify-between items-center mb-4">
            <div class="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2 text-blue-500"><CameraOutlined /> Chứng từ thanh toán ({{ paymentDetailRecord.attachments?.length || 0 }})</div>
-           <a-button v-if="can('payment.update')" type="link" size="small" @click="openAttachModal('payment', paymentDetailRecord)" class="p-0">Thêm tệp</a-button>
+           <a-button v-if="can('payment.update') && paymentDetailRecord.status === 'draft'" type="link" size="small" @click="openAttachModal('payment', paymentDetailRecord)" class="p-0">Thêm tệp</a-button>
         </div>
         <div v-if="paymentDetailRecord.attachments?.length" class="flex flex-wrap gap-2">
            <div v-for="att in paymentDetailRecord.attachments" :key="att.id" 
@@ -4857,7 +4913,7 @@
            <a-popconfirm v-if="can('payment.delete') && !['confirmed','paid'].includes(paymentDetailRecord.status)" title="Xóa đợt thanh toán này?" @confirm="deletePayment(paymentDetailRecord)">
              <a-button danger type="text"><DeleteOutlined /> Xóa đợt</a-button>
            </a-popconfirm>
-           <a-button v-if="can('payment.update') && ['draft','pending','overdue'].includes(paymentDetailRecord.status)" @click="openPaymentModal(paymentDetailRecord)"><EditOutlined /> Sửa</a-button>
+           <a-button v-if="can('payment.update') && paymentDetailRecord.status === 'draft'" @click="openPaymentModal(paymentDetailRecord)"><EditOutlined /> Sửa</a-button>
         </div>
         <div class="flex gap-2">
           <!-- Staff: Submit request to customer -->
@@ -4882,8 +4938,8 @@
              <a-button danger ghost @click="openRejectPaymentModal(paymentDetailRecord)">Từ chối</a-button>
           </template>
 
-          <!-- Hoàn duyệt: Khi đã Duyệt hoặc Bị từ chối -->
-          <template v-if="['pending', 'customer_approved', 'rejected'].includes(paymentDetailRecord.status) && can('payment.revert')">
+          <!-- Hoàn duyệt: Khi đã gửi phiếu xong (không còn ở trạng thái nháp) -->
+          <template v-if="paymentDetailRecord.status !== 'draft' && can('payment.revert')">
              <a-button danger ghost @click="revertPaymentAction(paymentDetailRecord)"><ReloadOutlined /> Hoàn duyệt</a-button>
           </template>
         </div>
@@ -8264,9 +8320,13 @@ const rejectCostReason = ref('')
 const openRejectCostModal = (c) => { rejectingCost.value = c; rejectCostReason.value = ''; showRejectCostModal.value = true }
 const rejectCost = () => { router.post(`/projects/${props.project.id}/costs/${rejectingCost.value.id}/reject`, { rejected_reason: rejectCostReason.value }, savingOptions({ onSuccess: () => showRejectCostModal.value = false })) }
 const revertCostAction = (c) => {
+  let content = 'Dữ liệu này sẽ được đưa về trạng thái Nháp để bạn có thể chỉnh sửa hoặc xóa. Bạn có chắc chắn muốn thực hiện?';
+  if (c.status === 'approved') {
+    content = 'Dữ liệu này sẽ được đưa về trạng thái Chờ kế toán xác nhận. Bạn có chắc chắn muốn thực hiện?';
+  }
   Modal.confirm({
     title: 'Xác nhận hoàn duyệt',
-    content: 'Dữ liệu này sẽ được đưa về trạng thái Nháp để bạn có thể chỉnh sửa hoặc xóa. Bạn có chắc chắn muốn thực hiện?',
+    content: content,
     okText: 'Đồng ý',
     cancelText: 'Hủy',
     onOk: () => router.post(`/projects/${props.project.id}/costs/${c.id}/revert`, {}, loadingOptions(`revert-cost-${c.id}`))
@@ -9270,6 +9330,10 @@ const onBudgetCostGroupChange = (idx, groupId) => {
   if (group) {
     budgetForm.value.items[idx].name = group.name
   }
+}
+
+const addBudgetItem = () => {
+  budgetForm.value.items.push({ cost_group_id: null, name: '', estimated_amount: 0, percentage: 0 })
 }
 
 const openBudgetModal = (budget = null) => {
@@ -10680,9 +10744,13 @@ const revertACAction = (ac) => {
 }
 
 const revertMaterialBillAction = (bill) => {
+  let content = 'Phiếu vật tư sẽ được đưa về trạng thái Nháp để bạn có thể chỉnh sửa hoặc xóa. Bạn có chắc chắn muốn thực hiện?';
+  if (bill.status === 'approved') {
+    content = 'Phiếu vật tư sẽ được đưa về trạng thái Chờ kế toán xác nhận. Bạn có chắc chắn muốn thực hiện?';
+  }
   Modal.confirm({
     title: 'Xác nhận hoàn duyệt',
-    content: 'Phiếu vật tư sẽ được đưa về trạng thái Nháp để bạn có thể chỉnh sửa hoặc xóa. Bạn có chắc chắn muốn thực hiện?',
+    content: content,
     okText: 'Đồng ý',
     cancelText: 'Hủy',
     onOk: () => {
@@ -10829,12 +10897,18 @@ const revertBudgetAction = (budget) => {
 const revertPaymentAction = (payment) => {
   Modal.confirm({
     title: 'Xác nhận hoàn duyệt',
-    content: 'Thanh toán sẽ được đưa về trạng thái Chờ xác nhận. Bạn có chắc chắn muốn thực hiện?',
+    content: 'Thanh toán sẽ được đưa về trạng thái Nháp. Bạn có chắc chắn muốn thực hiện?',
     okText: 'Đồng ý',
     cancelText: 'Hủy',
     onOk: () => {
       router.post(`/projects/${props.project.id}/payments/${payment.id}/revert`, {}, {
         preserveScroll: true,
+        onSuccess: () => {
+          if (showPaymentDetail.value) {
+            const updated = props.project?.payments?.find(x => x.id === payment.id)
+            if (updated) paymentDetailRecord.value = updated
+          }
+        }
       })
     }
   })

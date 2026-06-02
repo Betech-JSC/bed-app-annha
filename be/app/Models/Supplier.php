@@ -85,6 +85,12 @@ class Supplier extends Model
         return $this->save();
     }
 
+    public function reverseDebt(float $amount): bool
+    {
+        $this->total_debt -= $amount;
+        return $this->save();
+    }
+
     // ==================================================================
     // BOOT
     // ==================================================================

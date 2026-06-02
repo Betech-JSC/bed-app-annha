@@ -122,7 +122,7 @@ class EquipmentService
                 'project_id'       => $equipment->project_id,
                 'name'             => "Mua thiết bị: " . $equipment->name,
                 'amount'           => ($equipment->purchase_price ?: 0) * ($equipment->quantity ?: 1),
-                'cost_group_id'    => 3, // Thiết bị máy móc (Hardcoded in original code)
+                'cost_group_id'    => \App\Models\CostGroup::where('code', 'TBMM')->orWhere('name', 'LIKE', '%Thiết bị%')->value('id') ?: \App\Models\CostGroup::first()?->id,
                 'cost_date'        => $equipment->purchase_date ?: now(),
                 'description'      => "Duyệt mua từ Hồ sơ thiết bị " . ($equipment->code ? "#".$equipment->code : "(ID: ".$equipment->id.")"),
                 'quantity'         => $equipment->quantity ?: 1,

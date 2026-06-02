@@ -154,16 +154,57 @@ class MaterialBillService
      */
     public function revertToDraft(MaterialBill $bill, $user): void
     {
+        $status = $bill->status;
         $revertibleStatuses = ['pending_management', 'pending_accountant', 'approved', 'rejected'];
-        if (!in_array($bill->status, $revertibleStatuses)) {
+        if (!in_array($status, $revertibleStatuses)) {
             throw new \Exception('Trạng thái hiện tại không thể hoàn duyệt.');
         }
 
-        DB::transaction(function () use ($bill, $user) {
-            $bill->update([
-                'status' => 'draft',
-                'budget_item_id' => null,
-            ]);
+        $isSuperAdmin = $user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
+
+        DB::transaction(function () use ($bill, $status, $user, $isSuperAdmin) {
+            if ($status === 'pending_management') {
+                if (!$isSuperAdmin && (!$user || $bill->created_by !== $user->id)) {
+                    throw new \Exception('Chỉ người tạo hoặc quản trị viên mới có thể hoàn duyệt phiếu vật tư ở trạng thái này.');
+                }
+                $bill->status = 'draft';
+                $bill->management_approved_by = null;
+                $bill->management_approved_at = null;
+                $bill->accountant_approved_by = null;
+                $bill->accountant_approved_at = null;
+            } elseif ($status === 'pending_accountant') {
+                if (!$isSuperAdmin && (!$user || !$user->can(\App\Constants\Permissions::MATERIAL_APPROVE_MANAGEMENT))) {
+                    throw new \Exception('Chỉ Ban điều hành hoặc quản trị viên mới có thể hoàn duyệt phiếu vật tư ở trạng thái này.');
+                }
+                $bill->status = 'draft';
+                $bill->management_approved_by = null;
+                $bill->management_approved_at = null;
+                $bill->accountant_approved_by = null;
+                $bill->accountant_approved_at = null;
+            } elseif ($status === 'approved') {
+                if (!$isSuperAdmin && (!$user || !$user->can(\App\Constants\Permissions::MATERIAL_APPROVE_ACCOUNTANT))) {
+                    throw new \Exception('Chỉ Kế toán hoặc quản trị viên mới có thể hoàn duyệt phiếu vật tư ở trạng thái này.');
+                }
+                $bill->status = 'pending_accountant';
+                $bill->accountant_approved_by = null;
+                $bill->accountant_approved_at = null;
+
+                // Reverse supplier debt
+                if ($bill->supplier) {
+                    $bill->supplier->reverseDebt($bill->total_amount);
+                }
+            } elseif ($status === 'rejected') {
+                if (!$isSuperAdmin && (!$user || (!$user->can(\App\Constants\Permissions::MATERIAL_REVERT) && $bill->created_by !== $user->id))) {
+                    throw new \Exception('Bạn không có quyền hoàn duyệt phiếu vật tư ở trạng thái này.');
+                }
+                $bill->status = 'draft';
+                $bill->management_approved_by = null;
+                $bill->management_approved_at = null;
+                $bill->accountant_approved_by = null;
+                $bill->accountant_approved_at = null;
+            }
+
+            $bill->save();
 
             // Sync with linked Cost record
             $this->ensureLinkedCost($bill, $user);
@@ -209,16 +250,20 @@ class MaterialBillService
         $costName = "Phiếu vật liệu #" . ($bill->bill_number ?? $bill->id) . ($supplierName ? " - {$supplierName}" : '');
         
         $costData = [
-            'project_id'       => $bill->project_id,
-            'cost_group_id'    => $bill->cost_group_id,
-            'supplier_id'      => $bill->supplier_id,
-            'category'         => 'construction_materials',
-            'material_bill_id' => $bill->id,
-            'name'             => $costName,
-            'amount'           => $bill->total_amount,
-            'description'      => $bill->notes ?? "Từ phiếu vật tư " . ($bill->bill_number ?? $bill->id),
-            'cost_date'        => $bill->bill_date,
-            'status'           => $this->mapStatusToCost($bill->status),
+            'project_id'               => $bill->project_id,
+            'cost_group_id'            => $bill->cost_group_id,
+            'supplier_id'              => $bill->supplier_id,
+            'category'                 => 'construction_materials',
+            'material_bill_id'         => $bill->id,
+            'name'                     => $costName,
+            'amount'                   => $bill->total_amount,
+            'description'              => $bill->notes ?? "Từ phiếu vật tư " . ($bill->bill_number ?? $bill->id),
+            'cost_date'                => $bill->bill_date,
+            'status'                   => $this->mapStatusToCost($bill->status),
+            'management_approved_by'   => $bill->management_approved_by,
+            'management_approved_at'   => $bill->management_approved_at,
+            'accountant_approved_by'   => $bill->accountant_approved_by,
+            'accountant_approved_at'   => $bill->accountant_approved_at,
         ];
 
         if (!$cost) {

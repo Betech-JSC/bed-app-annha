@@ -388,22 +388,37 @@ class CostController extends Controller
         $cost = Cost::where('project_id', $project->id)->findOrFail($id);
         $user = $request->user();
 
-        // Check permission - Requires dedicated revert permission
-        $canRevert = $this->authService->can($user, Permissions::COST_REVERT, $project);
+        $isGlobalAdmin = false;
+        if ($user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) {
+            $isGlobalAdmin = true;
+        } elseif ($user instanceof \App\Models\User) {
+            $isGlobalAdmin = $user->owner;
+        }
+
+        $canRevert = $isGlobalAdmin 
+            || $this->authService->can($user, Permissions::COST_REVERT, $project)
+            || ($cost->status === 'pending_management_approval' && $cost->created_by === $user->id)
+            || ($cost->status === 'pending_accountant_approval' && $this->authService->can($user, Permissions::COST_APPROVE_MANAGEMENT, $project))
+            || ($cost->status === 'approved' && $this->authService->can($user, Permissions::COST_APPROVE_ACCOUNTANT, $project))
+            || ($cost->status === 'rejected' && $cost->created_by === $user->id);
 
         if (!$canRevert) {
             return response()->json([
                 'success' => false,
-                'message' => 'Bạn không có quyền hoàn duyệt chi phí này.'
+                'message' => 'Bạn không có quyền hoàn duyệt chi phí ở trạng thái này.'
             ], 403);
         }
 
         try {
-            $this->financialService->revertCostToDraft($cost);
+            $this->financialService->revertCostToDraft($cost, $user);
+
+            $msg = $cost->status === 'pending_accountant_approval' 
+                ? 'Đã đưa phiếu chi về trạng thái chờ Kế toán xác nhận.' 
+                : 'Đã đưa phiếu chi về trạng thái nháp.';
 
             return response()->json([
                 'success' => true,
-                'message' => 'Chi phí đã được hoàn về trạng thái nháp.',
+                'message' => $msg,
                 'data' => $cost->fresh(),
             ]);
         } catch (\Exception $e) {

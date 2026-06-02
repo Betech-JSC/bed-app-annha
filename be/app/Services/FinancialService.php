@@ -203,17 +203,54 @@ class FinancialService
      */
     public function revertCostToDraft(Cost $cost, $user = null): bool
     {
+        $status = $cost->status;
         $revertibleStatuses = ['pending_management_approval', 'pending_accountant_approval', 'approved', 'rejected'];
-        if (!in_array($cost->status, $revertibleStatuses)) {
+        if (!in_array($status, $revertibleStatuses)) {
             throw new \Exception('Chỉ có thể hoàn duyệt chi phí đang chờ duyệt, đã duyệt hoặc đã bị từ chối.');
         }
 
-        $cost->status = 'draft';
-        $cost->management_approved_by = null;
-        $cost->management_approved_at = null;
-        $cost->accountant_approved_by = null;
-        $cost->accountant_approved_at = null;
-        
+        $isSuperAdmin = $user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
+
+        if ($status === 'pending_management_approval') {
+            // Creator can revert it. Reverts to draft.
+            if (!$isSuperAdmin && (!$user || $cost->created_by !== $user->id)) {
+                throw new \Exception('Chỉ người tạo hoặc quản trị viên mới có thể hoàn duyệt chi phí ở trạng thái này.');
+            }
+            $cost->status = 'draft';
+            $cost->management_approved_by = null;
+            $cost->management_approved_at = null;
+            $cost->accountant_approved_by = null;
+            $cost->accountant_approved_at = null;
+        } elseif ($status === 'pending_accountant_approval') {
+            // Only Management (BĐH) can revert it. Reverts to draft.
+            if (!$isSuperAdmin && (!$user || !$user->can(\App\Constants\Permissions::COST_APPROVE_MANAGEMENT))) {
+                throw new \Exception('Chỉ Ban điều hành hoặc quản trị viên mới có thể hoàn duyệt chi phí ở trạng thái này.');
+            }
+            $cost->status = 'draft';
+            $cost->management_approved_by = null;
+            $cost->management_approved_at = null;
+            $cost->accountant_approved_by = null;
+            $cost->accountant_approved_at = null;
+        } elseif ($status === 'approved') {
+            // Only Accountant (KT) can revert it. Reverts to pending accountant approval.
+            if (!$isSuperAdmin && (!$user || !$user->can(\App\Constants\Permissions::COST_APPROVE_ACCOUNTANT))) {
+                throw new \Exception('Chỉ Kế toán hoặc quản trị viên mới có thể hoàn duyệt chi phí ở trạng thái này.');
+            }
+            $cost->status = 'pending_accountant_approval';
+            $cost->accountant_approved_by = null;
+            $cost->accountant_approved_at = null;
+        } elseif ($status === 'rejected') {
+            // Reverts to draft.
+            if (!$isSuperAdmin && (!$user || (!$user->can(\App\Constants\Permissions::COST_REVERT) && $cost->created_by !== $user->id))) {
+                throw new \Exception('Bạn không có quyền hoàn duyệt chi phí ở trạng thái này.');
+            }
+            $cost->status = 'draft';
+            $cost->management_approved_by = null;
+            $cost->management_approved_at = null;
+            $cost->accountant_approved_by = null;
+            $cost->accountant_approved_at = null;
+        }
+
         $saved = $cost->save();
 
         if ($saved) {
@@ -523,10 +560,13 @@ class FinancialService
      */
     public function revertProjectPaymentToDraft(ProjectPayment $payment, ?User $user = null): bool
     {
-        // Revertible if approved, customer_paid or confirmed
-        $revertibleStatuses = ['customer_approved', 'customer_paid', 'confirmed', 'paid'];
+        // Revertible from any status except draft
+        $revertibleStatuses = ['pending', 'customer_pending_approval', 'customer_approved', 'customer_paid', 'confirmed', 'paid', 'rejected', 'customer_rejected'];
+        if ($payment->status === 'draft') {
+            throw new \Exception('Thanh toán đang ở trạng thái nháp.');
+        }
         if (!in_array($payment->status, $revertibleStatuses)) {
-            throw new \Exception('Chỉ có thể hoàn duyệt thanh toán đã được KH duyệt, đã trả hoặc đã xác nhận.');
+            throw new \Exception('Không thể hoàn duyệt thanh toán ở trạng thái hiện tại.');
         }
 
         $payment->status = 'draft';

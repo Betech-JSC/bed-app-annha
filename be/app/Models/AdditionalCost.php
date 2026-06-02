@@ -231,9 +231,17 @@ class AdditionalCost extends Model
      */
     public function syncToCostTable(): void
     {
-        $costGroupId = \App\Models\CostGroup::where('code', 'additional')
+        $costGroup = \App\Models\CostGroup::where('code', 'additional')
             ->orWhere('name', 'LIKE', '%Phát sinh%')
-            ->value('id') ?: 6;
+            ->first();
+
+        if (!$costGroup) {
+            $costGroup = \App\Models\CostGroup::where('code', 'CPK')
+                ->orWhere('name', 'LIKE', '%Khác%')
+                ->first();
+        }
+
+        $costGroupId = $costGroup?->id ?: \App\Models\CostGroup::first()?->id;
 
         $costStatus = match($this->status) {
             'pending', 'pending_approval' => 'pending_management_approval',
