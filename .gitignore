@@ -1,8 +1,10 @@
-
 graphify-out/
 venv/
 graphify_*.txt
-
 config.bat
 node_modules
 fe/
+
+annha.sql
+be/database/mysql_local/
+huong_dan_test.md

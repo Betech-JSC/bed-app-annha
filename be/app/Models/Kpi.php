@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 class Kpi extends Model
 {
     protected $fillable = [
+        'parent_id',
         'project_id',
         'user_id',
         'title',
@@ -26,6 +27,16 @@ class Kpi extends Model
         'target_value' => 'double',
         'current_value' => 'double',
     ];
+
+    public function parent()
+    {
+        return $this->belongsTo(Kpi::class, 'parent_id');
+    }
+
+    public function children()
+    {
+        return $this->hasMany(Kpi::class, 'parent_id');
+    }
 
     public function project()
     {

@@ -3278,7 +3278,7 @@
       <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
         <div class="flex justify-between items-center mb-4">
            <div class="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2 text-blue-500"><FileProtectOutlined /> Chứng từ đính kèm ({{ costDetailRecord.attachments?.length || 0 }})</div>
-           <a-button v-if="can('cost.update')" type="link" size="small" @click="openAttachModal('cost', costDetailRecord)" class="p-0">Thêm tệp</a-button>
+           <a-button v-if="can('cost.update') || (costDetailRecord.status === 'pending_accountant_approval' && can('cost.approve.accountant'))" type="link" size="small" @click="openAttachModal('cost', costDetailRecord)" class="p-0">Thêm tệp</a-button>
         </div>
         <div v-if="costDetailRecord.attachments?.length" class="flex flex-wrap gap-2">
            <div v-for="att in costDetailRecord.attachments" :key="att.id" 
@@ -3721,7 +3721,7 @@
       </div>
 
       <!-- Action Footer (Sticky) -->
-      <div class="fixed bottom-0 right-0 w-[640px] p-4 bg-white border-t border-gray-100 flex justify-between items-center shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-10">
+      <div class="sticky bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-100 flex justify-between items-center shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-10 -mx-4">
         <div class="flex gap-2">
           <!-- Xóa: Chỉ khi Nháp hoặc Bị từ chối -->
           <a-tooltip v-if="budgetDetail.status === 'draft' && can('budgets.delete')" title="Gỡ bỏ ngân sách này khỏi hệ thống" placement="bottom">
@@ -3732,7 +3732,7 @@
 
           <!-- Sửa: Chỉ khi Nháp hoặc Từ chối -->
           <a-tooltip v-if="budgetDetail.status === 'draft' && can('budgets.update')" title="Thay đổi thông tin phiên bản hoặc hạng mục" placement="bottom">
-            <a-button size="small" @click="openBudgetModal(budgetDetail)"><EditOutlined /> Sửa</a-button>
+            <a-button size="small" @click="() => { showBudgetDetailDrawer = false; $nextTick(() => openBudgetModal(budgetDetail)) }"><EditOutlined /> Sửa</a-button>
           </a-tooltip>
           
           <a-button size="small" type="primary" ghost @click="recalculateBudget(budgetDetail)"><SyncOutlined /> Cập nhật dữ liệu</a-button>
@@ -4358,7 +4358,7 @@
       </div>
 
       <!-- Action Footer -->
-      <div class="fixed bottom-0 right-0 w-[560px] p-4 bg-white border-t border-gray-100 flex justify-between items-center shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-10 transition-all">
+      <div class="sticky bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-100 flex justify-between items-center shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-10 -mx-4">
         <div class="flex gap-2">
            <a-popconfirm v-if="can('defect.delete') && ['open','rejected'].includes(defectDetail.status)" title="Xóa?" @confirm="deleteDefect(defectDetail)">
              <a-button danger type="text"><DeleteOutlined /> Xóa</a-button>
@@ -4370,7 +4370,7 @@
              <a-button type="primary" ghost>🔧 Nhận xử lý</a-button>
            </a-popconfirm>
            <a-button v-if="defectDetail.status === 'in_progress' && can('defect.update')" class="text-green-600 border-green-600 hover:bg-green-50" @click="defectAction(defectDetail, 'mark-fixed')">✅ Báo cáo đã sửa</a-button>
-           <template v-if="defectDetail.status === 'fixed' && can('defect.update')">
+           <template v-if="defectDetail.status === 'fixed' && can('defect.verify')">
              <a-button danger ghost @click="openRejectDefectModal(defectDetail)">✗ Từ chối KQ</a-button>
              <a-popconfirm title="Xác nhận lỗi đã sửa xong?" @confirm="defectAction(defectDetail, 'verify')" ok-text="Xác nhận" cancel-text="Hủy">
                <a-button class="text-cyan-600 border-cyan-600 hover:bg-cyan-50">✔ Nghiệm thu sửa lỗi</a-button>
@@ -5424,7 +5424,7 @@
                 {{ fmt(budgetForm.profit_amount) }}
               </div>
               <div class="text-[9px] font-bold" :class="budgetForm.profit_percentage >= 0 ? 'text-emerald-500' : 'text-red-400'">
-                Biên: {{ budgetForm.profit_percentage?.toFixed(2) }}%
+                Biên: {{ Number(budgetForm.profit_percentage || 0).toFixed(2) }}%
               </div>
            </div>
         </div>
@@ -5451,7 +5451,7 @@
           <div class="p-3 bg-gray-50/50 rounded-xl border border-dashed border-gray-200 flex items-center gap-4">
              <div class="flex-1">
                <div class="text-[10px] font-bold text-gray-400 uppercase mb-1">Căn cứ doanh thu</div>
-               <a-input-number v-model:value="budgetForm.contract_value" :min="0" class="w-full !rounded-xl font-bold" size="large" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" :parser="v => v.replace(/,/g, '')" @change="recalculateProfitByTotal" />
+               <a-input-number v-model:value="budgetForm.contract_value" :min="0" class="w-full !rounded-xl font-bold" size="large" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" :parser="v => v.replace(/,/g, '')" @change="recalculateContractValue" />
              </div>
              <div class="text-center px-4">
                 <div class="text-[10px] font-bold text-gray-400 uppercase mb-1">Mục tiêu lợi nhuận</div>
@@ -6024,7 +6024,7 @@
                   </a-button>
                   
                   <!-- Fixed → Verify / Reject -->
-                  <template v-if="d.status === 'fixed' && can('defect.update')">
+                  <template v-if="d.status === 'fixed' && can('defect.verify')">
                     <a-popconfirm title="Xác nhận lỗi đã sửa xong?" @confirm="defectAction(d, 'verify')" ok-text="Xác nhận" cancel-text="Hủy">
                       <a-button size="small" class="rounded-lg text-[11px] font-bold h-8 px-3 text-cyan-600 border-cyan-300 hover:bg-cyan-50">
                         ✔ Xác nhận đạt
@@ -7013,13 +7013,23 @@ const invoices = computed(() => props.financeData?.invoices || [])
 const budgets = computed(() => props.financeData?.budgets || props.project.budgets || [])
 const allTasks = computed(() => props.scheduleData?.allTasks || [])
 
+// Flatten nested task tree (backend returns children nested)
+const flattenTasks = (tasks) => {
+  const result = []
+  for (const t of tasks) {
+    result.push(t)
+    if (t.children?.length) result.push(...flattenTasks(t.children))
+  }
+  return result
+}
+
 // Sorted tasks for log form: only leaf tasks, by progress ascending, 100% at bottom
 const logTaskOptions = computed(() => {
-  const tasks = allTasks.value;
-  // Find IDs of tasks that have children
-  const parentIds = new Set(tasks.map(t => t.parent_id).filter(id => id !== null));
+  const flat = flattenTasks(allTasks.value)
+  // Leaf = tasks that have no children OR whose id doesn't appear as a parent
+  const parentIds = new Set(flat.map(t => t.parent_id).filter(id => id !== null))
   
-  return tasks
+  return flat
     .filter(t => !parentIds.has(t.id)) // Only leaf tasks
     .sort((a, b) => {
       const pA = Number(a.progress_percentage || 0)
@@ -9297,12 +9307,31 @@ const recalculateProfitByPercent = () => {
   if (budgetForm.value.contract_value) {
     budgetForm.value.profit_amount = Math.round(budgetForm.value.contract_value * (budgetForm.value.profit_percentage / 100))
     budgetForm.value.total_budget = budgetForm.value.contract_value - budgetForm.value.profit_amount
+    // Re-tính lại tất cả items theo total_budget mới
+    budgetForm.value.items.forEach((item, idx) => {
+      if (item.percentage > 0) recalculateItemByPercent(idx)
+    })
   }
 }
 const recalculateProfitByAmount = () => {
   if (budgetForm.value.contract_value) {
     budgetForm.value.profit_percentage = parseFloat(((budgetForm.value.profit_amount / budgetForm.value.contract_value) * 100).toFixed(2))
     budgetForm.value.total_budget = budgetForm.value.contract_value - budgetForm.value.profit_amount
+    // Re-tính lại tất cả items theo total_budget mới
+    budgetForm.value.items.forEach((item, idx) => {
+      if (item.percentage > 0) recalculateItemByPercent(idx)
+    })
+  }
+}
+const recalculateContractValue = () => {
+  // Khi thay đổi doanh thu: giữ profit_percentage, tính lại profit_amount và total_budget
+  if (budgetForm.value.contract_value) {
+    budgetForm.value.profit_amount = Math.round(budgetForm.value.contract_value * (budgetForm.value.profit_percentage / 100))
+    budgetForm.value.total_budget = budgetForm.value.contract_value - budgetForm.value.profit_amount
+    // Re-tính lại tất cả items
+    budgetForm.value.items.forEach((item, idx) => {
+      if (item.percentage > 0) recalculateItemByPercent(idx)
+    })
   }
 }
 const recalculateProfitByTotal = () => {
@@ -9315,6 +9344,7 @@ const recalculateProfitByTotal = () => {
 const recalculateItemByPercent = (idx) => {
   const item = budgetForm.value.items[idx]
   if (budgetForm.value.total_budget) {
+    // Công thức: tỷ lệ% × (doanh thu - lợi nhuận) = tỷ lệ% × total_budget
     item.estimated_amount = Math.round(budgetForm.value.total_budget * (item.percentage / 100))
   }
 }
@@ -9342,27 +9372,27 @@ const openBudgetModal = (budget = null) => {
   if (budget) {
     budgetForm.value = {
       name: budget.name || '',
-      budget_date: budget.budget_date || dayjs().format('YYYY-MM-DD'),
+      budget_date: budget.budget_date ? dayjs(budget.budget_date).format('YYYY-MM-DD') : dayjs().format('YYYY-MM-DD'),
       version: budget.version || '',
       status: budget.status || 'draft',
       notes: budget.notes || '',
-      contract_value: budget.contract_value || 0,
-      profit_percentage: budget.profit_percentage || 0,
-      profit_amount: budget.profit_amount || 0,
-      total_budget: budget.total_budget || 0,
+      contract_value: parseFloat(budget.contract_value) || 0,
+      profit_percentage: parseFloat(budget.profit_percentage) || 0,
+      profit_amount: parseFloat(budget.profit_amount) || 0,
+      total_budget: parseFloat(budget.total_budget) || 0,
       items: budget.items?.length
         ? budget.items.map(i => ({ 
             cost_group_id: i.cost_group_id,
             name: i.name, 
-            percentage: i.percentage || 0,
-            estimated_amount: i.estimated_amount, 
+            percentage: parseFloat(i.percentage) || 0,
+            estimated_amount: parseFloat(i.estimated_amount) || 0, 
             description: i.description || '' 
           }))
         : [{ cost_group_id: null, name: '', estimated_amount: 0, percentage: 0 }],
     }
   } else {
     // Reset ve 0 hoac rong cho ngan sach moi
-    const defaultContractValue = props.contract?.contract_value || 0
+    const defaultContractValue = parseFloat(props.contract?.contract_value) || 0
     budgetForm.value = { 
       name: '', 
       budget_date: dayjs().format('YYYY-MM-DD'), 

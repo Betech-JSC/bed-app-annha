@@ -257,7 +257,9 @@ class CrmHrController extends Controller
     public function salaryConfig($id)
     {
         $admin = Auth::guard('admin')->user();
-        $this->crmRequire($admin, Permissions::PERSONNEL_VIEW);
+        if ($admin->id != $id) {
+            $this->crmRequire($admin, Permissions::PERSONNEL_VIEW);
+        }
         
         $employee = User::findOrFail($id);
         $config = EmployeeSalaryConfig::where('user_id', $id)

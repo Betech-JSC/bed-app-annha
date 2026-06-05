@@ -13,7 +13,7 @@ class DepartmentSeeder extends Seeder
      */
     public function run(): void
     {
-        $users = User::whereIn('role', ['admin', 'manager'])->get();
+        $users = User::where('user_type', 'employee')->get();
 
         if ($users->isEmpty()) {
             $this->command->warn('Chưa có users để gán làm manager. Tạo departments không có manager.');

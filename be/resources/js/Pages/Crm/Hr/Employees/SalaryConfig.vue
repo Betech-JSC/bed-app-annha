@@ -13,7 +13,7 @@
   <div class="crm-content-card p-6">
     <a-row :gutter="24">
       <!-- Cập nhật cấu hình mới -->
-      <a-col :xs="24" :lg="10">
+      <a-col v-if="can('personnel.assign')" :xs="24" :lg="10">
         <a-card title="Thiết lập lương mới" :bordered="false" class="shadow-sm rounded-xl mb-6">
           <a-form layout="vertical">
             <a-form-item label="Hình thức trả lương" required>
@@ -104,7 +104,7 @@
       </a-col>
 
       <!-- Lịch sử thay đổi -->
-      <a-col :xs="24" :lg="14">
+      <a-col :xs="24" :lg="can('personnel.assign') ? 14 : 24">
         <a-card title="Lịch sử điều chỉnh lương" :bordered="false" class="shadow-sm rounded-xl">
           <a-table :dataSource="configs" :columns="columns" :pagination="{ pageSize: 10 }">
              <template #bodyCell="{ column, record }">
@@ -131,13 +131,20 @@
 </template>
 
 <script setup>
-import { Head, useForm } from '@inertiajs/vue3'
+import { Head, useForm, usePage } from '@inertiajs/vue3'
 import { message } from 'ant-design-vue'
 import CrmLayout from '@/Layouts/CrmLayout.vue'
 import PageHeader from '@/Components/Crm/PageHeader.vue'
 import dayjs from 'dayjs'
 
 defineOptions({ layout: CrmLayout })
+
+const can = (perm) => {
+  const user = usePage().props.auth?.user
+  if (user?.super_admin) return true
+  const perms = user?.permissions || []
+  return perms.includes('*') || perms.includes(perm)
+}
 
 const props = defineProps({
   employee: Object,
