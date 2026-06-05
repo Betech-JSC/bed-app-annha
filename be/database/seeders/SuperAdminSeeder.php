@@ -26,7 +26,6 @@ class SuperAdminSeeder extends Seeder
                 'name' => 'Super Admin',
                 'email' => 'superadmin@skysend.com',
                 'password' => Hash::make('superadmin123'),
-                'role' => 'admin', // Role admin để truy cập HR module
                 'phone' => '+84901234567',
                 'owner' => true,
                 'email_verified_at' => now(),
@@ -36,7 +35,6 @@ class SuperAdminSeeder extends Seeder
         // Cập nhật lại nếu đã tồn tại
         if (!$superAdmin->wasRecentlyCreated) {
             $superAdmin->update([
-                'role' => 'admin',
                 'password' => Hash::make('superadmin123'), // Reset password về mặc định
                 'email_verified_at' => now(),
             ]);
@@ -72,7 +70,6 @@ class SuperAdminSeeder extends Seeder
                 'name' => 'HR Admin',
                 'email' => 'hradmin@skysend.com',
                 'password' => Hash::make('hradmin123'),
-                'role' => 'admin', // Role admin để truy cập HR module
                 'phone' => '+84901234568',
                 'owner' => false,
                 'email_verified_at' => now(),
@@ -81,7 +78,6 @@ class SuperAdminSeeder extends Seeder
 
         if (!$hrAdmin->wasRecentlyCreated) {
             $hrAdmin->update([
-                'role' => 'admin',
                 'password' => Hash::make('hradmin123'),
             ]);
         }

@@ -582,6 +582,12 @@ class CrmProjectsController extends Controller
         $this->crmRequire($admin, Permissions::COST_APPROVE_ACCOUNTANT, $project);
 
         $cost = Cost::where('project_id', $project->id)->findOrFail($costId);
+
+        // Financial Gatekeeper: Accountant MUST have attachments (skip labor costs from attendance)
+        if ($cost->category !== 'labor' && !$cost->attendance_id && $cost->attachments()->count() === 0) {
+            return back()->with('error', 'Phiếu chi phí này bắt buộc phải có file chứng từ đính kèm (hóa đơn, phiếu chi, biên lai...) trước khi kế toán xác nhận duyệt.');
+        }
+
         try {
             $this->financialService->approveCostByAccountant($cost, [], $admin);
             return back()->with('success', 'Đã xác nhận phiếu chi (Kế toán).');
@@ -1424,7 +1430,7 @@ class CrmProjectsController extends Controller
     {
         $project = Project::findOrFail($projectId);
         $user = auth('admin')->user();
-        $this->crmRequire($user, Permissions::DEFECT_UPDATE, $project);
+        $this->crmRequire($user, Permissions::DEFECT_VERIFY, $project);
 
         $defect = Defect::where('project_id', $project->id)->findOrFail($defectId);
         $this->defectService->transitionStatus($defect, 'verified', $user);
@@ -1436,7 +1442,7 @@ class CrmProjectsController extends Controller
     {
         $project = Project::findOrFail($projectId);
         $user = auth('admin')->user();
-        $this->crmRequire($user, Permissions::DEFECT_UPDATE, $project);
+        $this->crmRequire($user, Permissions::DEFECT_VERIFY, $project);
 
         $defect = Defect::where('project_id', $project->id)->findOrFail($defectId);
         $this->defectService->transitionStatus($defect, 'in_progress', $user, ['rejection_reason' => $request->input('rejection_reason') ?: $request->input('reason')]);

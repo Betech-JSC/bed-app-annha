@@ -12,7 +12,7 @@ class CostGroupSeeder extends Seeder
      */
     public function run(): void
     {
-        $admin = \App\Models\User::whereIn('role', ['admin', 'owner'])->first();
+        $admin = \App\Models\User::where('owner', true)->first() ?? \App\Models\User::first();
         
         $costGroups = [
             [

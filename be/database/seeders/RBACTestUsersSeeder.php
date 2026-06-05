@@ -220,7 +220,6 @@ class RBACTestUsersSeeder extends Seeder
                 'name' => $userData['name'],
                 'password' => Hash::make($userData['password']),
                 'phone' => $userData['phone'],
-                'role' => 'user', // Default role field
                 'owner' => false,
             ]);
 

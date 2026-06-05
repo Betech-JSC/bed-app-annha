@@ -250,11 +250,12 @@ const selectedKeys = computed(() => {
   if (url.startsWith('/projects')) return ['projects']
   if (url.startsWith('/subcontractors')) return ['subcontractors']
   if (url.startsWith('/suppliers')) return ['suppliers']
-  if (url.startsWith('/hr/kpi')) return ['kpi']
+  if (url.startsWith('/hr/kpi')) return can('kpi.view') ? ['kpi'] : ['kpi-assigned']
   if (url.startsWith('/hr/org-chart')) return ['org-chart']
   if (url.startsWith('/hr/departments')) return ['departments']
   if (url.startsWith('/hr/attendance')) return ['attendance']
   if (url.includes('mode=salary')) return ['payrolls']
+  if (url.includes('/salary')) return ['my-payroll']
   if (url.includes('type=customer')) return ['customers']
   if (url.startsWith('/hr')) return ['employees']
   if (url.startsWith('/finance/company-costs')) return ['company-costs']
@@ -350,9 +351,11 @@ const menuItems = computed(() => {
         { key: 'employees', label: 'Nhân viên', perm: 'personnel.view' },
         { key: 'customers', label: 'Khách hàng', perm: 'personnel.view' },
         { key: 'payrolls', label: 'Cấu hình lương', perm: 'personnel.view' },
+        { key: 'my-payroll', label: 'Phiếu lương của tôi', icon: () => h(FileTextOutlined), show: !can('personnel.view') },
         { key: 'departments', label: 'Phòng ban', perm: 'personnel.view' },
         { key: 'org-chart', label: 'Sơ đồ tổ chức', icon: () => h(ApartmentOutlined), perm: 'personnel.view' },
         { key: 'kpi', label: 'KPI nhân sự', icon: () => h(AimOutlined), perm: 'kpi.view' },
+        { key: 'kpi-assigned', label: 'KPI được giao', icon: () => h(AimOutlined), show: !can('kpi.view') },
         { key: 'attendance', label: 'Chấm công', icon: () => h(FieldTimeOutlined), perm: 'attendance.view' },
       ],
     },
@@ -385,7 +388,7 @@ const menuItems = computed(() => {
 
     // Items with children → filter children
     if (item.children) {
-      const filtered = item.children.filter(child => !child.perm || can(child.perm))
+      const filtered = item.children.filter(child => (child.show === undefined || child.show) && (!child.perm || can(child.perm)))
       if (filtered.length === 0) return null
       return { ...item, children: filtered }
     }
@@ -412,6 +415,8 @@ const handleMenuClick = ({ key }) => {
     payrolls: '/hr/employees?mode=salary',
     departments: '/hr/departments',
     kpi: '/hr/kpi',
+    'kpi-assigned': '/hr/kpi',
+    'my-payroll': `/hr/employees/${props.auth?.user?.id}/salary`,
     'org-chart': '/hr/org-chart',
     'attendance': '/hr/attendance',
     subcontractors: '/subcontractors',

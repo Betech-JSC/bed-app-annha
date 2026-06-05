@@ -19,48 +19,84 @@ class CrmKpiController extends Controller
     public function index(Request $request)
     {
         $user = Auth::guard('admin')->user();
-        $this->crmRequire($user, Permissions::KPI_VIEW);
+        $hasKpiView = $this->crmCan($user, Permissions::KPI_VIEW);
+        
         $query = Kpi::with([
             'user:id,name,email,image',
             'project:id,name,code',
             'creator:id,name',
-        ])->orderByDesc('created_at');
+            'children.user:id,name,email,image',
+            'children.project:id,name,code',
+        ])
+        ->whereNull('parent_id')
+        ->orderByDesc('created_at');
 
-        // Filters
-        if ($userId = $request->get('user_id')) {
-            $query->where('user_id', $userId);
+        // Apply Scope Filters
+        if (!$hasKpiView) {
+            $query->where('user_id', $user->id);
+        } else {
+            if ($userId = $request->get('user_id')) {
+                $query->where('user_id', $userId);
+            }
         }
+
         if ($projectId = $request->get('project_id')) {
             $query->where('project_id', $projectId);
         }
+
         if ($status = $request->get('status')) {
-            $query->where('status', $status);
+            $query->where(function($q) use($status) {
+                $q->where('status', $status)
+                  ->orWhereHas('children', function($cq) use($status) {
+                      $cq->where('status', $status);
+                  });
+            });
         }
+
         if ($search = $request->get('search')) {
             $query->where(function ($q) use ($search) {
                 $q->where('title', 'like', "%{$search}%")
-                  ->orWhere('description', 'like', "%{$search}%");
+                  ->orWhere('description', 'like', "%{$search}%")
+                  ->orWhereHas('children', function($cq) use($search) {
+                      $cq->where('title', 'like', "%{$search}%")
+                        ->orWhere('description', 'like', "%{$search}%");
+                  });
             });
         }
 
         $kpis = $query->paginate(20)->withQueryString();
 
-        // Stats
-        $totalKpi = Kpi::count();
-        $pendingKpi = Kpi::where('status', 'pending')->count();
-        $completedKpi = Kpi::where('status', 'completed')->count();
-        $verifiedSuccess = Kpi::where('status', 'verified_success')->count();
-        $verifiedFail = Kpi::where('status', 'verified_fail')->count();
+        // Stats & Charts Calculations with respect to permissions
+        if (!$hasKpiView) {
+            $totalKpi = Kpi::where('user_id', $user->id)->count();
+            $pendingKpi = Kpi::where('user_id', $user->id)->where('status', 'pending')->count();
+            $completedKpi = Kpi::where('user_id', $user->id)->where('status', 'completed')->count();
+            $verifiedSuccess = Kpi::where('user_id', $user->id)->where('status', 'verified_success')->count();
+            $verifiedFail = Kpi::where('user_id', $user->id)->where('status', 'verified_fail')->count();
 
-        // Average completion rate
-        $avgCompletion = Kpi::where('target_value', '>', 0)
-            ->selectRaw('AVG(LEAST(current_value / target_value * 100, 100)) as avg_pct')
-            ->value('avg_pct') ?? 0;
+            $avgCompletion = Kpi::where('user_id', $user->id)->where('target_value', '>', 0)
+                ->selectRaw('AVG(LEAST(current_value / target_value * 100, 100)) as avg_pct')
+                ->value('avg_pct') ?? 0;
 
-        // Chart: KPIs by Status
-        $byStatus = Kpi::selectRaw('status, COUNT(*) as cnt')
-            ->groupBy('status')
-            ->get();
+            $byStatus = Kpi::where('user_id', $user->id)
+                ->selectRaw('status, COUNT(*) as cnt')
+                ->groupBy('status')
+                ->get();
+        } else {
+            $totalKpi = Kpi::count();
+            $pendingKpi = Kpi::where('status', 'pending')->count();
+            $completedKpi = Kpi::where('status', 'completed')->count();
+            $verifiedSuccess = Kpi::where('status', 'verified_success')->count();
+            $verifiedFail = Kpi::where('status', 'verified_fail')->count();
+
+            $avgCompletion = Kpi::where('target_value', '>', 0)
+                ->selectRaw('AVG(LEAST(current_value / target_value * 100, 100)) as avg_pct')
+                ->value('avg_pct') ?? 0;
+
+            $byStatus = Kpi::selectRaw('status, COUNT(*) as cnt')
+                ->groupBy('status')
+                ->get();
+        }
 
         $statusLabels = [
             'pending' => 'Đang thực hiện',
@@ -76,32 +112,56 @@ class CrmKpiController extends Controller
         ];
 
         // Chart: Top employees by KPI completion
-        $topEmployees = Kpi::where('target_value', '>', 0)
-            ->selectRaw('user_id, AVG(LEAST(current_value / target_value * 100, 100)) as avg_pct, COUNT(*) as kpi_count')
-            ->groupBy('user_id')
-            ->orderByDesc('avg_pct')
-            ->limit(8)
-            ->with('user:id,name')
-            ->get();
+        if (!$hasKpiView) {
+            $topEmployees = Kpi::where('user_id', $user->id)->where('target_value', '>', 0)
+                ->selectRaw('user_id, AVG(LEAST(current_value / target_value * 100, 100)) as avg_pct, COUNT(*) as kpi_count')
+                ->groupBy('user_id')
+                ->with('user:id,name')
+                ->get();
 
-        // Chart: KPI by Project
-        $byProject = Kpi::whereNotNull('project_id')
-            ->selectRaw('project_id, COUNT(*) as cnt, SUM(CASE WHEN status = "verified_success" THEN 1 ELSE 0 END) as success_cnt')
-            ->groupBy('project_id')
-            ->orderByDesc('cnt')
-            ->limit(6)
-            ->with('project:id,name,code')
-            ->get();
+            $byProject = Kpi::where('user_id', $user->id)->whereNotNull('project_id')
+                ->selectRaw('project_id, COUNT(*) as cnt, SUM(CASE WHEN status = "verified_success" THEN 1 ELSE 0 END) as success_cnt')
+                ->groupBy('project_id')
+                ->orderByDesc('cnt')
+                ->with('project:id,name,code')
+                ->get();
 
-        // Dropdown data
-        $users = User::whereNull('deleted_at')
-            ->orderBy('name')
-            ->get(['id', 'name', 'email']);
+            $users = User::where('id', $user->id)->get(['id', 'name', 'email']);
+        } else {
+            $topEmployees = Kpi::where('target_value', '>', 0)
+                ->selectRaw('user_id, AVG(LEAST(current_value / target_value * 100, 100)) as avg_pct, COUNT(*) as kpi_count')
+                ->groupBy('user_id')
+                ->orderByDesc('avg_pct')
+                ->limit(8)
+                ->with('user:id,name')
+                ->get();
+
+            $byProject = Kpi::whereNotNull('project_id')
+                ->selectRaw('project_id, COUNT(*) as cnt, SUM(CASE WHEN status = "verified_success" THEN 1 ELSE 0 END) as success_cnt')
+                ->groupBy('project_id')
+                ->orderByDesc('cnt')
+                ->limit(6)
+                ->with('project:id,name,code')
+                ->get();
+
+            $users = User::whereNull('deleted_at')
+                ->orderBy('name')
+                ->get(['id', 'name', 'email']);
+        }
 
         $projects = Project::orderByDesc('created_at')
             ->get(['id', 'name', 'code']);
 
+        // Parent KPI options
+        $parentKpis = Kpi::whereNull('parent_id')
+            ->when(!$hasKpiView, function($q) use($user) {
+                $q->where('user_id', $user->id);
+            })
+            ->orderByDesc('created_at')
+            ->get(['id', 'title']);
+
         return Inertia::render('Crm/Hr/Kpi/Index', [
+            'parentKpis' => $parentKpis,
             'kpis' => $kpis,
             'stats' => [
                 'totalKpi' => $totalKpi,
@@ -143,23 +203,66 @@ class CrmKpiController extends Controller
     {
         $user = Auth::guard('admin')->user();
         $this->crmRequire($user, Permissions::KPI_CREATE);
+
         $validated = $request->validate([
-            'user_id' => 'required|exists:users,id',
-            'project_id' => 'nullable|exists:projects,id',
-            'title' => 'required|string|max:255',
+            'user_id'     => 'required|exists:users,id',
+            'project_id'  => 'nullable|exists:projects,id',
+            'title'       => 'required|string|max:255',
             'description' => 'nullable|string',
-            'target_value' => 'required|numeric|min:0.01',
-            'unit' => 'required|string|max:50',
-            'start_date' => 'nullable|date',
-            'end_date' => 'nullable|date|after_or_equal:start_date',
+            'month'       => 'nullable|string|max:7', // YYYY-MM
+            'start_date'  => 'nullable|date',
+            'end_date'    => 'nullable|date|after_or_equal:start_date',
+            'items'       => 'nullable|array',
+            'items.*.title'        => 'required_with:items|string|max:255',
+            'items.*.target_value' => 'required_with:items|numeric|min:0.01',
+            'items.*.unit'         => 'required_with:items|string|max:50',
+            'items.*.description'  => 'nullable|string',
         ]);
 
-        Kpi::create([
-            ...$validated,
-            'current_value' => 0,
-            'status' => 'pending',
-            // created_by is nullable — admin IDs can't satisfy FK to users table
-        ]);
+        DB::beginTransaction();
+        try {
+            $hasItems = !empty($validated['items']);
+
+            // Parent KPI — target_value = 100% when has children, otherwise required
+            $parent = Kpi::create([
+                'user_id'       => $validated['user_id'],
+                'project_id'    => $validated['project_id'] ?? null,
+                'title'         => $validated['title'],
+                'description'   => $validated['description'] ?? null,
+                'target_value'  => $hasItems ? 100 : $request->input('target_value', 100),
+                'current_value' => 0,
+                'unit'          => $hasItems ? '%' : $request->input('unit', '%'),
+                'start_date'    => $validated['start_date'] ?? null,
+                'end_date'      => $validated['end_date'] ?? null,
+                'status'        => 'pending',
+                'created_by'    => $user->id,
+            ]);
+
+            // Create children
+            if ($hasItems) {
+                foreach ($validated['items'] as $item) {
+                    Kpi::create([
+                        'parent_id'     => $parent->id,
+                        'user_id'       => $validated['user_id'],
+                        'project_id'    => $validated['project_id'] ?? null,
+                        'title'         => $item['title'],
+                        'description'   => $item['description'] ?? null,
+                        'target_value'  => $item['target_value'],
+                        'current_value' => 0,
+                        'unit'          => $item['unit'],
+                        'start_date'    => $validated['start_date'] ?? null,
+                        'end_date'      => $validated['end_date'] ?? null,
+                        'status'        => 'pending',
+                        'created_by'    => $user->id,
+                    ]);
+                }
+            }
+
+            DB::commit();
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return redirect()->back()->withErrors(['error' => 'Lỗi tạo KPI: ' . $e->getMessage()]);
+        }
 
         return redirect()->back()->with('success', 'Đã tạo KPI thành công.');
     }
@@ -171,22 +274,64 @@ class CrmKpiController extends Controller
         $kpi = Kpi::findOrFail($id);
 
         $validated = $request->validate([
-            'user_id' => 'sometimes|required|exists:users,id',
-            'project_id' => 'nullable|exists:projects,id',
-            'title' => 'sometimes|required|string|max:255',
+            'user_id'     => 'sometimes|required|exists:users,id',
+            'project_id'  => 'nullable|exists:projects,id',
+            'title'       => 'sometimes|required|string|max:255',
             'description' => 'nullable|string',
-            'target_value' => 'sometimes|required|numeric|min:0.01',
-            'current_value' => 'sometimes|required|numeric|min:0',
-            'unit' => 'sometimes|required|string|max:50',
-            'start_date' => 'nullable|date',
-            'end_date' => 'nullable|date|after_or_equal:start_date',
+            'start_date'  => 'nullable|date',
+            'end_date'    => 'nullable|date|after_or_equal:start_date',
+            'items'       => 'nullable|array',
+            'items.*.id'           => 'nullable|integer|exists:kpis,id',
+            'items.*.title'        => 'required_with:items|string|max:255',
+            'items.*.target_value' => 'required_with:items|numeric|min:0.01',
+            'items.*.unit'         => 'required_with:items|string|max:50',
+            'items.*.description'  => 'nullable|string',
         ]);
 
-        $kpi->update($validated);
+        DB::beginTransaction();
+        try {
+            // Update parent (no target_value if has items)
+            $parentData = collect($validated)->except(['items'])->toArray();
+            $kpi->update($parentData);
 
-        // Auto-mark completed if current >= target
-        if ($kpi->current_value >= $kpi->target_value && $kpi->status === 'pending') {
-            $kpi->update(['status' => 'completed']);
+            // Sync children if items provided
+            if (isset($validated['items'])) {
+                $submittedIds = collect($validated['items'])->pluck('id')->filter()->values();
+
+                // Delete children not in submitted list
+                $kpi->children()->whereNotIn('id', $submittedIds)->delete();
+
+                foreach ($validated['items'] as $item) {
+                    $childData = [
+                        'parent_id'    => $kpi->id,
+                        'user_id'      => $kpi->user_id,
+                        'project_id'   => $kpi->project_id,
+                        'title'        => $item['title'],
+                        'description'  => $item['description'] ?? null,
+                        'target_value' => $item['target_value'],
+                        'unit'         => $item['unit'],
+                        'start_date'   => $kpi->start_date,
+                        'end_date'     => $kpi->end_date,
+                        'status'       => 'pending',
+                        'created_by'   => $user->id,
+                    ];
+
+                    if (!empty($item['id'])) {
+                        $child = Kpi::find($item['id']);
+                        if ($child) {
+                            $child->update($childData);
+                            continue;
+                        }
+                    }
+
+                    Kpi::create($childData);
+                }
+            }
+
+            DB::commit();
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return redirect()->back()->withErrors(['error' => 'Lỗi cập nhật KPI: ' . $e->getMessage()]);
         }
 
         return redirect()->back()->with('success', 'Đã cập nhật KPI.');

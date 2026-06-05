@@ -28,9 +28,8 @@ class AssignSuperAdminRoleSeeder extends Seeder
             return;
         }
 
-        // Tìm tất cả users có role='admin' && owner=true
-        $superAdminUsers = User::where('role', 'admin')
-            ->where('owner', true)
+        // Tìm tất cả users có owner=true
+        $superAdminUsers = User::where('owner', true)
             ->get();
 
         if ($superAdminUsers->isEmpty()) {
