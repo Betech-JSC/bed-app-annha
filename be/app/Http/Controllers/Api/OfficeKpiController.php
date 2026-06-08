@@ -150,10 +150,26 @@ class OfficeKpiController extends Controller
                     $kpi->status = 'pending';
                 }
                 $kpi->save();
+
+                // Recalculate parent if this is a child KPI
+                if ($kpi->parent_id) {
+                    $parent = Kpi::find($kpi->parent_id);
+                    if ($parent) {
+                        $this->recalculateParent($parent);
+                    }
+                }
             }
         } else {
             // Manager can update everything
             $kpi->update($validated);
+
+            // Recalculate parent if this is a child KPI
+            if ($kpi->parent_id) {
+                $parent = Kpi::find($kpi->parent_id);
+                if ($parent) {
+                    $this->recalculateParent($parent);
+                }
+            }
         }
 
         return response()->json([
@@ -172,7 +188,17 @@ class OfficeKpiController extends Controller
         }
 
         $kpi = Kpi::whereNull('project_id')->findOrFail($id);
+        $parentId = $kpi->parent_id;
+
         $kpi->delete();
+
+        // Recalculate parent if this was a child
+        if ($parentId) {
+            $parent = Kpi::find($parentId);
+            if ($parent) {
+                $this->recalculateParent($parent);
+            }
+        }
 
         return response()->json([
             'success' => true,
@@ -199,9 +225,54 @@ class OfficeKpiController extends Controller
         $kpi->status = $validated['status'];
         $kpi->save();
 
+        // Auto-cascade: recalculate parent status when child is verified
+        if ($kpi->parent_id) {
+            $parent = Kpi::find($kpi->parent_id);
+            if ($parent) {
+                $this->recalculateParent($parent);
+            }
+        }
+
         return response()->json([
             'success' => true,
             'data' => $kpi
         ]);
+    }
+
+    /**
+     * Recalculate parent KPI from children progress & status.
+     */
+    private function recalculateParent(Kpi $parent): void
+    {
+        $children = $parent->children()->get();
+
+        if ($children->isEmpty()) {
+            return;
+        }
+
+        // Calculate average completion percentage across all children
+        $avgPct = $children->avg(function ($child) {
+            if ($child->target_value <= 0) return 0;
+            return min(($child->current_value / $child->target_value) * 100, 100);
+        });
+
+        $parent->current_value = round($avgPct, 2);
+
+        // Auto-derive parent status from children
+        $statuses = $children->pluck('status')->unique();
+
+        if ($statuses->count() === 1 && $statuses->first() === 'verified_success') {
+            $parent->status = 'verified_success';
+        } elseif ($statuses->contains('verified_fail')) {
+            if ($parent->status === 'pending') {
+                $parent->status = 'completed';
+            }
+        } elseif ($statuses->every(fn($s) => in_array($s, ['completed', 'verified_success', 'verified_fail']))) {
+            $parent->status = 'completed';
+        } elseif ($avgPct >= 100 && $parent->status === 'pending') {
+            $parent->status = 'completed';
+        }
+
+        $parent->save();
     }
 }

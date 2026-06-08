@@ -154,6 +154,40 @@ Route::middleware(['auth:sanctum', 'throttle:60,1'])->group(function () {
         Route::post('/{id}/verify', [OfficeKpiController::class, 'verify']);
     });
 
+    // HR Employee Detail (profile + KPI + salary for mobile app)
+    Route::get('hr/employees/{id}/detail', function ($id) {
+        $user = request()->user();
+        if (!$user->hasPermission(\App\Constants\Permissions::PERSONNEL_VIEW) && $user->id != $id) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $employee = \App\Models\User::with(['roles', 'department'])->findOrFail($id);
+
+        $kpis = \App\Models\Kpi::with(['children'])
+            ->where('user_id', $id)
+            ->whereNull('parent_id')
+            ->whereNull('project_id')
+            ->orderByDesc('created_at')
+            ->limit(10)
+            ->get();
+
+        $salaryConfigs = \App\Models\EmployeeSalaryConfig::where('user_id', $id)
+            ->orderByDesc('effective_from')
+            ->get();
+
+        $currentSalary = \App\Models\EmployeeSalaryConfig::forUser($id)->current()->first();
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'employee' => $employee,
+                'kpis' => $kpis,
+                'salaryConfigs' => $salaryConfigs,
+                'currentSalary' => $currentSalary,
+            ]
+        ]);
+    });
+
     // ===================================================================
     // CHẤM CÔNG & PHÂN CA (Attendance & Shift Management)
     // ===================================================================

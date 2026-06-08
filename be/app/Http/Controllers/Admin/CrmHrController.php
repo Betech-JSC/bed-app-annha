@@ -25,7 +25,7 @@ class CrmHrController extends Controller
     public function employees(Request $request)
     {
         $admin = Auth::guard('admin')->user();
-        $this->crmRequire($admin, Permissions::PERSONNEL_VIEW);
+        $this->crmRequire($admin, Permissions::HR_EMPLOYEE_VIEW);
         
         $type = $request->get('type', 'employee');
         
@@ -77,7 +77,7 @@ class CrmHrController extends Controller
     public function storeEmployee(Request $request)
     {
         $admin = Auth::guard('admin')->user();
-        $this->crmRequire($admin, Permissions::PERSONNEL_ASSIGN);
+        $this->crmRequire($admin, Permissions::HR_EMPLOYEE_CREATE);
         $validated = $request->validate([
             'first_name' => 'required|string|max:255',
             'last_name' => 'nullable|string|max:255',
@@ -110,7 +110,7 @@ class CrmHrController extends Controller
     public function updateEmployee(Request $request, $id)
     {
         $admin = Auth::guard('admin')->user();
-        $this->crmRequire($admin, Permissions::PERSONNEL_ASSIGN);
+        $this->crmRequire($admin, Permissions::HR_EMPLOYEE_UPDATE);
         $user = User::findOrFail($id);
 
         $validated = $request->validate([
@@ -150,7 +150,7 @@ class CrmHrController extends Controller
     public function destroyEmployee($id)
     {
         $admin = Auth::guard('admin')->user();
-        $this->crmRequire($admin, Permissions::PERSONNEL_REMOVE);
+        $this->crmRequire($admin, Permissions::HR_EMPLOYEE_DELETE);
         User::findOrFail($id)->delete();
         return redirect()->route('crm.hr.employees')->with('success', 'Đã xóa nhân viên.');
     }
@@ -161,7 +161,7 @@ class CrmHrController extends Controller
     public function employeeDetail($id)
     {
         $admin = Auth::guard('admin')->user();
-        $this->crmRequire($admin, Permissions::PERSONNEL_VIEW);
+        $this->crmRequire($admin, Permissions::HR_EMPLOYEE_VIEW);
 
         $employee = User::with(['roles', 'department'])->findOrFail($id);
 
@@ -194,7 +194,7 @@ class CrmHrController extends Controller
     public function departments(Request $request)
     {
         $admin = Auth::guard('admin')->user();
-        $this->crmRequire($admin, Permissions::PERSONNEL_VIEW);
+        $this->crmRequire($admin, Permissions::HR_EMPLOYEE_VIEW);
         $departments = Department::with('manager:id,name', 'parent:id,name')
             ->withCount('employees as users_count')
             ->orderBy('name')
@@ -213,7 +213,7 @@ class CrmHrController extends Controller
     public function orgChart()
     {
         $admin = Auth::guard('admin')->user();
-        $this->crmRequire($admin, Permissions::PERSONNEL_VIEW);
+        $this->crmRequire($admin, Permissions::HR_EMPLOYEE_VIEW);
         $departments = Department::with([
             'manager:id,name,email,image',
             'employees:id,name,email,image,department_id',
@@ -248,7 +248,7 @@ class CrmHrController extends Controller
     public function storeDepartment(Request $request)
     {
         $admin = Auth::guard('admin')->user();
-        $this->crmRequire($admin, Permissions::PERSONNEL_ASSIGN);
+        $this->crmRequire($admin, Permissions::HR_EMPLOYEE_CREATE);
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'code' => 'nullable|string|max:50|unique:departments,code',
@@ -263,7 +263,7 @@ class CrmHrController extends Controller
     public function updateDepartment(Request $request, $id)
     {
         $admin = Auth::guard('admin')->user();
-        $this->crmRequire($admin, Permissions::PERSONNEL_ASSIGN);
+        $this->crmRequire($admin, Permissions::HR_EMPLOYEE_UPDATE);
         $dept = Department::findOrFail($id);
         $validated = $request->validate([
             'name' => 'sometimes|string|max:255',
@@ -291,7 +291,7 @@ class CrmHrController extends Controller
     {
         $admin = Auth::guard('admin')->user();
         if ($admin->id != $id) {
-            $this->crmRequire($admin, Permissions::PERSONNEL_VIEW);
+            $this->crmRequire($admin, Permissions::HR_SALARY_VIEW);
         }
         
         $employee = User::findOrFail($id);
@@ -314,7 +314,7 @@ class CrmHrController extends Controller
     public function updateSalaryConfig(Request $request, $id)
     {
         $admin = Auth::guard('admin')->user();
-        $this->crmRequire($admin, Permissions::PERSONNEL_ASSIGN);
+        $this->crmRequire($admin, Permissions::HR_SALARY_MANAGE);
         
         $validated = $request->validate([
             'salary_type' => 'required|in:hourly,daily,monthly',
