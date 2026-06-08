@@ -290,7 +290,7 @@ class CrmKpiController extends Controller
 
         DB::beginTransaction();
         try {
-            // Update parent (no target_value if has items)
+            // Update parent metadata only (preserve target_value/current_value/status)
             $parentData = collect($validated)->except(['items'])->toArray();
             $kpi->update($parentData);
 
@@ -302,30 +302,45 @@ class CrmKpiController extends Controller
                 $kpi->children()->whereNotIn('id', $submittedIds)->delete();
 
                 foreach ($validated['items'] as $item) {
-                    $childData = [
+                    if (!empty($item['id'])) {
+                        // Existing child → update metadata only, PRESERVE status & progress
+                        $child = Kpi::find($item['id']);
+                        if ($child) {
+                            $child->update([
+                                'parent_id'    => $kpi->id,
+                                'user_id'      => $kpi->user_id,
+                                'project_id'   => $kpi->project_id,
+                                'title'        => $item['title'],
+                                'description'  => $item['description'] ?? null,
+                                'target_value' => $item['target_value'],
+                                'unit'         => $item['unit'],
+                                'start_date'   => $kpi->start_date,
+                                'end_date'     => $kpi->end_date,
+                                // status & current_value NOT touched
+                            ]);
+                            continue;
+                        }
+                    }
+
+                    // New child → create with pending status
+                    Kpi::create([
                         'parent_id'    => $kpi->id,
                         'user_id'      => $kpi->user_id,
                         'project_id'   => $kpi->project_id,
                         'title'        => $item['title'],
                         'description'  => $item['description'] ?? null,
                         'target_value' => $item['target_value'],
+                        'current_value' => 0,
                         'unit'         => $item['unit'],
                         'start_date'   => $kpi->start_date,
                         'end_date'     => $kpi->end_date,
                         'status'       => 'pending',
                         'created_by'   => $user->id,
-                    ];
-
-                    if (!empty($item['id'])) {
-                        $child = Kpi::find($item['id']);
-                        if ($child) {
-                            $child->update($childData);
-                            continue;
-                        }
-                    }
-
-                    Kpi::create($childData);
+                    ]);
                 }
+
+                // Recalculate parent from children
+                $this->recalculateParent($kpi);
             }
 
             DB::commit();
@@ -341,7 +356,19 @@ class CrmKpiController extends Controller
     {
         $user = Auth::guard('admin')->user();
         $this->crmRequire($user, Permissions::KPI_DELETE);
-        Kpi::findOrFail($id)->delete();
+        $kpi = Kpi::findOrFail($id);
+        $parentId = $kpi->parent_id;
+
+        $kpi->delete();
+
+        // Recalculate parent if this was a child
+        if ($parentId) {
+            $parent = Kpi::find($parentId);
+            if ($parent) {
+                $this->recalculateParent($parent);
+            }
+        }
+
         return redirect()->back()->with('success', 'Đã xóa KPI.');
     }
 
@@ -359,6 +386,14 @@ class CrmKpiController extends Controller
         ]);
 
         $kpi->update(['status' => $validated['status']]);
+
+        // Auto-cascade: recalculate parent status when child is verified
+        if ($kpi->parent_id) {
+            $parent = Kpi::find($kpi->parent_id);
+            if ($parent) {
+                $this->recalculateParent($parent);
+            }
+        }
 
         return redirect()->back()->with('success', 'Đã cập nhật xác nhận KPI.');
     }
@@ -384,6 +419,57 @@ class CrmKpiController extends Controller
 
         $kpi->save();
 
+        // Recalculate parent if this is a child KPI
+        if ($kpi->parent_id) {
+            $parent = Kpi::find($kpi->parent_id);
+            if ($parent) {
+                $this->recalculateParent($parent);
+            }
+        }
+
         return redirect()->back()->with('success', 'Đã cập nhật tiến độ KPI.');
+    }
+
+    /**
+     * Recalculate parent KPI from children progress & status.
+     * - current_value = AVG(children percentage) mapped to parent target
+     * - status auto-updates: all completed → completed, all verified_success → verified_success
+     */
+    private function recalculateParent(Kpi $parent): void
+    {
+        $children = $parent->children()->get();
+
+        if ($children->isEmpty()) {
+            return;
+        }
+
+        // Calculate average completion percentage across all children
+        $avgPct = $children->avg(function ($child) {
+            if ($child->target_value <= 0) return 0;
+            return min(($child->current_value / $child->target_value) * 100, 100);
+        });
+
+        // Map back to parent's scale (parent target_value is 100 when has children)
+        $parent->current_value = round($avgPct, 2);
+
+        // Auto-derive parent status from children
+        $statuses = $children->pluck('status')->unique();
+
+        if ($statuses->count() === 1 && $statuses->first() === 'verified_success') {
+            // All children verified success → parent auto verified
+            $parent->status = 'verified_success';
+        } elseif ($statuses->contains('verified_fail')) {
+            // Any child failed → keep parent for manual review, mark completed
+            if ($parent->status === 'pending') {
+                $parent->status = 'completed';
+            }
+        } elseif ($statuses->every(fn($s) => in_array($s, ['completed', 'verified_success', 'verified_fail']))) {
+            // All children are done (mix of completed/verified) → parent completed
+            $parent->status = 'completed';
+        } elseif ($avgPct >= 100 && $parent->status === 'pending') {
+            $parent->status = 'completed';
+        }
+
+        $parent->save();
     }
 }
