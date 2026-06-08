@@ -519,6 +519,7 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         Route::post('/employees', [CrmHrController::class, 'storeEmployee'])->name('employees.store');
         Route::put('/employees/{id}', [CrmHrController::class, 'updateEmployee'])->name('employees.update');
         Route::delete('/employees/{id}', [CrmHrController::class, 'destroyEmployee'])->name('employees.destroy');
+        Route::get('/employees/{id}/detail', [CrmHrController::class, 'employeeDetail'])->name('employees.detail');
         
         // Salary Config
         Route::get('/employees/{id}/salary', [CrmHrController::class, 'salaryConfig'])->name('employees.salary');

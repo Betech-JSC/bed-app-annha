@@ -156,6 +156,39 @@ class CrmHrController extends Controller
     }
 
     /**
+     * Employee Detail — JSON data for detail modal (3 tabs: info, KPI, salary)
+     */
+    public function employeeDetail($id)
+    {
+        $admin = Auth::guard('admin')->user();
+        $this->crmRequire($admin, Permissions::PERSONNEL_VIEW);
+
+        $employee = User::with(['roles', 'department'])->findOrFail($id);
+
+        // Recent KPIs (parent only, latest 10)
+        $kpis = \App\Models\Kpi::with(['project:id,name,code', 'children'])
+            ->where('user_id', $id)
+            ->whereNull('parent_id')
+            ->orderByDesc('created_at')
+            ->limit(10)
+            ->get();
+
+        // Salary configs
+        $salaryConfigs = EmployeeSalaryConfig::where('user_id', $id)
+            ->orderByDesc('effective_from')
+            ->get();
+
+        $currentSalary = EmployeeSalaryConfig::forUser($id)->current()->first();
+
+        return response()->json([
+            'employee' => $employee,
+            'kpis' => $kpis,
+            'salaryConfigs' => $salaryConfigs,
+            'currentSalary' => $currentSalary,
+        ]);
+    }
+
+    /**
      * Departments
      */
     public function departments(Request $request)
