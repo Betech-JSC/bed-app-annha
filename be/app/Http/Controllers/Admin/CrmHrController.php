@@ -279,7 +279,7 @@ class CrmHrController extends Controller
     public function destroyDepartment($id)
     {
         $admin = Auth::guard('admin')->user();
-        $this->crmRequire($admin, Permissions::PERSONNEL_REMOVE);
+        $this->crmRequire($admin, Permissions::HR_EMPLOYEE_DELETE);
         Department::findOrFail($id)->delete();
         return back()->with('success', 'Đã xóa phòng ban.');
     }

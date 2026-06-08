@@ -28,49 +28,10 @@ return new class extends Migration
                 DB::table('permissions')->insert($perm);
             }
         }
-
-        // Auto-assign new HR permissions to roles that currently have personnel.view
-        // This ensures admins who had access before still have access after the migration
-        $personnelViewPerm = DB::table('permissions')->where('name', 'personnel.view')->first();
-        if ($personnelViewPerm) {
-            // Find all roles that have personnel.view
-            $roleIds = DB::table('permission_role')
-                ->where('permission_id', $personnelViewPerm->id)
-                ->pluck('role_id')
-                ->toArray();
-
-            if (!empty($roleIds)) {
-                $newPermIds = DB::table('permissions')
-                    ->whereIn('name', [
-                        'hr.employee.view', 'hr.employee.create', 'hr.employee.update', 'hr.employee.delete',
-                        'hr.salary.view', 'hr.salary.manage',
-                    ])
-                    ->pluck('id')
-                    ->toArray();
-
-                $inserts = [];
-                foreach ($roleIds as $roleId) {
-                    foreach ($newPermIds as $permId) {
-                        // Check if already exists
-                        $exists = DB::table('permission_role')
-                            ->where('role_id', $roleId)
-                            ->where('permission_id', $permId)
-                            ->exists();
-
-                        if (!$exists) {
-                            $inserts[] = [
-                                'role_id' => $roleId,
-                                'permission_id' => $permId,
-                            ];
-                        }
-                    }
-                }
-
-                if (!empty($inserts)) {
-                    DB::table('permission_role')->insert($inserts);
-                }
-            }
-        }
+        // NOTE: Admins must manually assign these new HR permissions
+        // to the appropriate roles (e.g. Giám đốc, PM) via the
+        // Phân Quyền Vai Trò page. Do NOT auto-assign to all roles
+        // with personnel.view — that permission is project-level only.
     }
 
     /**

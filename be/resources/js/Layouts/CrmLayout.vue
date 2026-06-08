@@ -308,7 +308,7 @@ const menuItems = computed(() => {
             }, (page.props.pending_approvals_count > 99 ? '99+' : String(page.props.pending_approvals_count)))
           ])
         : 'Trung tâm duyệt',
-      show: canAny('cost.approve.management', 'cost.approve.accountant', 'acceptance.approve.level_1', 'acceptance.approve.level_2', 'acceptance.approve.level_3', 'log.approve', 'material.approve', 'equipment.approve'),
+      show: canAny('cost.approve.management', 'cost.approve.accountant', 'acceptance.approve.level_1', 'acceptance.approve.level_2', 'acceptance.approve.level_3', 'log.approve', 'material.approve', 'equipment.approve', 'attendance.approve'),
     },
     {
       type: 'divider',
