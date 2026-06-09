@@ -19,15 +19,12 @@
   </div>
 
   <!-- ═══ Charts ═══ -->
-  <div class="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-8">
+  <div class="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-8">
     <ChartCard title="KPI theo trạng thái" :subtitle="`${stats.totalKpi} KPI`" :height="260">
       <Doughnut :data="statusChartData" :options="donutOpts" />
     </ChartCard>
     <ChartCard title="Top nhân viên" subtitle="% hoàn thành KPI trung bình" :height="260">
       <Bar :data="topEmployeesData" :options="horizontalBarOpts" />
-    </ChartCard>
-    <ChartCard title="KPI theo dự án" subtitle="Tổng / Đạt" :height="260">
-      <Bar :data="byProjectData" :options="groupedBarOpts" />
     </ChartCard>
   </div>
 
@@ -55,14 +52,7 @@
           <a-select-option value="">Tất cả</a-select-option>
           <a-select-option v-for="u in users" :key="u.id" :value="String(u.id)" :label="u.name">{{ u.name }}</a-select-option>
         </a-select>
-        <a-select
-          v-model:value="localFilters.project_id" style="width: 200px;" size="large"
-          @change="applyFilters" placeholder="Dự án" allow-clear show-search
-          :filter-option="filterOption" option-label-prop="label"
-        >
-          <a-select-option value="">Tất cả</a-select-option>
-          <a-select-option v-for="p in projects" :key="p.id" :value="String(p.id)" :label="`${p.code} - ${p.name}`">{{ p.code }} - {{ p.name }}</a-select-option>
-        </a-select>
+
       </div>
     </div>
   </div>
@@ -71,7 +61,7 @@
   <div class="crm-content-card">
     <a-table
       :columns="columns"
-      :data-source="kpis.data"
+      :data-source="kpiData"
       :pagination="false"
       row-key="id"
       class="crm-table"
@@ -81,7 +71,7 @@
       <!-- Expand icon slot -->
       <template #expandIcon="{ expanded, onExpand, record }">
         <span
-          v-if="record.children?.length"
+          v-if="record.sub_kpis?.length"
           class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-blue-50 border border-blue-200 cursor-pointer transition-all hover:bg-blue-100 mr-2"
           @click.stop="onExpand(record, $event)"
         >
@@ -94,11 +84,11 @@
       <template #expandedRowRender="{ record }">
         <div class="py-3 px-2">
           <div class="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-3 px-1">
-            Các mục KPI — {{ record.children?.length || 0 }} chỉ tiêu
+            Các mục KPI — {{ record.sub_kpis?.length || 0 }} chỉ tiêu
           </div>
           <div class="space-y-2">
             <div
-              v-for="child in (record.children || [])"
+              v-for="child in (record.sub_kpis || [])"
               :key="child.id"
               class="flex items-center gap-4 px-4 py-3 bg-white rounded-xl border border-gray-100 shadow-sm hover:border-blue-200 transition-all group"
             >
@@ -167,8 +157,8 @@
           <div class="flex items-center gap-2">
             <div>
               <div class="font-semibold text-gray-800 text-sm leading-tight">{{ record.title }}</div>
-              <div v-if="record.children?.length" class="text-xs text-blue-500 font-medium mt-0.5">
-                <FolderOutlined class="mr-1" />{{ record.children.length }} mục chỉ tiêu
+              <div v-if="record.sub_kpis?.length" class="text-xs text-blue-500 font-medium mt-0.5">
+                <FolderOutlined class="mr-1" />{{ record.sub_kpis.length }} mục chỉ tiêu
               </div>
               <div v-else-if="record.description" class="text-xs text-gray-400 mt-0.5 truncate" style="max-width:220px;">
                 {{ record.description }}
@@ -187,11 +177,7 @@
           </div>
         </template>
 
-        <!-- Project -->
-        <template v-if="column.dataIndex === 'project'">
-          <a-tag v-if="record.project" color="blue" class="rounded-lg text-xs">{{ record.project.code }}</a-tag>
-          <span v-else class="text-gray-400 text-xs">Công ty</span>
-        </template>
+
 
         <!-- Progress (parent = avg of children) -->
         <template v-if="column.dataIndex === 'progress'">
@@ -203,8 +189,8 @@
             />
             <span class="text-xs font-bold" :style="{ color: progressColor(record) }">{{ progressPct(record) }}%</span>
           </div>
-          <div v-if="record.children?.length" class="text-xs text-blue-400 mt-0.5 font-medium">
-            TB {{ record.children.length }} mục
+          <div v-if="record.sub_kpis?.length" class="text-xs text-blue-400 mt-0.5 font-medium">
+            TB {{ record.sub_kpis.length }} mục
           </div>
           <div v-else class="text-xs text-gray-400 mt-0.5">
             {{ record.current_value }} / {{ record.target_value }} {{ record.unit }}
@@ -232,13 +218,13 @@
           <div class="flex gap-1">
             <!-- Update Progress only for parent with no children -->
             <a-tooltip title="Cập nhật tiến độ">
-              <a-button v-if="record.status === 'pending' && !record.children?.length" type="text" size="small" @click="showProgressModal(record)">
+              <a-button v-if="record.status === 'pending' && !record.sub_kpis?.length" type="text" size="small" @click="showProgressModal(record)">
                 <RiseOutlined style="color: #3B82F6;" />
               </a-button>
             </a-tooltip>
             <!-- Verify only for parent with no children -->
             <a-tooltip title="Xác nhận KPI">
-              <a-button v-if="record.status === 'completed' && !record.children?.length" type="text" size="small" @click="showVerifyModal(record)">
+              <a-button v-if="record.status === 'completed' && !record.sub_kpis?.length" type="text" size="small" @click="showVerifyModal(record)">
                 <SafetyOutlined style="color: #10B981;" />
               </a-button>
             </a-tooltip>
@@ -314,28 +300,15 @@
         <a-input v-model:value="form.title" placeholder="VD: KPI Tháng 06/2026" size="large" />
       </div>
 
-      <!-- Row 2: Dự án + Thời hạn -->
+      <!-- Row 2: Thời hạn -->
       <div class="grid grid-cols-2 gap-4">
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Dự án</label>
-          <a-select
-            v-model:value="form.project_id"
-            style="width: 100%;" size="large"
-            placeholder="Toàn công ty (tùy chọn)"
-            allow-clear show-search :filter-option="filterOption" option-label-prop="label"
-          >
-            <a-select-option v-for="p in projects" :key="p.id" :value="p.id" :label="`${p.code} - ${p.name}`">{{ p.code }} - {{ p.name }}</a-select-option>
-          </a-select>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Từ ngày</label>
+          <a-date-picker v-model:value="formStartDate" style="width: 100%;" size="large" format="DD/MM/YYYY" />
         </div>
-        <div class="grid grid-cols-2 gap-2">
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Từ ngày</label>
-            <a-date-picker v-model:value="formStartDate" style="width: 100%;" size="large" format="DD/MM/YYYY" />
-          </div>
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Đến ngày</label>
-            <a-date-picker v-model:value="formEndDate" style="width: 100%;" size="large" format="DD/MM/YYYY" />
-          </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Đến ngày</label>
+          <a-date-picker v-model:value="formEndDate" style="width: 100%;" size="large" format="DD/MM/YYYY" />
         </div>
       </div>
 
@@ -487,9 +460,19 @@ const props = defineProps({
   stats: Object,
   charts: Object,
   users: Array,
-  projects: Array,
+
   filters: Object,
   parentKpis: Array,
+})
+
+const kpiData = computed(() => {
+  return (props.kpis?.data || []).map(kpi => {
+    const { children, ...rest } = kpi
+    return {
+      ...rest,
+      sub_kpis: children || []
+    }
+  })
 })
 
 const { defaultOptions, doughnutOptions, barOptions } = useChart()
@@ -502,9 +485,10 @@ const formatDate = (d) => d ? dayjs(d).format('DD/MM/YYYY') : '—'
 // PROGRESS HELPERS
 // ============================================================
 const progressPct = (kpi) => {
-  if (kpi?.children?.length) {
-    const totalPct = kpi.children.reduce((sum, child) => sum + progressPct(child), 0)
-    return Math.round(totalPct / kpi.children.length)
+  const children = kpi?.sub_kpis || kpi?.children;
+  if (children?.length) {
+    const totalPct = children.reduce((sum, child) => sum + progressPct(child), 0)
+    return Math.round(totalPct / children.length)
   }
   if (!kpi?.target_value || kpi.target_value <= 0) return 0
   return Math.min(Math.round((kpi.current_value / kpi.target_value) * 100), 100)
@@ -537,7 +521,7 @@ const buildQuery = () => {
   if (localFilters.search) params.set('search', localFilters.search)
   if (localFilters.status) params.set('status', localFilters.status)
   if (localFilters.user_id) params.set('user_id', localFilters.user_id)
-  if (localFilters.project_id) params.set('project_id', localFilters.project_id)
+
   return params.toString()
 }
 
@@ -580,22 +564,7 @@ const topEmployeesData = computed(() => ({
   }]
 }))
 
-const groupedBarOpts = computed(() => ({
-  ...defaultOptions,
-  plugins: { ...defaultOptions.plugins, legend: { display: true, position: 'top', labels: { boxWidth: 12, padding: 10, font: { size: 11 } } } },
-  scales: {
-    ...defaultOptions.scales,
-    y: { ...defaultOptions.scales.y, beginAtZero: true, ticks: { ...defaultOptions.scales.y.ticks, stepSize: 1, callback: (v) => Number.isInteger(v) ? v : '' } }
-  }
-}))
 
-const byProjectData = computed(() => ({
-  labels: props.charts?.byProject?.labels || [],
-  datasets: [
-    { label: 'Tổng KPI', data: props.charts?.byProject?.data || [], backgroundColor: 'rgba(59, 130, 246, 0.6)', borderRadius: 6, barThickness: 16 },
-    { label: 'Đạt', data: props.charts?.byProject?.success || [], backgroundColor: 'rgba(16, 185, 129, 0.6)', borderRadius: 6, barThickness: 16 },
-  ]
-}))
 
 // ============================================================
 // TABLE
@@ -603,7 +572,7 @@ const byProjectData = computed(() => ({
 const columns = [
   { title: 'Tiêu đề KPI', dataIndex: 'title', key: 'title', width: 280 },
   { title: 'Nhân viên', dataIndex: 'user', key: 'user', width: 160 },
-  { title: 'Dự án', dataIndex: 'project', key: 'project', width: 90 },
+
   { title: 'Tiến độ', dataIndex: 'progress', key: 'progress', width: 200 },
   { title: 'Trạng thái', dataIndex: 'status', key: 'status', width: 120 },
   { title: 'Thời hạn', dataIndex: 'period', key: 'period', width: 110 },
@@ -624,7 +593,7 @@ const makeItem = () => ({ _key: ++_itemKey, id: null, title: '', target_value: 1
 
 const form = useForm({
   user_id: null,
-  project_id: null,
+
   title: '',
   description: '',
   start_date: '',
@@ -658,7 +627,7 @@ const showCreateModal = () => {
 const showEditModal = (record) => {
   editingKpi.value = record
   form.user_id = record.user_id
-  form.project_id = record.project_id
+
   form.title = record.title
   form.description = record.description || ''
   formStartDate.value = record.start_date ? dayjs(record.start_date) : null
@@ -666,8 +635,8 @@ const showEditModal = (record) => {
   formMonth.value = record.start_date ? dayjs(record.start_date) : null
 
   // Load children as items
-  if (record.children?.length) {
-    form.items = record.children.map(c => ({
+  if (record.sub_kpis?.length) {
+    form.items = record.sub_kpis.map(c => ({
       _key: ++_itemKey,
       id: c.id,
       title: c.title,

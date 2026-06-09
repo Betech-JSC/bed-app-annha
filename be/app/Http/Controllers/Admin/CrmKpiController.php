@@ -20,13 +20,13 @@ class CrmKpiController extends Controller
     {
         $user = Auth::guard('admin')->user();
         $hasKpiView = $this->crmCan($user, Permissions::KPI_VIEW);
+        $hasKpiCreate = $this->crmCan($user, Permissions::KPI_CREATE);
+        $canManageKpi = $hasKpiView || $hasKpiCreate;
         
         $query = Kpi::with([
             'user:id,name,email,image',
-            'project:id,name,code',
             'creator:id,name',
             'children.user:id,name,email,image',
-            'children.project:id,name,code',
         ])
         ->whereNull('parent_id')
         ->orderByDesc('created_at');
@@ -38,10 +38,6 @@ class CrmKpiController extends Controller
             if ($userId = $request->get('user_id')) {
                 $query->where('user_id', $userId);
             }
-        }
-
-        if ($projectId = $request->get('project_id')) {
-            $query->where('project_id', $projectId);
         }
 
         if ($status = $request->get('status')) {
@@ -118,15 +114,6 @@ class CrmKpiController extends Controller
                 ->groupBy('user_id')
                 ->with('user:id,name')
                 ->get();
-
-            $byProject = Kpi::where('user_id', $user->id)->whereNotNull('project_id')
-                ->selectRaw('project_id, COUNT(*) as cnt, SUM(CASE WHEN status = "verified_success" THEN 1 ELSE 0 END) as success_cnt')
-                ->groupBy('project_id')
-                ->orderByDesc('cnt')
-                ->with('project:id,name,code')
-                ->get();
-
-            $users = User::where('id', $user->id)->get(['id', 'name', 'email']);
         } else {
             $topEmployees = Kpi::where('target_value', '>', 0)
                 ->selectRaw('user_id, AVG(LEAST(current_value / target_value * 100, 100)) as avg_pct, COUNT(*) as kpi_count')
@@ -135,22 +122,15 @@ class CrmKpiController extends Controller
                 ->limit(8)
                 ->with('user:id,name')
                 ->get();
-
-            $byProject = Kpi::whereNotNull('project_id')
-                ->selectRaw('project_id, COUNT(*) as cnt, SUM(CASE WHEN status = "verified_success" THEN 1 ELSE 0 END) as success_cnt')
-                ->groupBy('project_id')
-                ->orderByDesc('cnt')
-                ->limit(6)
-                ->with('project:id,name,code')
-                ->get();
-
-            $users = User::whereNull('deleted_at')
-                ->orderBy('name')
-                ->get(['id', 'name', 'email']);
         }
 
-        $projects = Project::orderByDesc('created_at')
-            ->get(['id', 'name', 'code']);
+        if ($canManageKpi) {
+            $users = User::employees()->whereNull('deleted_at')
+                ->orderBy('name')
+                ->get(['id', 'name', 'email']);
+        } else {
+            $users = User::where('id', $user->id)->get(['id', 'name', 'email']);
+        }
 
         // Parent KPI options
         $parentKpis = Kpi::whereNull('parent_id')
@@ -182,18 +162,11 @@ class CrmKpiController extends Controller
                     'data' => $topEmployees->map(fn($e) => round($e->avg_pct, 1))->toArray(),
                     'counts' => $topEmployees->pluck('kpi_count')->toArray(),
                 ],
-                'byProject' => [
-                    'labels' => $byProject->map(fn($p) => $p->project->code ?? 'N/A')->toArray(),
-                    'data' => $byProject->pluck('cnt')->toArray(),
-                    'success' => $byProject->pluck('success_cnt')->toArray(),
-                ],
             ],
             'users' => $users,
-            'projects' => $projects,
             'filters' => [
                 'search' => $request->get('search', ''),
                 'user_id' => $request->get('user_id', ''),
-                'project_id' => $request->get('project_id', ''),
                 'status' => $request->get('status', ''),
             ],
         ]);
@@ -206,7 +179,6 @@ class CrmKpiController extends Controller
 
         $validated = $request->validate([
             'user_id'     => 'required|exists:users,id',
-            'project_id'  => 'nullable|exists:projects,id',
             'title'       => 'required|string|max:255',
             'description' => 'nullable|string',
             'month'       => 'nullable|string|max:7', // YYYY-MM
@@ -226,7 +198,7 @@ class CrmKpiController extends Controller
             // Parent KPI — target_value = 100% when has children, otherwise required
             $parent = Kpi::create([
                 'user_id'       => $validated['user_id'],
-                'project_id'    => $validated['project_id'] ?? null,
+                'project_id'    => null,
                 'title'         => $validated['title'],
                 'description'   => $validated['description'] ?? null,
                 'target_value'  => $hasItems ? 100 : $request->input('target_value', 100),
@@ -244,7 +216,7 @@ class CrmKpiController extends Controller
                     Kpi::create([
                         'parent_id'     => $parent->id,
                         'user_id'       => $validated['user_id'],
-                        'project_id'    => $validated['project_id'] ?? null,
+                        'project_id'    => null,
                         'title'         => $item['title'],
                         'description'   => $item['description'] ?? null,
                         'target_value'  => $item['target_value'],
@@ -275,7 +247,6 @@ class CrmKpiController extends Controller
 
         $validated = $request->validate([
             'user_id'     => 'sometimes|required|exists:users,id',
-            'project_id'  => 'nullable|exists:projects,id',
             'title'       => 'sometimes|required|string|max:255',
             'description' => 'nullable|string',
             'start_date'  => 'nullable|date',
@@ -309,7 +280,7 @@ class CrmKpiController extends Controller
                             $child->update([
                                 'parent_id'    => $kpi->id,
                                 'user_id'      => $kpi->user_id,
-                                'project_id'   => $kpi->project_id,
+                                'project_id'   => null,
                                 'title'        => $item['title'],
                                 'description'  => $item['description'] ?? null,
                                 'target_value' => $item['target_value'],
@@ -326,7 +297,7 @@ class CrmKpiController extends Controller
                     Kpi::create([
                         'parent_id'    => $kpi->id,
                         'user_id'      => $kpi->user_id,
-                        'project_id'   => $kpi->project_id,
+                        'project_id'   => null,
                         'title'        => $item['title'],
                         'description'  => $item['description'] ?? null,
                         'target_value' => $item['target_value'],
