@@ -166,7 +166,7 @@ class CrmHrController extends Controller
         $employee = User::with(['roles', 'department'])->findOrFail($id);
 
         // Recent KPIs (parent only, latest 10)
-        $kpis = \App\Models\Kpi::with(['project:id,name,code', 'children'])
+        $kpis = \App\Models\Kpi::with(['children'])
             ->where('user_id', $id)
             ->whereNull('parent_id')
             ->orderByDesc('created_at')

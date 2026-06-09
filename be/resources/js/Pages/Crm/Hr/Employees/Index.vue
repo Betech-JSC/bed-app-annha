@@ -261,7 +261,6 @@
                 <div>
                   <div class="font-semibold text-gray-800 text-sm">{{ kpi.title }}</div>
                   <div class="text-xs text-gray-400 mt-0.5">
-                    <span v-if="kpi.project">{{ kpi.project.code }} — </span>
                     <span v-if="kpi.start_date">{{ formatDate(kpi.start_date) }} → {{ formatDate(kpi.end_date) }}</span>
                   </div>
                 </div>
