@@ -35,9 +35,9 @@ class ExpoPushService
                 return null;
             }
 
-            // Skip sending push notification in local environment unless enabled explicitly
-            if (config('app.env') === 'local' && !env('EXPO_PUSH_ENABLE_LOCAL', false)) {
-                Log::info('ExpoPushService: Skipped sending push notification in local environment', [
+            // Skip sending push notification if disabled in .env or in local environment unless enabled explicitly
+            if (env('EXPO_PUSH_DISABLED', false) || (config('app.env') === 'local' && !env('EXPO_PUSH_ENABLE_LOCAL', false))) {
+                Log::info('ExpoPushService: Skipped sending push notification (disabled in env or local)', [
                     'token_count' => count($tokens),
                     'title' => $title,
                 ]);
