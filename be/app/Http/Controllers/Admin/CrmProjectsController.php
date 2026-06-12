@@ -583,12 +583,15 @@ class CrmProjectsController extends Controller
 
         $cost = Cost::where('project_id', $project->id)->findOrFail($costId);
 
-        // Financial Gatekeeper: Accountant MUST have attachments (skip labor costs from attendance)
-        if ($cost->category !== 'labor' && !$cost->attendance_id && $cost->attachments()->count() === 0) {
-            return back()->with('error', 'Phiếu chi phí này bắt buộc phải có file chứng từ đính kèm (hóa đơn, phiếu chi, biên lai...) trước khi kế toán xác nhận duyệt.');
-        }
-
         try {
+            // Mandatorily attach uploaded files to the Cost
+            $this->attachFilesToEntity($request, $cost, "costs/{$project->id}/{$cost->id}", true);
+
+            // Update budget item if provided
+            if ($request->filled('budget_item_id')) {
+                $cost->update(['budget_item_id' => $request->budget_item_id]);
+            }
+
             $this->financialService->approveCostByAccountant($cost, [], $admin);
             return back()->with('success', 'Đã xác nhận phiếu chi (Kế toán).');
         } catch (\Exception $e) {

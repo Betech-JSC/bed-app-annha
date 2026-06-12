@@ -6291,7 +6291,7 @@
   </a-modal>
 
   <!-- ACCOUNTANT CONFIRM PAYMENT MODAL (Unified for Material & Sub) -->
-  <a-modal v-model:open="showConfirmPaymentModal" :title="confirmPaymentType === 'material' ? 'Kế toán xác nhận - Phiếu Vật tư' : 'Kế toán xác nhận - Thanh toán thầu phụ'" @ok="confirmApprovePayment" ok-text="Xác nhận chi" cancel-text="Hủy" centered class="crm-modal" :ok-button-props="{ disabled: !confirmPaymentFiles.length }">
+  <a-modal v-model:open="showConfirmPaymentModal" :title="{ material: 'Kế toán xác nhận - Phiếu Vật tư', cost: 'Kế toán xác nhận - Phiếu chi', sub: 'Kế toán xác nhận - Thanh toán thầu phụ' }[confirmPaymentType]" @ok="confirmApprovePayment" ok-text="Xác nhận chi" cancel-text="Hủy" centered class="crm-modal" :ok-button-props="{ disabled: !confirmPaymentFiles.length }">
     <div class="p-4 space-y-4">
       <div class="bg-blue-50 p-3 rounded-xl border border-blue-100 flex items-center gap-3">
         <div class="w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center shadow-lg"><InfoCircleOutlined /></div>
@@ -8319,7 +8319,11 @@ const approveCostAcct = (c) => {
       content: 'Kế toán chỉ có thể xác nhận khi đã có tệp chứng từ đính kèm để đối chiếu.'
     })
   }
-  router.post(`/projects/${props.project.id}/costs/${c.id}/approve-accountant`, {}, loadingOptions(`approve-cost-acct-${c.id}`))
+  confirmPaymentType.value = 'cost'
+  confirmPaymentTarget.value = c
+  confirmPaymentBudgetItem.value = c.budget_item_id || null
+  confirmPaymentFiles.value = []
+  showConfirmPaymentModal.value = true
 }
 
 // Drawer Openers
@@ -10347,6 +10351,18 @@ const confirmApprovePayment = () => {
         showConfirmPaymentModal.value = false
         confirmPaymentFiles.value = []
         message.success('Đã xác nhận thanh toán thầu phụ')
+      },
+      onError: showValidationErrors
+    })
+  } else if (confirmPaymentType.value === 'cost') {
+    router.post(`/projects/${props.project.id}/costs/${confirmPaymentTarget.value.id}/approve-accountant`, fd, {
+      forceFormData: true,
+      onSuccess: () => {
+        showConfirmPaymentModal.value = false
+        costDetailRecord.value = null
+        showCostDetail.value = false
+        confirmPaymentFiles.value = []
+        message.success('Đã xác nhận phiếu chi và ghi nhận ngân sách')
       },
       onError: showValidationErrors
     })
