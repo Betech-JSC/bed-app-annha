@@ -7016,10 +7016,20 @@ const allTasks = computed(() => props.scheduleData?.allTasks || [])
 // Flatten nested task tree (backend returns children nested)
 const flattenTasks = (tasks) => {
   const result = []
-  for (const t of tasks) {
-    result.push(t)
-    if (t.children?.length) result.push(...flattenTasks(t.children))
+  const seen = new Set()
+  
+  const recurse = (list) => {
+    for (const t of list) {
+      if (!t || seen.has(t.id)) continue
+      seen.add(t.id)
+      result.push(t)
+      if (t.children?.length) {
+        recurse(t.children)
+      }
+    }
   }
+  
+  recurse(tasks)
   return result
 }
 

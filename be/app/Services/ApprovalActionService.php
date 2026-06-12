@@ -725,12 +725,28 @@ class ApprovalActionService
                 ->first();
 
             if ($approval) {
-                // Keep the approval updated if the saved hook didn't catch the exact status
+                // IMPORTANT: Only mark as 'approved' if the model is truly fully approved.
+                // When management approves a cost, the model moves to 'pending_accountant_approval'
+                // (not 'approved'), so the Approvable::saved hook already re-synced the Approval
+                // record to status='pending' for the accountant step.
+                // We must NOT overwrite that 'pending' back to 'approved' here.
+                $model = $approval->approvable;
+                $modelIsTrulyDone = !$model 
+                    || !method_exists($model, 'isPendingApproval')
+                    || !$model->isPendingApproval();
+
                 if ($status === 'rejected' && $approval->status !== 'rejected') {
                     $approval->status = 'rejected';
                     $approval->last_action = 'rejected';
                     $approval->last_actor_id = $user->id;
                     $approval->save();
+                } elseif ($status === 'approved' && !$modelIsTrulyDone) {
+                    // Model still has pending steps (e.g. pending_accountant_approval).
+                    // The Approvable::saved hook has already re-synced the Approval to 'pending'
+                    // for the next approver — do NOT overwrite it back to 'approved'.
+                    Log::info("completeCentralizedApproval: Skipping 'approved' — model still in pending step", [
+                        'type' => $type, 'id' => $id, 'model_status' => $model->status ?? 'unknown',
+                    ]);
                 }
 
                 ApprovalLog::create([
