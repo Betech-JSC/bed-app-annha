@@ -238,11 +238,25 @@ class Permissions
     public const DEFECT_VERIFY = 'defect.verify';
 
     // ===================================================================
-    // PERSONNEL MODULE
+    // PERSONNEL MODULE (Project-level: nhân sự tham gia dự án)
     // ===================================================================
     public const PERSONNEL_VIEW = 'personnel.view';
     public const PERSONNEL_ASSIGN = 'personnel.assign';
     public const PERSONNEL_REMOVE = 'personnel.remove';
+
+    // ===================================================================
+    // HR EMPLOYEE MODULE (Company-level: quản lý nhân sự toàn công ty)
+    // ===================================================================
+    public const HR_EMPLOYEE_VIEW = 'hr.employee.view';
+    public const HR_EMPLOYEE_CREATE = 'hr.employee.create';
+    public const HR_EMPLOYEE_UPDATE = 'hr.employee.update';
+    public const HR_EMPLOYEE_DELETE = 'hr.employee.delete';
+
+    // ===================================================================
+    // HR SALARY MODULE (Quản lý cấu hình lương)
+    // ===================================================================
+    public const HR_SALARY_VIEW = 'hr.salary.view';
+    public const HR_SALARY_MANAGE = 'hr.salary.manage';
 
     // ===================================================================
     // KPI MODULE
@@ -604,10 +618,20 @@ class Permissions
             self::DEFECT_DELETE,
             self::DEFECT_VERIFY,
 
-            // Personnel
+            // Personnel (Project-level)
             self::PERSONNEL_VIEW,
             self::PERSONNEL_ASSIGN,
             self::PERSONNEL_REMOVE,
+
+            // HR Employee (Company-level)
+            self::HR_EMPLOYEE_VIEW,
+            self::HR_EMPLOYEE_CREATE,
+            self::HR_EMPLOYEE_UPDATE,
+            self::HR_EMPLOYEE_DELETE,
+
+            // HR Salary
+            self::HR_SALARY_VIEW,
+            self::HR_SALARY_MANAGE,
 
             // KPI
             self::KPI_VIEW,
@@ -941,6 +965,16 @@ class Permissions
                 self::PERSONNEL_VIEW,
                 self::PERSONNEL_ASSIGN,
                 self::PERSONNEL_REMOVE,
+            ],
+            'hr_employee' => [
+                self::HR_EMPLOYEE_VIEW,
+                self::HR_EMPLOYEE_CREATE,
+                self::HR_EMPLOYEE_UPDATE,
+                self::HR_EMPLOYEE_DELETE,
+            ],
+            'hr_salary' => [
+                self::HR_SALARY_VIEW,
+                self::HR_SALARY_MANAGE,
             ],
             'kpi' => [
                 self::KPI_VIEW,

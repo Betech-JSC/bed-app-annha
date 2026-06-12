@@ -60,12 +60,12 @@
     >
       <template #bodyCell="{ column, record }">
         <template v-if="column.key === 'name'">
-          <div class="flex items-center gap-3">
+          <div class="flex items-center gap-3 cursor-pointer group" @click="openDetailModal(record)">
             <a-avatar :size="36" :class="[filters.type === 'customer' ? 'bg-blue-500' : 'bg-crm-primary', 'text-white font-semibold flex-shrink-0']">
               {{ record.name?.charAt(0)?.toUpperCase() || '?' }}
             </a-avatar>
             <div>
-              <div class="font-semibold">{{ record.name }}</div>
+              <div class="font-semibold group-hover:text-blue-600 transition-colors">{{ record.name }}</div>
               <div class="text-xs text-gray-400">{{ record.email }}</div>
             </div>
           </div>
@@ -108,6 +108,11 @@
 
         <template v-else-if="column.key === 'actions'">
           <div class="flex items-center gap-1">
+            <a-tooltip title="Xem chi tiết">
+              <a-button type="text" size="small" @click="openDetailModal(record)">
+                <template #icon><EyeOutlined /></template>
+              </a-button>
+            </a-tooltip>
             <a-tooltip title="Sửa">
               <a-button type="text" size="small" @click="openEditModal(record)">
                 <template #icon><EditOutlined /></template>
@@ -194,6 +199,185 @@
       </a-form-item>
     </a-form>
   </a-modal>
+
+  <!-- ═══ Employee Detail Modal (3 tabs) ═══ -->
+  <a-modal
+    v-model:open="detailModalVisible"
+    :title="detailEmployee?.name || 'Chi tiết nhân viên'"
+    :width="780"
+    :footer="null"
+    class="crm-modal"
+    centered
+    destroy-on-close
+  >
+    <div v-if="detailLoading" class="flex items-center justify-center py-16">
+      <a-spin size="large" />
+    </div>
+
+    <div v-else-if="detailData" class="mt-2">
+      <a-tabs v-model:activeKey="detailTab" class="detail-tabs">
+        <!-- ─── Tab 1: Thông tin cá nhân ─── -->
+        <a-tab-pane key="info" tab="Thông tin cá nhân">
+          <div class="detail-section">
+            <div class="flex items-center gap-4 mb-6">
+              <a-avatar :size="64" class="bg-crm-primary text-white text-2xl font-bold flex-shrink-0">
+                {{ detailData.employee.name?.charAt(0)?.toUpperCase() || '?' }}
+              </a-avatar>
+              <div>
+                <div class="text-xl font-bold text-gray-900">{{ detailData.employee.name }}</div>
+                <div class="text-sm text-gray-500">{{ detailData.employee.email }}</div>
+                <div class="flex gap-2 mt-1">
+                  <a-tag v-for="role in (detailData.employee.roles || [])" :key="role.id" color="blue" class="rounded-full text-xs">
+                    {{ roleLabels[role.name] || role.name }}
+                  </a-tag>
+                </div>
+              </div>
+            </div>
+
+            <a-descriptions :column="2" bordered size="small" class="detail-descriptions">
+              <a-descriptions-item label="Họ và tên">{{ detailData.employee.name }}</a-descriptions-item>
+              <a-descriptions-item label="Email">{{ detailData.employee.email }}</a-descriptions-item>
+              <a-descriptions-item label="Số điện thoại">{{ detailData.employee.phone || '—' }}</a-descriptions-item>
+              <a-descriptions-item label="Phòng ban">{{ detailData.employee.department?.name || '—' }}</a-descriptions-item>
+              <a-descriptions-item label="Trạng thái">
+                <a-tag :color="detailData.employee.deleted_at ? 'red' : 'green'" class="rounded-full">
+                  {{ detailData.employee.deleted_at ? 'Đã khóa' : 'Hoạt động' }}
+                </a-tag>
+              </a-descriptions-item>
+              <a-descriptions-item label="Ngày tạo">{{ formatDate(detailData.employee.created_at) }}</a-descriptions-item>
+            </a-descriptions>
+          </div>
+        </a-tab-pane>
+
+        <!-- ─── Tab 2: KPI ─── -->
+        <a-tab-pane key="kpi" tab="Kết quả KPI">
+          <div v-if="detailData.kpis?.length" class="space-y-3">
+            <div
+              v-for="kpi in detailData.kpis"
+              :key="kpi.id"
+              class="kpi-card"
+            >
+              <div class="flex items-center justify-between mb-2">
+                <div>
+                  <div class="font-semibold text-gray-800 text-sm">{{ kpi.title }}</div>
+                  <div class="text-xs text-gray-400 mt-0.5">
+                    <span v-if="kpi.start_date">{{ formatDate(kpi.start_date) }} → {{ formatDate(kpi.end_date) }}</span>
+                  </div>
+                </div>
+                <span class="crm-tag text-xs" :class="kpiStatusTag(kpi.status)">
+                  {{ kpiStatusLabel(kpi.status) }}
+                </span>
+              </div>
+
+              <!-- Parent progress -->
+              <div class="flex items-center gap-2 mb-2">
+                <a-progress
+                  :percent="kpiProgressPct(kpi)"
+                  :size="5"
+                  :show-info="false"
+                  :stroke-color="kpiProgressColor(kpi)"
+                  style="flex: 1;"
+                />
+                <span class="text-xs font-bold w-9 text-right" :style="{ color: kpiProgressColor(kpi) }">
+                  {{ kpiProgressPct(kpi) }}%
+                </span>
+              </div>
+
+              <!-- Children list -->
+              <div v-if="kpi.children?.length" class="pl-4 border-l-2 border-blue-100 space-y-1.5 mt-2">
+                <div
+                  v-for="child in kpi.children"
+                  :key="child.id"
+                  class="flex items-center gap-3 text-xs"
+                >
+                  <div class="w-1.5 h-1.5 rounded-full flex-shrink-0" :class="statusDot(child.status)" />
+                  <span class="flex-1 text-gray-700 truncate">{{ child.title }}</span>
+                  <span class="text-gray-400">{{ child.current_value }}/{{ child.target_value }} {{ child.unit }}</span>
+                  <span class="crm-tag text-[10px]" :class="kpiStatusTag(child.status)">
+                    {{ kpiStatusLabel(child.status) }}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div v-else class="text-center py-12">
+            <AimOutlined style="font-size: 40px; color: #D1D5DB;" />
+            <p class="mt-3 text-gray-400 text-sm">Chưa có KPI nào được giao</p>
+          </div>
+        </a-tab-pane>
+
+        <!-- ─── Tab 3: Bảng lương ─── -->
+        <a-tab-pane key="salary" tab="Bảng lương">
+          <!-- Current config -->
+          <div v-if="detailData.currentSalary" class="salary-current-card mb-4">
+            <div class="text-xs text-gray-400 font-semibold uppercase tracking-widest mb-2">Đang áp dụng</div>
+            <div class="flex items-center gap-4">
+              <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center text-white">
+                <DollarOutlined style="font-size: 20px;" />
+              </div>
+              <div>
+                <div class="text-2xl font-bold text-gray-900">{{ formatCurrency(getMainRate(detailData.currentSalary)) }}</div>
+                <div class="text-xs text-gray-500">{{ translateType(detailData.currentSalary.salary_type) }} · Hiệu lực từ {{ formatDate(detailData.currentSalary.effective_from) }}</div>
+              </div>
+            </div>
+            <div v-if="detailData.currentSalary.overtime_rate" class="mt-2 text-xs text-gray-500">
+              Tăng ca: {{ formatCurrency(detailData.currentSalary.overtime_rate) }}/giờ
+            </div>
+          </div>
+
+          <!-- Salary history -->
+          <div v-if="detailData.salaryConfigs?.length" class="salary-history">
+            <div class="text-xs text-gray-400 font-semibold uppercase tracking-widest mb-3">Lịch sử điều chỉnh</div>
+            <a-table
+              :data-source="detailData.salaryConfigs"
+              :columns="salaryColumns"
+              :pagination="{ pageSize: 5 }"
+              size="small"
+              row-key="id"
+            >
+              <template #bodyCell="{ column, record: rec }">
+                <template v-if="column.key === 'type'">
+                  <a-tag color="blue" class="rounded-full">{{ translateType(rec.salary_type) }}</a-tag>
+                </template>
+                <template v-if="column.key === 'rate'">
+                  <span class="font-semibold">{{ formatCurrency(getMainRate(rec)) }}</span>
+                </template>
+                <template v-if="column.key === 'date'">
+                  {{ formatDate(rec.effective_from) }}
+                </template>
+                <template v-if="column.key === 'status'">
+                  <a-tag v-if="detailData.currentSalary?.id === rec.id" color="green" class="rounded-full">Đang dùng</a-tag>
+                  <a-tag v-else color="default" class="rounded-full">Hết hạn</a-tag>
+                </template>
+              </template>
+            </a-table>
+          </div>
+
+          <div v-if="!detailData.currentSalary && !detailData.salaryConfigs?.length" class="text-center py-12">
+            <DollarOutlined style="font-size: 40px; color: #D1D5DB;" />
+            <p class="mt-3 text-gray-400 text-sm">Chưa cấu hình lương</p>
+            <a-button type="primary" class="mt-3 rounded-xl" @click="goToSalaryConfig">Cấu hình ngay</a-button>
+          </div>
+        </a-tab-pane>
+      </a-tabs>
+
+      <!-- Footer Actions -->
+      <div class="flex items-center gap-2 mt-4 pt-4 border-t border-gray-100">
+        <a-button @click="openEditFromDetail" type="primary" ghost>
+          <template #icon><EditOutlined /></template>
+          Sửa thông tin
+        </a-button>
+        <a-button v-if="filters.type === 'employee'" @click="goToSalaryConfig">
+          <template #icon><DollarOutlined /></template>
+          Cấu hình lương
+        </a-button>
+        <a-button v-if="filters.type === 'employee'" @click="goToKpi">
+          <template #icon><AimOutlined /></template>
+          Giao KPI
+        </a-button>
+      </div>
+    </div>
+  </a-modal>
 </template>
 
 <script setup>
@@ -202,7 +386,12 @@ import { Head, useForm, router } from '@inertiajs/vue3'
 import CrmLayout from '@/Layouts/CrmLayout.vue'
 import PageHeader from '@/Components/Crm/PageHeader.vue'
 import StatCard from '@/Components/Crm/StatCard.vue'
-import { PlusOutlined, EditOutlined, DeleteOutlined, DollarOutlined, TeamOutlined, UserOutlined } from '@ant-design/icons-vue'
+import { useStatusFormat } from '@/Composables/useStatusFormat'
+import dayjs from 'dayjs'
+import {
+  PlusOutlined, EditOutlined, DeleteOutlined, DollarOutlined,
+  TeamOutlined, UserOutlined, EyeOutlined, AimOutlined,
+} from '@ant-design/icons-vue'
 
 defineOptions({ layout: CrmLayout })
 
@@ -213,6 +402,8 @@ const props = defineProps({
   roles: Array,
   filters: Object,
 })
+
+const { kpiStatusLabel, kpiStatusTag } = useStatusFormat()
 
 const loading = ref(false)
 const showModal = ref(false)
@@ -257,7 +448,7 @@ const dynamicColumns = computed(() => {
   }
   
   base.push({ title: 'Trạng thái', key: 'status', width: 120, align: 'center' })
-  base.push({ title: '', key: 'actions', width: 100, align: 'center', fixed: 'right' })
+  base.push({ title: '', key: 'actions', width: 140, align: 'center', fixed: 'right' })
   
   return base
 })
@@ -375,6 +566,96 @@ const getMainRate = (record) => {
   if (record.salary_type === 'monthly') return record.monthly_salary
   return 0
 }
+
+const formatDate = (d) => d ? dayjs(d).format('DD/MM/YYYY') : '—'
+
+// ============================================================
+// DETAIL MODAL
+// ============================================================
+const detailModalVisible = ref(false)
+const detailLoading = ref(false)
+const detailData = ref(null)
+const detailEmployee = ref(null)
+const detailTab = ref('info')
+
+const openDetailModal = async (emp) => {
+  detailEmployee.value = emp
+  detailTab.value = 'info'
+  detailLoading.value = true
+  detailModalVisible.value = true
+  detailData.value = null
+
+  try {
+    const response = await fetch(`/hr/employees/${emp.id}/detail`, {
+      headers: {
+        'Accept': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest',
+      },
+    })
+    if (response.ok) {
+      detailData.value = await response.json()
+    }
+  } catch (e) {
+    console.error('Failed to load employee detail', e)
+  } finally {
+    detailLoading.value = false
+  }
+}
+
+const openEditFromDetail = () => {
+  detailModalVisible.value = false
+  if (detailData.value?.employee) {
+    openEditModal(detailData.value.employee)
+  }
+}
+
+const goToSalaryConfig = () => {
+  detailModalVisible.value = false
+  router.visit(`/hr/employees/${detailEmployee.value?.id}/salary`)
+}
+
+const goToKpi = () => {
+  detailModalVisible.value = false
+  router.visit('/hr/kpi')
+}
+
+// KPI helpers for detail modal
+const kpiProgressPct = (kpi) => {
+  if (kpi?.children?.length) {
+    const totalPct = kpi.children.reduce((sum, child) => {
+      if (!child.target_value || child.target_value <= 0) return sum
+      return sum + Math.min((child.current_value / child.target_value) * 100, 100)
+    }, 0)
+    return Math.round(totalPct / kpi.children.length)
+  }
+  if (!kpi?.target_value || kpi.target_value <= 0) return 0
+  return Math.min(Math.round((kpi.current_value / kpi.target_value) * 100), 100)
+}
+
+const kpiProgressColor = (kpi) => {
+  const pct = kpiProgressPct(kpi)
+  if (kpi?.status === 'verified_success') return '#10B981'
+  if (kpi?.status === 'verified_fail') return '#EF4444'
+  if (pct >= 100) return '#10B981'
+  if (pct >= 70) return '#3B82F6'
+  if (pct >= 40) return '#F59E0B'
+  return '#EF4444'
+}
+
+const statusDot = (status) => ({
+  'bg-blue-500': status === 'pending',
+  'bg-amber-500': status === 'completed',
+  'bg-emerald-500': status === 'verified_success',
+  'bg-red-500': status === 'verified_fail',
+})
+
+// Salary columns for detail modal
+const salaryColumns = [
+  { title: 'Ngày hiệu lực', key: 'date', width: 120 },
+  { title: 'Hình thức', key: 'type', width: 120 },
+  { title: 'Đơn giá', key: 'rate' },
+  { title: 'Trạng thái', key: 'status', width: 100 },
+]
 </script>
 
 <style scoped>
@@ -390,13 +671,6 @@ const getMainRate = (record) => {
   border: 1px solid #E8ECF1;
   overflow: hidden;
 }
-.crm-tabs :deep(.ant-tabs-nav) {
-  margin-bottom: 0;
-}
-.crm-tabs :deep(.ant-tabs-tab) {
-  padding: 16px 8px;
-  font-weight: 500;
-}
 .crm-table :deep(.ant-table-thead > tr > th) {
   background: #FAFBFC;
   font-weight: 600;
@@ -411,5 +685,48 @@ const getMainRate = (record) => {
 }
 @media (max-width: 768px) {
   .crm-stats-grid { grid-template-columns: 1fr; }
+}
+
+/* Detail Modal */
+.detail-tabs :deep(.ant-tabs-nav) {
+  margin-bottom: 16px;
+}
+.detail-tabs :deep(.ant-tabs-tab) {
+  font-weight: 500;
+  padding: 10px 4px;
+}
+.detail-descriptions :deep(.ant-descriptions-item-label) {
+  font-weight: 600;
+  color: #5D6B82;
+  background: #FAFBFC;
+}
+
+/* KPI cards in detail */
+.kpi-card {
+  padding: 16px;
+  background: #FAFBFC;
+  border: 1px solid #E8ECF1;
+  border-radius: 12px;
+  transition: all 0.2s ease;
+}
+.kpi-card:hover {
+  border-color: #AED6F1;
+  box-shadow: 0 2px 8px rgba(27, 79, 114, 0.06);
+}
+
+/* Salary current card */
+.salary-current-card {
+  padding: 20px;
+  background: linear-gradient(135deg, #f0fdf4, #ecfdf5);
+  border: 1px solid #bbf7d0;
+  border-radius: 16px;
+}
+
+/* Salary history table */
+.salary-history :deep(.ant-table-thead > tr > th) {
+  background: #FAFBFC;
+  font-weight: 600;
+  font-size: 12px;
+  color: #5D6B82;
 }
 </style>
