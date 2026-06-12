@@ -2177,6 +2177,9 @@ class CrmProjectsController extends Controller
         $payment = SubcontractorPayment::where('project_id', $project->id)->findOrFail($paymentId);
 
         try {
+            // Mandatorily attach uploaded files to the payment
+            $this->attachFilesToEntity($request, $payment, "sub-payments/{$project->id}/{$payment->id}", true);
+
             $this->financialService->processSubPayment($payment, $request->all(), $admin);
             return back()->with('success', 'Đã xác nhận thanh toán thầu phụ.');
         } catch (\Exception $e) {
@@ -4060,6 +4063,9 @@ class CrmProjectsController extends Controller
         $bill = MaterialBill::where('project_id', $project->id)->findOrFail($billId);
 
         try {
+            // Mandatorily attach uploaded files to the material bill
+            $this->attachFilesToEntity($request, $bill, "material-bills/{$project->id}/{$bill->id}", true);
+
             $this->materialBillService->approve($bill, $user, $request->only('budget_item_id'));
             return back()->with('success', 'Đã xác nhận phiếu vật tư. Dữ liệu đã đẩy qua Chi phí dự án.');
         } catch (\Exception $e) {

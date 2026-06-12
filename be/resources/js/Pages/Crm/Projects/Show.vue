@@ -6291,7 +6291,7 @@
   </a-modal>
 
   <!-- ACCOUNTANT CONFIRM PAYMENT MODAL (Unified for Material & Sub) -->
-  <a-modal v-model:open="showConfirmPaymentModal" :title="confirmPaymentType === 'material' ? 'Kế toán xác nhận - Phiếu Vật tư' : 'Kế toán xác nhận - Thanh toán thầu phụ'" @ok="confirmApprovePayment" ok-text="Xác nhận chi" cancel-text="Hủy" centered class="crm-modal">
+  <a-modal v-model:open="showConfirmPaymentModal" :title="confirmPaymentType === 'material' ? 'Kế toán xác nhận - Phiếu Vật tư' : 'Kế toán xác nhận - Thanh toán thầu phụ'" @ok="confirmApprovePayment" ok-text="Xác nhận chi" cancel-text="Hủy" centered class="crm-modal" :ok-button-props="{ disabled: !confirmPaymentFiles.length }">
     <div class="p-4 space-y-4">
       <div class="bg-blue-50 p-3 rounded-xl border border-blue-100 flex items-center gap-3">
         <div class="w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center shadow-lg"><InfoCircleOutlined /></div>
@@ -6315,6 +6315,25 @@
          </div>
       </div>
 
+      <!-- Existing attachments uploaded by creator -->
+      <div v-if="confirmPaymentTarget?.attachments?.length" class="border border-dashed border-gray-200 rounded-xl p-3 bg-gray-50/50">
+        <div class="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1">
+          <PaperClipOutlined class="text-gray-400" /> Tệp chứng từ của phiếu ({{ confirmPaymentTarget.attachments.length }})
+        </div>
+        <div class="space-y-1.5 max-h-[120px] overflow-y-auto">
+          <div v-for="att in confirmPaymentTarget.attachments" :key="att.id" 
+               class="flex items-center justify-between p-2 rounded-lg border border-gray-100 bg-white hover:border-blue-300 transition-all cursor-pointer shadow-sm group"
+               @click="openFilePreview(att)">
+            <div class="flex items-center gap-2 min-w-0">
+              <FileOutlined class="text-gray-400 text-xs" />
+              <span class="text-[10px] text-gray-700 font-medium truncate max-w-[280px] hover:text-blue-600">{{ att.original_name || att.file_name }}</span>
+              <span class="text-[9px] text-gray-400">({{ formatFileSize(att.file_size) }})</span>
+            </div>
+            <EyeOutlined class="text-[10px] text-gray-300 group-hover:text-blue-500" />
+          </div>
+        </div>
+      </div>
+
       <div>
         <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Chọn hạng mục Ngân sách</div>
         <a-select v-model:value="confirmPaymentBudgetItem" class="w-full" placeholder="Chọn hạng mục dự toán..." show-search :filter-option="(input, option) => (option.label || '').toLowerCase().indexOf(input.toLowerCase()) >= 0">
@@ -6336,6 +6355,49 @@
           </a-select-opt-group>
         </a-select>
         <div v-if="!confirmPaymentBudgetItem" class="mt-1 text-[10px] text-amber-500 italic">* Khuyên dùng: Hãy chọn hạng mục để theo dõi thực chi chính xác.</div>
+      </div>
+
+      <!-- Accountant payment proof upload (Mandatory) -->
+      <div class="border-t border-dashed pt-4">
+        <div class="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1">
+          <UploadOutlined class="text-blue-500" /> Chứng từ thanh toán / Ủy nhiệm chi * <span class="text-red-500">(Bắt buộc)</span>
+        </div>
+        
+        <div class="flex flex-col gap-2">
+          <!-- Selection Button -->
+          <div class="relative group">
+            <input 
+              type="file" 
+              multiple 
+              @change="e => confirmPaymentFiles = [...(e.target.files || [])]" 
+              class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" 
+            />
+            <div class="flex items-center justify-center gap-2 py-3 px-4 border-2 border-dashed border-blue-100 rounded-xl group-hover:border-blue-400 group-hover:bg-blue-50 transition-all">
+              <UploadOutlined class="text-blue-400 group-hover:text-blue-600" />
+              <span class="text-xs font-semibold text-blue-500 group-hover:text-blue-700">
+                {{ confirmPaymentFiles.length ? 'Thay đổi tệp đã chọn' : 'Chọn tệp chứng từ thanh toán' }}
+              </span>
+            </div>
+          </div>
+
+          <!-- File List -->
+          <div v-if="confirmPaymentFiles.length" class="space-y-1.5 mt-1">
+            <div v-for="(file, idx) in confirmPaymentFiles" :key="idx" class="flex items-center justify-between p-2 bg-blue-50/50 rounded-lg border border-blue-100/50">
+              <div class="flex items-center gap-2 min-w-0">
+                <PaperClipOutlined class="text-blue-400 text-xs" />
+                <span class="text-[10px] font-medium text-blue-700 truncate max-w-[280px]">{{ file.name }}</span>
+                <span class="text-[9px] text-gray-400">({{ formatFileSize(file.size) }})</span>
+              </div>
+              <a-button type="text" size="small" @click="confirmPaymentFiles.splice(idx, 1)" class="h-5 w-5 p-0 flex items-center justify-center">
+                <CloseOutlined class="text-[10px] text-gray-400 hover:text-red-500" />
+              </a-button>
+            </div>
+          </div>
+          <div v-else class="text-[10px] text-red-500 pl-1 mt-1 font-medium flex items-center gap-1">
+            <span class="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span>
+            * Vui lòng đính kèm chứng từ chuyển khoản để hoàn tất xác nhận.
+          </div>
+        </div>
       </div>
     </div>
   </a-modal>
@@ -7016,20 +7078,10 @@ const allTasks = computed(() => props.scheduleData?.allTasks || [])
 // Flatten nested task tree (backend returns children nested)
 const flattenTasks = (tasks) => {
   const result = []
-  const seen = new Set()
-  
-  const recurse = (list) => {
-    for (const t of list) {
-      if (!t || seen.has(t.id)) continue
-      seen.add(t.id)
-      result.push(t)
-      if (t.children?.length) {
-        recurse(t.children)
-      }
-    }
+  for (const t of tasks) {
+    result.push(t)
+    if (t.children?.length) result.push(...flattenTasks(t.children))
   }
-  
-  recurse(tasks)
   return result
 }
 
@@ -10233,6 +10285,7 @@ const confirmPaymentType = ref('') // 'material' or 'sub'
 const confirmPaymentTarget = ref(null)
 const confirmPaymentSub = ref(null) // Only for sub
 const confirmPaymentBudgetItem = ref(null)
+const confirmPaymentFiles = ref([])
 
 const approveBillAccountant = (bill) => {
   if (!bill.attachments?.length && !(bill.attachments_count > 0)) {
@@ -10244,6 +10297,7 @@ const approveBillAccountant = (bill) => {
   confirmPaymentType.value = 'material'
   confirmPaymentTarget.value = bill
   confirmPaymentBudgetItem.value = bill.budget_item_id || null
+  confirmPaymentFiles.value = []
   showConfirmPaymentModal.value = true
 }
 
@@ -10258,29 +10312,43 @@ const confirmSubPayment = (sub, p) => {
   confirmPaymentTarget.value = p
   confirmPaymentSub.value = sub
   confirmPaymentBudgetItem.value = p.budget_item_id || null
+  confirmPaymentFiles.value = []
   showConfirmPaymentModal.value = true
 }
 
 const confirmApprovePayment = () => {
+  if (!confirmPaymentFiles.value.length) {
+    message.warning('Vui lòng chọn ít nhất một chứng từ chuyển khoản.')
+    return
+  }
+
+  const fd = new FormData()
+  if (confirmPaymentBudgetItem.value) {
+    fd.append('budget_item_id', confirmPaymentBudgetItem.value)
+  }
+  confirmPaymentFiles.value.forEach(f => fd.append('files[]', f))
+
   if (confirmPaymentType.value === 'material') {
-    router.post(`/projects/${props.project.id}/material-bills/${confirmPaymentTarget.value.id}/approve-accountant`, {
-      budget_item_id: confirmPaymentBudgetItem.value
-    }, {
+    router.post(`/projects/${props.project.id}/material-bills/${confirmPaymentTarget.value.id}/approve-accountant`, fd, {
+      forceFormData: true,
       onSuccess: () => {
         showConfirmPaymentModal.value = false
         materialDetail.value = null
         showMaterialDetailDrawer.value = false
+        confirmPaymentFiles.value = []
         message.success('Đã xác nhận thanh toán và ghi nhận ngân sách')
-      }
+      },
+      onError: showValidationErrors
     })
   } else if (confirmPaymentType.value === 'sub') {
-    router.post(`/projects/${props.project.id}/subcontractors/${confirmPaymentSub.value.id}/payments/${confirmPaymentTarget.value.id}/confirm`, {
-      budget_item_id: confirmPaymentBudgetItem.value
-    }, {
+    router.post(`/projects/${props.project.id}/subcontractors/${confirmPaymentSub.value.id}/payments/${confirmPaymentTarget.value.id}/confirm`, fd, {
+      forceFormData: true,
       onSuccess: () => {
         showConfirmPaymentModal.value = false
+        confirmPaymentFiles.value = []
         message.success('Đã xác nhận thanh toán thầu phụ')
-      }
+      },
+      onError: showValidationErrors
     })
   }
 }
