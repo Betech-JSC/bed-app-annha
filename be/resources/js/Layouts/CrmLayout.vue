@@ -74,8 +74,29 @@
             </a-button>
           </a-tooltip>
 
+          <!-- Sound Controls -->
+          <a-tooltip :title="soundEnabled ? 'Tắt âm thông báo' : 'Bật âm thông báo'">
+            <a-button type="text" shape="circle" class="crm-header__btn" @click="toggleSound">
+              <template #icon>
+                <SoundOutlined v-if="soundEnabled" style="font-size: 18px;" />
+                <AudioMutedOutlined v-else style="font-size: 18px;" />
+              </template>
+            </a-button>
+          </a-tooltip>
+
+          <!-- Browser Notification Settings -->
+          <a-tooltip :title="getBrowserNotificationTooltip()">
+            <a-button type="text" shape="circle" class="crm-header__btn" @click="toggleBrowserNotifications">
+              <template #icon>
+                <NotificationOutlined v-if="browserPermission === 'granted'" style="font-size: 18px; color: #52c41a;" />
+                <DesktopOutlined v-else-if="browserPermission === 'denied'" style="font-size: 18px; color: #ff4d4f;" />
+                <DesktopOutlined v-else style="font-size: 18px;" />
+              </template>
+            </a-button>
+          </a-tooltip>
+
           <!-- Notifications -->
-          <a-badge :count="unreadCount" :overflow-count="99">
+          <a-badge :count="unreadCountLocal" :overflow-count="99">
             <a-button type="text" shape="circle" class="crm-header__btn" @click="router.visit('/notifications')">
               <template #icon><BellOutlined style="font-size: 18px;" /></template>
             </a-button>
@@ -123,6 +144,44 @@
             leave-from-class="opacity-100 scale-100"
             leave-to-class="opacity-0 scale-90"
           >
+            <!-- Real-time Notifications Toasts -->
+            <div
+              v-for="toast in activeToasts"
+              :key="toast.id"
+              class="pointer-events-auto group relative overflow-hidden p-4 rounded-2xl shadow-2xl flex items-start gap-4 cursor-pointer transition-all duration-300 border hover:scale-[1.02]"
+              :class="getToastBorderClass(toast.priority)"
+              @click="handleToastClick(toast)"
+            >
+              <!-- Colored Left Accent Line -->
+              <div class="absolute left-0 top-0 bottom-0 w-1.5" :class="getToastAccentBgClass(toast.priority)"></div>
+              
+              <!-- Icon based on type -->
+              <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 border" :class="getToastIconClass(toast.priority)">
+                <BellOutlined v-if="toast.type === 'system'" style="font-size: 18px" />
+                <LineChartOutlined v-else-if="toast.type === 'project_performance'" style="font-size: 18px" />
+                <AuditOutlined v-else-if="toast.type === 'workflow'" style="font-size: 18px" />
+                <UserSwitchOutlined v-else-if="toast.type === 'assignment'" style="font-size: 18px" />
+                <MessageOutlined v-else-if="toast.type === 'mention'" style="font-size: 18px" />
+                <BellOutlined v-else style="font-size: 18px" />
+              </div>
+              
+              <div class="flex-1 pr-6">
+                <div class="text-sm font-bold text-gray-900 mb-0.5">{{ toast.title }}</div>
+                <div class="text-xs text-gray-500 leading-relaxed">{{ toast.body }}</div>
+                <div class="text-[10px] text-gray-400 mt-1.5 flex items-center gap-1.5">
+                  <span class="w-1.5 h-1.5 rounded-full" :class="getToastAccentBgClass(toast.priority)"></span>
+                  {{ getPriorityLabel(toast.priority) }}
+                </div>
+              </div>
+              
+              <!-- Close button -->
+              <button
+                @click.stop="removeToast(toast.id)"
+                class="absolute top-3 right-3 w-6 h-6 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <CloseOutlined style="font-size: 12px" />
+              </button>
+            </div>
             <!-- Success Alert -->
             <div
               v-if="$page.props.flash?.success"
@@ -184,6 +243,7 @@
 import { ref, computed, h, watch } from 'vue'
 import { Link, usePage, router } from '@inertiajs/vue3'
 import AiChatWidget from '@/Components/Crm/AiChatWidget.vue'
+import { message } from 'ant-design-vue'
 import {
   MenuFoldOutlined,
   MenuUnfoldOutlined,
@@ -217,6 +277,13 @@ import {
   CloseOutlined,
   BankOutlined,
   FieldTimeOutlined,
+  SoundOutlined,
+  AudioMutedOutlined,
+  DesktopOutlined,
+  NotificationOutlined,
+  LineChartOutlined,
+  UserSwitchOutlined,
+  MessageOutlined,
 } from '@ant-design/icons-vue'
 
 const props = defineProps({
@@ -241,6 +308,191 @@ watch(() => page.props.flash, (flash) => {
     }, 2000)
   }
 }, { deep: true, immediate: true })
+
+// ==================================================================
+// REAL-TIME NOTIFICATIONS LOGIC
+// ==================================================================
+const unreadCountLocal = ref(props.unreadCount)
+const activeToasts = ref([])
+const soundEnabled = ref(localStorage.getItem('crm_noti_sound') !== 'false')
+const browserPermission = ref(typeof Notification !== 'undefined' ? Notification.permission : 'default')
+
+// Sync with prop when it changes (e.g. on manual read all or reload)
+watch(() => props.unreadCount, (newVal) => {
+  unreadCountLocal.value = newVal
+})
+
+// Play chime sound using Web Audio API
+const playChime = () => {
+  if (!soundEnabled.value) return
+  try {
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)()
+    const playTone = (freq, startTime, duration) => {
+      const osc = audioCtx.createOscillator()
+      const gainNode = audioCtx.createGain()
+      osc.connect(gainNode)
+      gainNode.connect(audioCtx.destination)
+      osc.type = 'sine'
+      osc.frequency.setValueAtTime(freq, startTime)
+      gainNode.gain.setValueAtTime(0.15, startTime)
+      gainNode.gain.exponentialRampToValueAtTime(0.0001, startTime + duration)
+      osc.start(startTime)
+      osc.stop(startTime + duration)
+    }
+    const now = audioCtx.currentTime
+    // Dual-tone: E5 (659.25Hz) followed by A5 (880Hz)
+    playTone(659.25, now, 0.3)
+    playTone(880.00, now + 0.1, 0.45)
+  } catch (e) {
+    console.error('Failed to play chime notification sound:', e)
+  }
+}
+
+// Toast notification management
+const addToast = (notification) => {
+  const id = notification.id || Math.random().toString(36).substr(2, 9)
+  const toast = {
+    id,
+    title: notification.title || 'Thông báo mới',
+    body: notification.body || notification.message || '',
+    priority: notification.priority || 'medium',
+    type: notification.type || 'system',
+    action_url: notification.action_url
+  }
+  activeToasts.value.push(toast)
+  setTimeout(() => {
+    removeToast(id)
+  }, 6000)
+}
+
+const removeToast = (id) => {
+  const index = activeToasts.value.findIndex(t => t.id === id)
+  if (index > -1) {
+    activeToasts.value.splice(index, 1)
+  }
+}
+
+const handleToastClick = (toast) => {
+  removeToast(toast.id)
+  if (toast.action_url) {
+    router.visit(toast.action_url)
+  } else {
+    router.visit('/notifications')
+  }
+}
+
+// Styling classes for toast alerts
+const getToastBorderClass = (priority) => {
+  return {
+    urgent: 'border-red-100 bg-white/95 shadow-red-500/10',
+    high: 'border-amber-100 bg-white/95 shadow-amber-500/10',
+    medium: 'border-blue-100 bg-white/95 shadow-blue-500/10',
+    low: 'border-gray-100 bg-white/95 shadow-gray-500/5',
+  }[priority] || 'border-blue-100 bg-white/95 shadow-blue-500/10'
+}
+
+const getToastAccentBgClass = (priority) => {
+  return {
+    urgent: 'bg-red-500',
+    high: 'bg-amber-500',
+    medium: 'bg-blue-500',
+    low: 'bg-gray-400',
+  }[priority] || 'bg-blue-500'
+}
+
+const getToastIconClass = (priority) => {
+  return {
+    urgent: 'bg-red-50 border-red-100/50 text-red-500',
+    high: 'bg-amber-50 border-amber-100/50 text-amber-500',
+    medium: 'bg-blue-50 border-blue-100/50 text-blue-500',
+    low: 'bg-gray-50 border-gray-100/50 text-gray-400',
+  }[priority] || 'bg-blue-50 border-blue-100/50 text-blue-500'
+}
+
+const getPriorityLabel = (priority) => {
+  return {
+    urgent: 'Khẩn cấp',
+    high: 'Cao',
+    medium: 'Trung bình',
+    low: 'Thấp',
+  }[priority] || 'Trung bình'
+}
+
+// Audio and browser settings
+const toggleSound = () => {
+  soundEnabled.value = !soundEnabled.value
+  localStorage.setItem('crm_noti_sound', soundEnabled.value.toString())
+  message.success(soundEnabled.value ? 'Đã bật âm thanh thông báo' : 'Đã tắt âm thanh thông báo')
+}
+
+const toggleBrowserNotifications = async () => {
+  if (typeof Notification === 'undefined') {
+    message.warning('Trình duyệt của bạn không hỗ trợ thông báo đẩy.')
+    return
+  }
+  
+  if (Notification.permission === 'default') {
+    const permission = await Notification.requestPermission()
+    browserPermission.value = permission
+    if (permission === 'granted') {
+      new Notification('Thông báo CRM', {
+        body: 'Đã bật nhận thông báo trình duyệt thành công!',
+        icon: '/favicon.ico'
+      })
+    }
+  } else {
+    const statusText = Notification.permission === 'granted' ? 'Đã cho phép' : 'Đã chặn'
+    message.info(`Quyền thông báo trình duyệt: ${statusText}. Bạn có thể cấu hình lại trong cài đặt trang web của trình duyệt.`)
+  }
+}
+
+const getBrowserNotificationTooltip = () => {
+  if (typeof Notification === 'undefined') return 'Trình duyệt không hỗ trợ'
+  if (browserPermission.value === 'granted') return 'Thông báo trình duyệt: Đã Bật'
+  if (browserPermission.value === 'denied') return 'Thông báo trình duyệt: Đã Chặn'
+  return 'Bật thông báo trình duyệt'
+}
+
+// Show native browser desktop notification
+const showDesktopNotification = (notification) => {
+  if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+    const notif = new Notification(notification.title || 'Thông báo mới', {
+      body: notification.body || notification.message || '',
+      icon: '/favicon.ico',
+    })
+    notif.onclick = () => {
+      window.focus()
+      if (notification.action_url) {
+        router.visit(notification.action_url)
+      } else {
+        router.visit('/notifications')
+      }
+    }
+  }
+}
+
+// Main handler for incoming notifications
+const handleNewNotification = (notification) => {
+  unreadCountLocal.value++
+  playChime()
+  addToast(notification)
+  if (document.hidden) {
+    showDesktopNotification(notification)
+  }
+}
+
+// Subscribe to Laravel Reverb via Echo
+watch(() => props.auth?.user?.id, (newId, oldId) => {
+  if (oldId && window.Echo) {
+    window.Echo.leave(`App.Models.User.${oldId}`)
+  }
+  if (newId && window.Echo) {
+    window.Echo.private(`App.Models.User.${newId}`)
+      .listen('.NotificationSent', (e) => {
+        handleNewNotification(e.notification)
+      })
+  }
+}, { immediate: true })
 
 const selectedKeys = computed(() => {
   const url = page.url
@@ -308,7 +560,7 @@ const menuItems = computed(() => {
             }, (page.props.pending_approvals_count > 99 ? '99+' : String(page.props.pending_approvals_count)))
           ])
         : 'Trung tâm duyệt',
-      show: canAny('cost.approve.management', 'cost.approve.accountant', 'acceptance.approve.level_1', 'acceptance.approve.level_2', 'acceptance.approve.level_3', 'log.approve', 'material.approve', 'equipment.approve'),
+      show: canAny('cost.approve.management', 'cost.approve.accountant', 'acceptance.approve.level_1', 'acceptance.approve.level_2', 'acceptance.approve.level_3', 'log.approve', 'material.approve', 'equipment.approve', 'attendance.approve'),
     },
     {
       type: 'divider',
@@ -348,12 +600,12 @@ const menuItems = computed(() => {
       icon: () => h(TeamOutlined),
       label: 'Nhân sự & Tổ chức',
       children: [
-        { key: 'employees', label: 'Nhân viên', perm: 'personnel.view' },
-        { key: 'customers', label: 'Khách hàng', perm: 'personnel.view' },
-        { key: 'payrolls', label: 'Cấu hình lương', perm: 'personnel.view' },
-        { key: 'my-payroll', label: 'Phiếu lương của tôi', icon: () => h(FileTextOutlined), show: !can('personnel.view') },
-        { key: 'departments', label: 'Phòng ban', perm: 'personnel.view' },
-        { key: 'org-chart', label: 'Sơ đồ tổ chức', icon: () => h(ApartmentOutlined), perm: 'personnel.view' },
+        { key: 'employees', label: 'Nhân viên', perm: 'hr.employee.view' },
+        { key: 'customers', label: 'Khách hàng', perm: 'hr.employee.view' },
+        { key: 'payrolls', label: 'Cấu hình lương', perm: 'hr.salary.manage' },
+        { key: 'my-payroll', label: 'Phiếu lương của tôi', icon: () => h(FileTextOutlined), show: !can('hr.salary.manage') },
+        { key: 'departments', label: 'Phòng ban', perm: 'hr.employee.view' },
+        { key: 'org-chart', label: 'Sơ đồ tổ chức', icon: () => h(ApartmentOutlined), perm: 'hr.employee.view' },
         { key: 'kpi', label: 'KPI nhân sự', icon: () => h(AimOutlined), perm: 'kpi.view' },
         { key: 'kpi-assigned', label: 'KPI được giao', icon: () => h(AimOutlined), show: !can('kpi.view') },
         { key: 'attendance', label: 'Chấm công', icon: () => h(FieldTimeOutlined), perm: 'attendance.view' },

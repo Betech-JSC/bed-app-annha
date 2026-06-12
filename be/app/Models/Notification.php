@@ -11,6 +11,24 @@ class Notification extends Model
 {
     use HasFactory;
 
+    /**
+     * The "booted" method of the model.
+     * Automatically broadcast new notifications over WebSocket (Reverb)
+     */
+    protected static function booted()
+    {
+        static::created(function ($notification) {
+            try {
+                broadcast(new \App\Events\NotificationSent($notification));
+            } catch (\Exception $e) {
+                \Log::error('Failed to broadcast notification: ' . $e->getMessage(), [
+                    'notification_id' => $notification->id,
+                    'user_id' => $notification->user_id
+                ]);
+            }
+        });
+    }
+
     // ==================================================================
     // CONSTANTS - Types
     // ==================================================================

@@ -48,7 +48,7 @@ class CrmRolesController extends Controller
                     return $first . '_' . $second;
                 }
                 // Check for "supplier.contract", "supplier.acceptance", "subcontractor.progress" etc.
-                $dotPrefixes = ['supplier.contract', 'supplier.acceptance', 'subcontractor.contract', 'subcontractor.acceptance', 'subcontractor.progress', 'project.comment', 'project.task', 'project.phase', 'project.document', 'project.risk', 'project.monitoring', 'acceptance.template'];
+                $dotPrefixes = ['supplier.contract', 'supplier.acceptance', 'subcontractor.contract', 'subcontractor.acceptance', 'subcontractor.progress', 'project.comment', 'project.task', 'project.phase', 'project.document', 'project.risk', 'project.monitoring', 'acceptance.template', 'hr.employee', 'hr.salary'];
                 $twoLevel = $first . '.' . $second;
                 if (in_array($twoLevel, $dotPrefixes)) {
                     return $twoLevel;
@@ -257,6 +257,8 @@ class CrmRolesController extends Controller
             'reminder' => 'Nhắc nhở',
 
             // HR & KPI
+            'hr.employee' => 'Quản lý nhân sự (Công ty)',
+            'hr.salary' => 'Quản lý lương',
             'kpi' => 'KPI nhân sự',
             'departments' => 'Phòng ban',
             'attendance' => 'Chấm công',
@@ -338,6 +340,8 @@ class CrmRolesController extends Controller
                     'equipment.view', 'equipment.approve',
                     // Nhân sự & KPI
                     'personnel.view',
+                    'hr.employee.view', 'hr.employee.create', 'hr.employee.update', 'hr.employee.delete',
+                    'hr.salary.view', 'hr.salary.manage',
                     'kpi.view', 'kpi.verify',
                     // Báo cáo
                     'report.view', 'report.export', 'report.financial', 'report.progress',
@@ -398,6 +402,8 @@ class CrmRolesController extends Controller
                     'defect.view', 'defect.create', 'defect.update',
                     // Nhân sự
                     'personnel.view', 'personnel.assign', 'personnel.remove',
+                    'hr.employee.view', 'hr.employee.create', 'hr.employee.update',
+                    'hr.salary.view', 'hr.salary.manage',
                     'kpi.view', 'kpi.create', 'kpi.update',
                     'attendance.view', 'attendance.manage',
                     'labor_productivity.view',

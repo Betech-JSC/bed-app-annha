@@ -13,9 +13,20 @@ import {
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { projectApi } from "@/api/projectApi";
 import { officeKpiApi, OfficeKpi } from "@/api/officeKpiApi";
+import api from "@/api/api";
 import { Ionicons } from "@expo/vector-icons";
 import { ScreenHeader } from "@/components";
 import { useTabBarHeight } from "@/hooks/useTabBarHeight";
+
+interface SalaryConfig {
+    id: number;
+    salary_type: "hourly" | "daily" | "monthly";
+    hourly_rate?: number;
+    daily_rate?: number;
+    monthly_salary?: number;
+    overtime_rate?: number;
+    effective_from: string;
+}
 
 export default function EmployeeDetailScreen() {
     const { id } = useLocalSearchParams();
@@ -24,9 +35,11 @@ export default function EmployeeDetailScreen() {
 
     const [employee, setEmployee] = useState<any>(null);
     const [kpis, setKpis] = useState<OfficeKpi[]>([]);
+    const [salaryConfigs, setSalaryConfigs] = useState<SalaryConfig[]>([]);
+    const [currentSalary, setCurrentSalary] = useState<SalaryConfig | null>(null);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
-    const [activeTab, setActiveTab] = useState<"info" | "kpi">("info");
+    const [activeTab, setActiveTab] = useState<"info" | "kpi" | "salary">("info");
 
     useEffect(() => {
         loadEmployeeData();
@@ -36,7 +49,22 @@ export default function EmployeeDetailScreen() {
         try {
             setLoading(true);
 
-            // Load employee info
+            // Try unified detail endpoint first
+            try {
+                const detailResponse = await api.get(`/hr/employees/${id}/detail`);
+                if (detailResponse.data?.success) {
+                    const data = detailResponse.data.data;
+                    setEmployee(data.employee);
+                    setKpis(data.kpis || []);
+                    setSalaryConfigs(data.salaryConfigs || []);
+                    setCurrentSalary(data.currentSalary || null);
+                    return;
+                }
+            } catch {
+                // Fallback to separate requests
+            }
+
+            // Fallback: Load employee info
             const usersResponse = await projectApi.getAllUsers();
             if (usersResponse.success) {
                 const foundEmployee = usersResponse.data?.find((u: any) => u.id === parseInt(id as string));
@@ -82,8 +110,42 @@ export default function EmployeeDetailScreen() {
         }
     };
 
-    const renderKpiItem = (item: OfficeKpi) => {
-        const progress = Math.min(Math.max((item.current_value / item.target_value) * 100, 0), 100);
+    const formatCurrency = (value?: number) => {
+        if (!value) return "0 ₫";
+        return new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(value);
+    };
+
+    const getMainRate = (config: SalaryConfig) => {
+        if (config.salary_type === "hourly") return config.hourly_rate;
+        if (config.salary_type === "daily") return config.daily_rate;
+        if (config.salary_type === "monthly") return config.monthly_salary;
+        return 0;
+    };
+
+    const translateType = (type: string) => {
+        const map: Record<string, string> = { hourly: "Theo giờ", daily: "Theo ngày", monthly: "Lương tháng" };
+        return map[type] || type;
+    };
+
+    const formatDate = (dateStr?: string) => {
+        if (!dateStr) return "—";
+        return new Date(dateStr).toLocaleDateString("vi-VN");
+    };
+
+    // KPI progress calculation (supports parent with children)
+    const getKpiProgress = (kpi: OfficeKpi & { children?: OfficeKpi[] }) => {
+        if (kpi.children?.length) {
+            const totalPct = kpi.children.reduce((sum, child) => {
+                if (!child.target_value || child.target_value <= 0) return sum;
+                return sum + Math.min((child.current_value / child.target_value) * 100, 100);
+            }, 0);
+            return Math.round(totalPct / kpi.children.length);
+        }
+        return Math.min(Math.max((kpi.current_value / kpi.target_value) * 100, 0), 100);
+    };
+
+    const renderKpiItem = (item: OfficeKpi & { children?: OfficeKpi[] }) => {
+        const progress = getKpiProgress(item);
 
         return (
             <TouchableOpacity
@@ -108,7 +170,10 @@ export default function EmployeeDetailScreen() {
                     <View style={styles.progressHeader}>
                         <Text style={styles.progressLabel}>Tiến độ</Text>
                         <Text style={styles.progressValue}>
-                            {item.current_value} / {item.target_value} {item.unit}
+                            {item.children?.length
+                                ? `${progress}% (${item.children.length} mục)`
+                                : `${item.current_value} / ${item.target_value} ${item.unit}`
+                            }
                         </Text>
                     </View>
                     <View style={styles.progressBarBg}>
@@ -121,13 +186,28 @@ export default function EmployeeDetailScreen() {
                     </View>
                 </View>
 
+                {/* Children summary */}
+                {item.children && item.children.length > 0 && (
+                    <View style={styles.childrenSummary}>
+                        {item.children.map(child => (
+                            <View key={child.id} style={styles.childRow}>
+                                <View style={[styles.childDot, { backgroundColor: getStatusColor(child.status) }]} />
+                                <Text style={styles.childTitle} numberOfLines={1}>{child.title}</Text>
+                                <Text style={styles.childValue}>
+                                    {child.current_value}/{child.target_value} {child.unit}
+                                </Text>
+                            </View>
+                        ))}
+                    </View>
+                )}
+
                 {item.year ? (
                     <Text style={styles.dateText}>
                         📅 Năm: {item.year}
                     </Text>
                 ) : item.end_date && (
                     <Text style={styles.dateText}>
-                        📅 Hạn chót: {new Date(item.end_date).toLocaleDateString("vi-VN")}
+                        📅 Hạn chót: {formatDate(item.end_date)}
                     </Text>
                 )}
             </TouchableOpacity>
@@ -178,6 +258,16 @@ export default function EmployeeDetailScreen() {
                         </View>
                     </View>
                 )}
+
+                {employee?.department?.name && (
+                    <View style={styles.infoRow}>
+                        <Ionicons name="business-outline" size={20} color="#6B7280" />
+                        <View style={styles.infoContent}>
+                            <Text style={styles.infoLabel}>Phòng ban</Text>
+                            <Text style={styles.infoValue}>{employee.department.name}</Text>
+                        </View>
+                    </View>
+                )}
             </View>
 
             {/* KPI Summary */}
@@ -222,6 +312,69 @@ export default function EmployeeDetailScreen() {
             ) : (
                 kpis.map(renderKpiItem)
             )}
+        </View>
+    );
+
+    const renderSalaryTab = () => (
+        <View style={styles.tabContent}>
+            {/* Current Salary */}
+            {currentSalary ? (
+                <View style={styles.salaryCurrentCard}>
+                    <Text style={styles.salaryCurrentLabel}>ĐANG ÁP DỤNG</Text>
+                    <View style={styles.salaryCurrentRow}>
+                        <View style={styles.salaryIconBox}>
+                            <Ionicons name="cash-outline" size={24} color="#FFF" />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                            <Text style={styles.salaryCurrentAmount}>
+                                {formatCurrency(getMainRate(currentSalary))}
+                            </Text>
+                            <Text style={styles.salaryCurrentType}>
+                                {translateType(currentSalary.salary_type)} · Từ {formatDate(currentSalary.effective_from)}
+                            </Text>
+                        </View>
+                    </View>
+                    {currentSalary.overtime_rate ? (
+                        <Text style={styles.salaryOvertimeText}>
+                            Tăng ca: {formatCurrency(currentSalary.overtime_rate)}/giờ
+                        </Text>
+                    ) : null}
+                </View>
+            ) : null}
+
+            {/* Salary History */}
+            {salaryConfigs.length > 0 ? (
+                <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>Lịch sử điều chỉnh</Text>
+                    {salaryConfigs.map((config) => (
+                        <View key={config.id} style={styles.salaryHistoryRow}>
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.salaryHistoryAmount}>
+                                    {formatCurrency(getMainRate(config))}
+                                </Text>
+                                <Text style={styles.salaryHistoryMeta}>
+                                    {translateType(config.salary_type)} · {formatDate(config.effective_from)}
+                                </Text>
+                            </View>
+                            {currentSalary?.id === config.id ? (
+                                <View style={styles.salaryActiveBadge}>
+                                    <Text style={styles.salaryActiveBadgeText}>Đang dùng</Text>
+                                </View>
+                            ) : (
+                                <View style={styles.salaryExpiredBadge}>
+                                    <Text style={styles.salaryExpiredBadgeText}>Hết hạn</Text>
+                                </View>
+                            )}
+                        </View>
+                    ))}
+                </View>
+            ) : !currentSalary ? (
+                <View style={styles.emptyContainer}>
+                    <Ionicons name="wallet-outline" size={64} color="#D1D5DB" />
+                    <Text style={styles.emptyText}>Chưa cấu hình lương</Text>
+                    <Text style={styles.emptySubtext}>Liên hệ quản trị viên để cấu hình</Text>
+                </View>
+            ) : null}
         </View>
     );
 
@@ -281,6 +434,20 @@ export default function EmployeeDetailScreen() {
                         KPI ({kpis.length})
                     </Text>
                 </TouchableOpacity>
+
+                <TouchableOpacity
+                    style={[styles.tab, activeTab === "salary" && styles.tabActive]}
+                    onPress={() => setActiveTab("salary")}
+                >
+                    <Ionicons
+                        name="wallet-outline"
+                        size={20}
+                        color={activeTab === "salary" ? "#3B82F6" : "#6B7280"}
+                    />
+                    <Text style={[styles.tabText, activeTab === "salary" && styles.tabTextActive]}>
+                        Lương
+                    </Text>
+                </TouchableOpacity>
             </View>
 
             <ScrollView
@@ -288,7 +455,9 @@ export default function EmployeeDetailScreen() {
                 contentContainerStyle={[styles.scrollContent, { paddingBottom: tabBarHeight + 20 }]}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
             >
-                {activeTab === "info" ? renderInfoTab() : renderKpiTab()}
+                {activeTab === "info" && renderInfoTab()}
+                {activeTab === "kpi" && renderKpiTab()}
+                {activeTab === "salary" && renderSalaryTab()}
             </ScrollView>
         </View>
     );
@@ -321,7 +490,7 @@ const styles = StyleSheet.create({
         borderBottomColor: "#3B82F6",
     },
     tabText: {
-        fontSize: 15,
+        fontSize: 14,
         fontWeight: "500",
         color: "#6B7280",
     },
@@ -429,7 +598,7 @@ const styles = StyleSheet.create({
     },
     kpiSummaryItem: {
         flex: 1,
-        minWidth: "45%",
+        minWidth: "45%" as any,
         backgroundColor: "#F9FAFB",
         padding: 16,
         borderRadius: 8,
@@ -516,6 +685,120 @@ const styles = StyleSheet.create({
         color: "#6B7280",
     },
 
+    // Children summary
+    childrenSummary: {
+        marginTop: 8,
+        paddingTop: 8,
+        borderTopWidth: 1,
+        borderTopColor: "#F3F4F6",
+        gap: 6,
+    },
+    childRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 8,
+    },
+    childDot: {
+        width: 6,
+        height: 6,
+        borderRadius: 3,
+    },
+    childTitle: {
+        flex: 1,
+        fontSize: 13,
+        color: "#4B5563",
+    },
+    childValue: {
+        fontSize: 12,
+        color: "#9CA3AF",
+    },
+
+    // Salary Current Card
+    salaryCurrentCard: {
+        backgroundColor: "#ECFDF5",
+        borderRadius: 16,
+        padding: 20,
+        marginBottom: 16,
+        borderWidth: 1,
+        borderColor: "#BBF7D0",
+    },
+    salaryCurrentLabel: {
+        fontSize: 11,
+        fontWeight: "700",
+        color: "#6B7280",
+        letterSpacing: 1.5,
+        marginBottom: 12,
+    },
+    salaryCurrentRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 12,
+    },
+    salaryIconBox: {
+        width: 48,
+        height: 48,
+        borderRadius: 12,
+        backgroundColor: "#10B981",
+        justifyContent: "center",
+        alignItems: "center",
+    },
+    salaryCurrentAmount: {
+        fontSize: 24,
+        fontWeight: "700",
+        color: "#111827",
+    },
+    salaryCurrentType: {
+        fontSize: 13,
+        color: "#6B7280",
+        marginTop: 2,
+    },
+    salaryOvertimeText: {
+        fontSize: 13,
+        color: "#6B7280",
+        marginTop: 8,
+    },
+
+    // Salary History
+    salaryHistoryRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        paddingVertical: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: "#F3F4F6",
+    },
+    salaryHistoryAmount: {
+        fontSize: 16,
+        fontWeight: "600",
+        color: "#111827",
+    },
+    salaryHistoryMeta: {
+        fontSize: 12,
+        color: "#9CA3AF",
+        marginTop: 2,
+    },
+    salaryActiveBadge: {
+        backgroundColor: "#D1FAE5",
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 12,
+    },
+    salaryActiveBadgeText: {
+        fontSize: 11,
+        fontWeight: "600",
+        color: "#059669",
+    },
+    salaryExpiredBadge: {
+        backgroundColor: "#F3F4F6",
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 12,
+    },
+    salaryExpiredBadgeText: {
+        fontSize: 11,
+        fontWeight: "600",
+        color: "#9CA3AF",
+    },
+
     // Empty State
     emptyContainer: {
         alignItems: "center",
@@ -525,5 +808,10 @@ const styles = StyleSheet.create({
         marginTop: 16,
         color: "#9CA3AF",
         fontSize: 16,
+    },
+    emptySubtext: {
+        marginTop: 4,
+        color: "#D1D5DB",
+        fontSize: 13,
     },
 });

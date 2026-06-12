@@ -13,7 +13,7 @@
   <div class="crm-content-card p-6">
     <a-row :gutter="24">
       <!-- Cập nhật cấu hình mới -->
-      <a-col v-if="can('personnel.assign')" :xs="24" :lg="10">
+      <a-col v-if="can('hr.salary.manage')" :xs="24" :lg="10">
         <a-card title="Thiết lập lương mới" :bordered="false" class="shadow-sm rounded-xl mb-6">
           <a-form layout="vertical">
             <a-form-item label="Hình thức trả lương" required>
@@ -104,7 +104,7 @@
       </a-col>
 
       <!-- Lịch sử thay đổi -->
-      <a-col :xs="24" :lg="can('personnel.assign') ? 14 : 24">
+      <a-col :xs="24" :lg="can('hr.salary.manage') ? 14 : 24">
         <a-card title="Lịch sử điều chỉnh lương" :bordered="false" class="shadow-sm rounded-xl">
           <a-table :dataSource="configs" :columns="columns" :pagination="{ pageSize: 10 }">
              <template #bodyCell="{ column, record }">
