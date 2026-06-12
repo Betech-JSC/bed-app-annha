@@ -6290,8 +6290,8 @@
     </a-form>
   </a-modal>
 
-  <!-- ACCOUNTANT CONFIRM PAYMENT MODAL (Unified for Material & Sub) -->
-  <a-modal v-model:open="showConfirmPaymentModal" :title="{ material: 'Kế toán xác nhận - Phiếu Vật tư', cost: 'Kế toán xác nhận - Phiếu chi', sub: 'Kế toán xác nhận - Thanh toán thầu phụ' }[confirmPaymentType]" @ok="confirmApprovePayment" ok-text="Xác nhận chi" cancel-text="Hủy" centered class="crm-modal" :ok-button-props="{ disabled: !confirmPaymentFiles.length }">
+  <!-- ACCOUNTANT CONFIRM PAYMENT MODAL (Unified for Material, Sub, Rental, Usage, Purchase, Project Payment) -->
+  <a-modal v-model:open="showConfirmPaymentModal" :title="{ material: 'Kế toán xác nhận - Phiếu Vật tư', cost: 'Kế toán xác nhận - Phiếu chi', sub: 'Kế toán xác nhận - Thanh toán thầu phụ', rental: 'Kế toán xác nhận - Thuê thiết bị', usage: 'Kế toán xác nhận - Sử dụng thiết bị', purchase: 'Kế toán xác nhận - Mua thiết bị', project_payment: 'Kế toán xác nhận - Đợt thanh toán từ Khách hàng' }[confirmPaymentType]" @ok="confirmApprovePayment" ok-text="Xác nhận" cancel-text="Hủy" centered class="crm-modal" :ok-button-props="{ disabled: !confirmPaymentFiles.length }">
     <div class="p-4 space-y-4">
       <div class="bg-blue-50 p-3 rounded-xl border border-blue-100 flex items-center gap-3">
         <div class="w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center shadow-lg"><InfoCircleOutlined /></div>
@@ -6302,12 +6302,22 @@
 
       <div v-if="confirmPaymentTarget" class="bg-gray-50 p-3 rounded-lg border border-gray-100 text-xs">
          <div class="flex justify-between">
-            <span class="text-gray-400">Số phiếu:</span>
-            <span class="font-bold text-gray-700">{{ confirmPaymentTarget.bill_number || confirmPaymentTarget.payment_number }}</span>
+            <span class="text-gray-400">Tên / Số phiếu:</span>
+            <span class="font-bold text-gray-700">
+              {{ confirmPaymentTarget.bill_number || confirmPaymentTarget.payment_number || confirmPaymentTarget.name || confirmPaymentTarget.equipment_name || confirmPaymentTarget.notes || `#${confirmPaymentTarget.id}` }}
+            </span>
          </div>
-         <div class="flex justify-between mt-1">
+         <div v-if="confirmPaymentTarget.total_amount || confirmPaymentTarget.amount || confirmPaymentTarget.total_cost || confirmPaymentTarget.actual_amount" class="flex justify-between mt-1">
             <span class="text-gray-400">Số tiền:</span>
-            <span class="font-bold text-red-600">{{ fmt(confirmPaymentTarget.total_amount || confirmPaymentTarget.amount) }}</span>
+            <span class="font-bold text-red-600">
+              {{ fmt(confirmPaymentTarget.total_amount || confirmPaymentTarget.amount || confirmPaymentTarget.total_cost || confirmPaymentTarget.actual_amount) }}
+            </span>
+         </div>
+         <div v-if="confirmPaymentTarget.quantity" class="flex justify-between mt-1">
+            <span class="text-gray-400">Số lượng:</span>
+            <span class="font-bold text-gray-700">
+              {{ confirmPaymentTarget.quantity }}
+            </span>
          </div>
          <div v-if="confirmPaymentSub" class="flex justify-between mt-1">
             <span class="text-gray-400">Nhà thầu:</span>
@@ -8601,7 +8611,13 @@ const submitPaymentProof = () => {
 const deletePayment = (p) => router.delete(`/projects/${props.project.id}/payments/${p.id}`, loadingOptions(`delete-pay-${p.id}`))
 const submitPaymentAction = (p) => router.post(`/projects/${props.project.id}/payments/${p.id}/submit`, {}, loadingOptions(`submit-pay-${p.id}`))
 const approvePaymentByCustomerAction = (p) => router.post(`/projects/${props.project.id}/payments/${p.id}/customer-approve`, {}, loadingOptions(`approve-pay-${p.id}`))
-const confirmPaymentAction = (p) => router.post(`/projects/${props.project.id}/payments/${p.id}/confirm`, { paid_date: new Date().toISOString().slice(0, 10) }, loadingOptions(`confirm-pay-${p.id}`))
+const confirmPaymentAction = (p) => {
+  confirmPaymentType.value = 'project_payment'
+  confirmPaymentTarget.value = p
+  confirmPaymentBudgetItem.value = p.budget_item_id || null
+  confirmPaymentFiles.value = []
+  showConfirmPaymentModal.value = true
+}
 const showRejectPaymentModal = ref(false)
 const rejectPaymentTarget = ref(null)
 const rejectPaymentReason = ref('')
@@ -10366,6 +10382,51 @@ const confirmApprovePayment = () => {
       },
       onError: showValidationErrors
     })
+  } else if (confirmPaymentType.value === 'rental') {
+    router.post(`/projects/${props.project.id}/equipment-rentals/${confirmPaymentTarget.value.id}/confirm-accountant`, fd, {
+      forceFormData: true,
+      onSuccess: () => {
+        showConfirmPaymentModal.value = false
+        confirmPaymentFiles.value = []
+        showRentalDetailDrawer.value = false
+        message.success('Kế toán đã xác nhận thuê thiết bị')
+      },
+      onError: showValidationErrors
+    })
+  } else if (confirmPaymentType.value === 'usage') {
+    router.post(`/projects/${props.project.id}/asset-usages/${confirmPaymentTarget.value.id}/confirm-accountant`, fd, {
+      forceFormData: true,
+      onSuccess: () => {
+        showConfirmPaymentModal.value = false
+        confirmPaymentFiles.value = []
+        showUsageDetailDrawer.value = false
+        message.success('Kế toán đã xác nhận sử dụng thiết bị')
+      },
+      onError: showValidationErrors
+    })
+  } else if (confirmPaymentType.value === 'purchase') {
+    router.post(`/projects/${props.project.id}/equipment-purchases/${confirmPaymentTarget.value.id}/confirm-accountant`, fd, {
+      forceFormData: true,
+      onSuccess: () => {
+        showConfirmPaymentModal.value = false
+        confirmPaymentFiles.value = []
+        showPurchaseDetailDrawer.value = false
+        message.success('Kế toán đã xác nhận mua thiết bị')
+      },
+      onError: showValidationErrors
+    })
+  } else if (confirmPaymentType.value === 'project_payment') {
+    fd.append('paid_date', new Date().toISOString().slice(0, 10))
+    router.post(`/projects/${props.project.id}/payments/${confirmPaymentTarget.value.id}/confirm`, fd, {
+      forceFormData: true,
+      onSuccess: () => {
+        showConfirmPaymentModal.value = false
+        confirmPaymentFiles.value = []
+        showPaymentDetail.value = false
+        message.success('Đã xác nhận thanh toán (Kế toán).')
+      },
+      onError: showValidationErrors
+    })
   }
 }
 
@@ -10512,7 +10573,13 @@ const submitRentalForm = () => {
 }
 const submitRental = (r) => router.post(`/projects/${props.project.id}/equipment-rentals/${r.id}/submit`)
 const approveRentalMgmt = (r) => router.post(`/projects/${props.project.id}/equipment-rentals/${r.id}/approve-management`)
-const confirmRentalKT = (r) => router.post(`/projects/${props.project.id}/equipment-rentals/${r.id}/confirm-accountant`)
+const confirmRentalKT = (r) => {
+  confirmPaymentType.value = 'rental'
+  confirmPaymentTarget.value = r
+  confirmPaymentBudgetItem.value = r.budget_item_id || null
+  confirmPaymentFiles.value = []
+  showConfirmPaymentModal.value = true
+}
 const rejectRental = (r) => router.post(`/projects/${props.project.id}/equipment-rentals/${r.id}/reject`, { reason: rejectReason.value }, { onSuccess: () => { rejectReason.value = '' } })
 const deleteRental = (r) => router.delete(`/projects/${props.project.id}/equipment-rentals/${r.id}`)
 const requestReturnRental = (r) => router.post(`/projects/${props.project.id}/equipment-rentals/${r.id}/request-return`)
@@ -10580,7 +10647,13 @@ const submitPurchaseForm = () => {
 }
 const submitPurchase = (p) => router.post(`/projects/${props.project.id}/equipment-purchases/${p.id}/submit`)
 const approvePurchaseMgmt = (p) => router.post(`/projects/${props.project.id}/equipment-purchases/${p.id}/approve-management`)
-const confirmPurchaseKT = (p) => router.post(`/projects/${props.project.id}/equipment-purchases/${p.id}/confirm-accountant`)
+const confirmPurchaseKT = (p) => {
+  confirmPaymentType.value = 'purchase'
+  confirmPaymentTarget.value = p
+  confirmPaymentBudgetItem.value = p.budget_item_id || null
+  confirmPaymentFiles.value = []
+  showConfirmPaymentModal.value = true
+}
 const rejectPurchase = (p) => router.post(`/projects/${props.project.id}/equipment-purchases/${p.id}/reject`, { reason: rejectReason.value }, { onSuccess: () => { rejectReason.value = '' } })
 const deletePurchase = (p) => router.delete(`/projects/${props.project.id}/equipment-purchases/${p.id}`)
 
@@ -10645,7 +10718,13 @@ const submitUsageForm = () => {
 }
 const submitUsage = (u) => router.post(`/projects/${props.project.id}/asset-usages/${u.id}/submit`)
 const approveUsageManagement = (u) => router.post(`/projects/${props.project.id}/asset-usages/${u.id}/approve-management`)
-const confirmUsageAccountant = (u) => router.post(`/projects/${props.project.id}/asset-usages/${u.id}/confirm-accountant`)
+const confirmUsageAccountant = (u) => {
+  confirmPaymentType.value = 'usage'
+  confirmPaymentTarget.value = u
+  confirmPaymentBudgetItem.value = u.budget_item_id || null
+  confirmPaymentFiles.value = []
+  showConfirmPaymentModal.value = true
+}
 const rejectUsage = (u) => router.post(`/projects/${props.project.id}/asset-usages/${u.id}/reject`, { rejection_reason: rejectReason.value }, { onSuccess: () => { rejectReason.value = '' } })
 const requestReturn = (u) => router.post(`/projects/${props.project.id}/asset-usages/${u.id}/request-return`)
 const confirmReturn = (u) => router.post(`/projects/${props.project.id}/asset-usages/${u.id}/confirm-return`)

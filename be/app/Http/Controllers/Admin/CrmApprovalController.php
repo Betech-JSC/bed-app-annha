@@ -22,6 +22,7 @@ use App\Models\AssetUsage;
 use App\Models\MaterialBill;
 use App\Models\Attendance;
 use App\Services\AttendanceService;
+use App\Services\AttachmentService;
 use App\Models\User;
 use App\Services\ApprovalQueryService;
 use App\Services\ApprovalActionService;
@@ -39,15 +40,23 @@ class CrmApprovalController extends Controller
     protected $approvalQueryService;
     protected $approvalActionService;
     protected $attendanceService;
+    protected $attachmentService;
 
     public function __construct(
         ApprovalQueryService $approvalQueryService,
         ApprovalActionService $approvalActionService,
-        AttendanceService $attendanceService
+        AttendanceService $attendanceService,
+        AttachmentService $attachmentService
     ) {
         $this->approvalQueryService = $approvalQueryService;
         $this->approvalActionService = $approvalActionService;
         $this->attendanceService = $attendanceService;
+        $this->attachmentService = $attachmentService;
+    }
+
+    private function attachFilesToEntity(Request $request, $entity, string $storagePath, bool $validate = true): int
+    {
+        return $this->attachmentService->handleCrmUpload($request, $entity, $storagePath, $validate);
     }
 
     /**
@@ -177,17 +186,24 @@ class CrmApprovalController extends Controller
             $this->crmRequire($user, Permissions::COMPANY_COST_APPROVE_ACCOUNTANT);
         }
 
-        // Financial Gatekeeper: Accountant MUST have attachments (skip labor costs from attendance)
-        if ($cost->category !== 'labor' && !$cost->attendance_id && $cost->attachments()->count() === 0) {
-            return back()->with('error', 'Phiếu chi phí này bắt buộc phải có file chứng từ đính kèm (hóa đơn, phiếu chi, biên lai...) trước khi kế toán xác nhận duyệt.');
-        }
+        try {
+            // Mandatorily attach uploaded files to the Cost
+            $this->attachFilesToEntity($request, $cost, "costs/{$cost->project_id}/{$cost->id}", true);
 
-        $result = $this->approvalActionService->approve($user, 'accountant', $id);
+            // Update budget item if provided
+            if ($request->filled('budget_item_id')) {
+                $cost->update(['budget_item_id' => $request->budget_item_id]);
+            }
 
-        if ($result['success']) {
-            return back()->with('success', $result['message']);
+            $result = $this->approvalActionService->approve($user, 'accountant', $id);
+
+            if ($result['success']) {
+                return back()->with('success', $result['message']);
+            }
+            return back()->with('error', $result['message']);
+        } catch (\Exception $e) {
+            return back()->with('error', 'Lỗi: ' . $e->getMessage());
         }
-        return back()->with('error', $result['message']);
     }
 
     /**
@@ -415,17 +431,19 @@ class CrmApprovalController extends Controller
         $user = Auth::guard('admin')->user();
         $this->crmRequire($user, Permissions::SUBCONTRACTOR_PAYMENT_MARK_PAID, $payment->project);
 
-        // Financial Gatekeeper: Ensure attachments exist
-        if ($payment->attachments()->count() === 0) {
-            return back()->with('error', 'Yêu cầu thanh toán NTP này bắt buộc phải có file chứng từ đi kèm (UNC/Hóa đơn) mới có thể xác nhận.');
-        }
+        try {
+            // Mandatorily attach uploaded files to the payment
+            $this->attachFilesToEntity($request, $payment, "sub-payments/{$payment->project_id}/{$payment->id}", true);
 
-        // Link to budget if provided (pre-processing before service call)
-        if ($request->has('budget_item_id')) {
-            $payment->update(['budget_item_id' => $request->budget_item_id]);
-        }
+            // Link to budget if provided (pre-processing before service call)
+            if ($request->has('budget_item_id')) {
+                $payment->update(['budget_item_id' => $request->budget_item_id]);
+            }
 
-        return $this->delegateApprove($user, 'sub_payment_confirm', $id);
+            return $this->delegateApprove($user, 'sub_payment_confirm', $id);
+        } catch (\Exception $e) {
+            return back()->with('error', 'Lỗi: ' . $e->getMessage());
+        }
     }
 
     public function rejectSubPayment(Request $request, $id)
@@ -448,12 +466,21 @@ class CrmApprovalController extends Controller
         $user = Auth::guard('admin')->user();
         $this->crmRequire($user, Permissions::MATERIAL_APPROVE, $bill->project);
 
-        // Normalize edge-case statuses before service call
-        if (in_array($bill->status, ['draft', 'pending', 'rejected'])) {
-            $bill->update(['status' => 'pending_management']);
-        }
+        try {
+            // Mandatorily attach uploaded files to the Material Bill if status is pending_accountant (Accountant step)
+            if ($bill->status === 'pending_accountant') {
+                $this->attachFilesToEntity($request, $bill, "material-bills/{$bill->project_id}/{$bill->id}", true);
+            }
 
-        return $this->delegateApprove($user, 'material_bill', $id);
+            // Normalize edge-case statuses before service call
+            if (in_array($bill->status, ['draft', 'pending', 'rejected'])) {
+                $bill->update(['status' => 'pending_management']);
+            }
+
+            return $this->delegateApprove($user, 'material_bill', $id);
+        } catch (\Exception $e) {
+            return back()->with('error', 'Lỗi: ' . $e->getMessage());
+        }
     }
 
     public function rejectMaterialBill(Request $request, $id)
@@ -509,7 +536,14 @@ class CrmApprovalController extends Controller
             return back()->with('error', 'Đợt thanh toán này bắt buộc phải có file chứng từ đính kèm (UNC/Bill chuyển khoản) trước khi kế toán xác nhận.');
         }
 
-        return $this->delegateApprove($user, 'project_payment_confirm', $id);
+        try {
+            // Mandatorily attach uploaded files to the Project Payment (UNC/Sao kê báo có)
+            $this->attachFilesToEntity($request, $payment, "project-payments/{$payment->project_id}/{$payment->id}", true);
+
+            return $this->delegateApprove($user, 'project_payment_confirm', $id);
+        } catch (\Exception $e) {
+            return back()->with('error', 'Lỗi: ' . $e->getMessage());
+        }
     }
 
     public function rejectPayment(Request $request, $id)
@@ -652,14 +686,16 @@ class CrmApprovalController extends Controller
     public function approveEquipmentPurchaseAccountant(Request $request, $id)
     {
         $user = Auth::guard('admin')->user();
-
-        // Financial Gatekeeper: Accountant MUST have attachments
         $purchase = \App\Models\EquipmentPurchase::findOrFail($id);
-        if ($purchase->attachments()->count() === 0) {
-            return back()->with('error', 'Phiếu mua thiết bị này bắt buộc phải có file chứng từ đính kèm trước khi kế toán xác nhận.');
-        }
 
-        return $this->delegateApprove($user, 'equipment_purchase_accountant', $id);
+        try {
+            // Mandatorily attach uploaded files to the Equipment Purchase
+            $this->attachFilesToEntity($request, $purchase, "equipment-purchases/{$purchase->project_id}/{$purchase->id}", true);
+
+            return $this->delegateApprove($user, 'equipment_purchase_accountant', $id);
+        } catch (\Exception $e) {
+            return back()->with('error', 'Lỗi: ' . $e->getMessage());
+        }
     }
 
     public function rejectEquipmentPurchase(Request $request, $id)

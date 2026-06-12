@@ -578,18 +578,25 @@
       <!-- Action Footer (Sticky) -->
       <div class="fixed bottom-0 right-0 w-[560px] p-4 bg-white border-t border-gray-100 flex justify-end items-center shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-40 transition-all rounded-br-2xl">
         <div class="flex gap-2 w-full">
-           <a-button v-if="getDetailUrl(detailItem)" 
+           <a-button @click="detailItem = null" class="rounded-xl h-12 font-bold px-4">Đóng</a-button>
+           <a-button v-if="canApproveDirectly(detailItem)"
                      type="primary"
-                     block
-                     class="rounded-xl h-12 px-6 font-bold bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-100 border-0" 
+                     danger
+                     class="rounded-xl h-12 px-4 font-bold border-0 shadow-lg shadow-red-100" 
+                     @click="handleRejectDirectly(detailItem)">
+             Từ chối
+           </a-button>
+           <a-button v-if="canApproveDirectly(detailItem)"
+                     type="primary"
+                     class="rounded-xl h-12 px-6 font-bold bg-green-600 hover:bg-green-700 shadow-lg shadow-green-100 border-0 flex-1" 
+                     @click="handleApproveDirectly(detailItem)">
+             {{ isAccountantApproveType(detailItem) ? 'KT Xác nhận' : 'Duyệt' }}
+           </a-button>
+           <a-button v-if="!canApproveDirectly(detailItem) && getDetailUrl(detailItem)" 
+                     type="primary"
+                     class="rounded-xl h-12 px-6 font-bold bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-100 border-0 flex-1" 
                      @click="navigateToDetail(detailItem)">
              <ArrowRightOutlined /> Vào module để xử lý phiếu
-           </a-button>
-           <a-button v-else
-                     block
-                     class="rounded-xl h-12 px-6 font-bold"
-                     @click="detailItem = null">
-             Đóng
            </a-button>
         </div>
       </div>
@@ -699,6 +706,98 @@
         <div class="text-amber-500 mt-0.5"><InfoCircleOutlined /></div>
         <div class="text-[11px] text-amber-700 leading-relaxed italic">
           <strong>Lưu ý:</strong> Một khi bạn gửi báo cáo, thông tin sẽ được chuyển qua bộ phận Kế toán để đối soát và xác nhận nhận tiền thành công. Trạng thái đợt thanh toán sẽ chuyển sang "Đã báo cáo thanh toán".
+        </div>
+      </div>
+    </div>
+  </a-modal>
+
+  <!-- Accountant Quick Approval Modal with mandatory file upload -->
+  <a-modal v-model:open="showConfirmApprovalModal" title="Kế toán xác nhận phê duyệt" @ok="confirmApproveAccountant" ok-text="Xác nhận" cancel-text="Hủy" centered class="crm-modal" :ok-button-props="{ disabled: !confirmApprovalFiles.length }">
+    <div class="p-4 space-y-4">
+      <div class="bg-blue-50 p-3 rounded-xl border border-blue-100 flex items-center gap-3">
+        <div class="w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center shadow-lg"><InfoCircleOutlined /></div>
+        <div class="text-[11px] text-blue-700 leading-tight">
+          Vui lòng kiểm tra chứng từ gốc trước khi đính kèm Biên lai chuyển tiền / Ủy nhiệm chi để xác nhận giao dịch.
+        </div>
+      </div>
+
+      <div v-if="confirmApprovalTarget" class="bg-gray-50 p-3 rounded-lg border border-gray-100 text-xs">
+         <div class="flex justify-between">
+            <span class="text-gray-400">Yêu cầu:</span>
+            <span class="font-bold text-gray-700">{{ confirmApprovalTarget.title }}</span>
+         </div>
+         <div class="flex justify-between mt-1">
+            <span class="text-gray-400">Phân loại:</span>
+            <span class="font-medium text-gray-700">{{ confirmApprovalTarget.type_label }}</span>
+         </div>
+         <div v-if="confirmApprovalTarget.amount" class="flex justify-between mt-1">
+            <span class="text-gray-400">Số tiền:</span>
+            <span class="font-bold text-red-600">{{ formatCurrency(confirmApprovalTarget.amount) }}</span>
+         </div>
+         <div v-if="confirmApprovalTarget.subtitle" class="flex justify-between mt-1">
+            <span class="text-gray-400">Dự án:</span>
+            <span class="font-medium text-gray-700 truncate max-w-[280px]" :title="confirmApprovalTarget.subtitle">{{ confirmApprovalTarget.subtitle }}</span>
+         </div>
+      </div>
+
+      <!-- Existing attachments uploaded by creator -->
+      <div v-if="confirmApprovalTarget?.attachments?.length" class="border border-dashed border-gray-200 rounded-xl p-3 bg-gray-50/50">
+        <div class="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1">
+          <PaperClipOutlined class="text-gray-400" /> Tệp chứng từ gốc ({{ confirmApprovalTarget.attachments.length }})
+        </div>
+        <div class="space-y-1.5 max-h-[120px] overflow-y-auto">
+          <div v-for="att in confirmApprovalTarget.attachments" :key="att.id" 
+               class="flex items-center justify-between p-2 rounded-lg border border-gray-100 bg-white hover:border-blue-300 transition-all cursor-pointer shadow-sm group"
+               @click="window.open(att.url || `/storage/${att.file_path}`, '_blank')">
+            <div class="flex items-center gap-2 min-w-0">
+               <FileOutlined class="text-gray-400 text-xs" />
+               <span class="text-[10px] text-gray-700 font-medium truncate max-w-[280px] hover:text-blue-600">{{ att.name }}</span>
+            </div>
+            <EyeOutlined class="text-[10px] text-gray-300 group-hover:text-blue-500" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Accountant payment proof upload (Mandatory) -->
+      <div class="border-t border-dashed pt-4">
+        <div class="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1">
+          <UploadOutlined class="text-blue-500" /> Chứng từ thanh toán / Ủy nhiệm chi * <span class="text-red-500">(Bắt buộc)</span>
+        </div>
+        
+        <div class="flex flex-col gap-2">
+          <!-- Selection Button -->
+          <div class="relative group">
+            <input 
+              type="file" 
+              multiple 
+              @change="e => confirmApprovalFiles = [...(e.target.files || [])]" 
+              class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" 
+            />
+            <div class="flex items-center justify-center gap-2 py-3 px-4 border-2 border-dashed border-blue-100 rounded-xl group-hover:border-blue-400 group-hover:bg-blue-50 transition-all">
+              <UploadOutlined class="text-blue-400 group-hover:text-blue-600" />
+              <span class="text-xs font-semibold text-blue-500 group-hover:text-blue-700">
+                {{ confirmApprovalFiles.length ? 'Thay đổi tệp đã chọn' : 'Chọn tệp chứng từ thanh toán' }}
+              </span>
+            </div>
+          </div>
+
+          <!-- File List -->
+          <div v-if="confirmApprovalFiles.length" class="space-y-1.5 mt-1">
+            <div v-for="(file, idx) in confirmApprovalFiles" :key="idx" class="flex items-center justify-between p-2 bg-blue-50/50 rounded-lg border border-blue-100/50">
+              <div class="flex items-center gap-2 min-w-0">
+                <PaperClipOutlined class="text-blue-400 text-xs" />
+                <span class="text-[10px] font-medium text-blue-700 truncate max-w-[280px]">{{ file.name }}</span>
+                <span class="text-[9px] text-gray-400">({{ formatFileSize(file.size) }})</span>
+              </div>
+              <a-button type="text" size="small" @click="confirmApprovalFiles.splice(idx, 1)" class="h-5 w-5 p-0 flex items-center justify-center">
+                <CloseOutlined class="text-[10px] text-gray-400 hover:text-red-500" />
+              </a-button>
+            </div>
+          </div>
+          <div v-else class="text-[10px] text-red-500 pl-1 mt-1 font-medium flex items-center gap-1">
+            <span class="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span>
+            * Vui lòng đính kèm chứng từ chuyển khoản để hoàn tất xác nhận.
+          </div>
         </div>
       </div>
     </div>
@@ -821,6 +920,11 @@ const paymentProofTarget = ref(null)
 const paymentProofFiles = ref([])
 const paymentProofForm = ref({ paid_date: new Date().toISOString().slice(0, 10), actual_amount: null })
 const paymentProofLoading = ref(false)
+
+const showConfirmApprovalModal = ref(false)
+const confirmApprovalTarget = ref(null)
+const confirmApprovalType = ref('')
+const confirmApprovalFiles = ref([])
 
 const typeColors = {
   project_cost: 'blue',
@@ -1205,14 +1309,11 @@ const handleApproveByType = (record) => {
   const isAccountantStep = accountantApproveTypes.includes(type) || activeRole.value === 'accountant'
   const isExempt = type === 'attendance' || record.category === 'labor'
   
-  // Enforce mandatory attachments for Accountant level on financial items
-  if (isAccountantStep && !isExempt && (record.attachments_count === 0 || !record.attachments_count)) {
-    Modal.warning({
-      title: 'Thiếu chứng từ đính kèm',
-      content: 'Phiếu này chưa có tệp chứng từ đính kèm. Kế toán bắt buộc phải kiểm tra chứng từ (hóa đơn, phiếu chi, biên lai...) trước khi xác nhận duyệt phiếu để đảm bảo tính chính xác và minh bạch tài chính. Vui lòng yêu cầu người tạo phiếu bổ sung chứng từ.',
-      okText: 'Tôi đã hiểu',
-      centered: true
-    })
+  if (isAccountantStep && !isExempt) {
+    confirmApprovalTarget.value = record
+    confirmApprovalType.value = type
+    confirmApprovalFiles.value = []
+    showConfirmApprovalModal.value = true
     return
   }
 
@@ -1294,6 +1395,58 @@ const handleReject = () => {
       message.error('Không thể từ chối yêu cầu này')
       rejectLoading.value = false
     },
+  })
+}
+
+const canApproveDirectly = (item) => {
+  if (!item) return false
+  const isPending = ['pending', 'pending_management_approval', 'pending_accountant_approval', 'pending_management', 'pending_accountant', 'pending_accountant_confirmation', 'customer_paid', 'submitted', 'under_review'].includes(item.status)
+  return isPending
+}
+
+const handleApproveDirectly = (item) => {
+  handleApproveByType(item)
+}
+
+const handleRejectDirectly = (item) => {
+  openRejectModal(item)
+}
+
+const formatFileSize = (bytes) => {
+  if (!bytes) return ''
+  if (bytes < 1024) return bytes + ' B'
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
+}
+
+const confirmApproveAccountant = () => {
+  if (!confirmApprovalFiles.value.length) {
+    message.warning('Vui lòng chọn ít nhất một chứng từ chuyển khoản.')
+    return
+  }
+
+  const fd = new FormData()
+  confirmApprovalFiles.value.forEach(f => fd.append('files[]', f))
+
+  const urlFn = approveUrlMap[confirmApprovalType.value]
+  if (!urlFn) return
+
+  router.post(urlFn(confirmApprovalTarget.value), fd, {
+    forceFormData: true,
+    preserveScroll: true,
+    onSuccess: () => {
+      showConfirmApprovalModal.value = false
+      confirmApprovalFiles.value = []
+      detailItem.value = null
+      message.success(`Đã xác nhận thành công`)
+    },
+    onError: (errs) => {
+      if (errs && errs.files) {
+        message.error(errs.files[0])
+      } else {
+        message.error('Đã xảy ra lỗi khi xác nhận.')
+      }
+    }
   })
 }
 </script>

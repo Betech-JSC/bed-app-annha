@@ -823,6 +823,9 @@ class CrmProjectsController extends Controller
         ]);
 
         try {
+            // Mandatorily attach uploaded files to the Project Payment (UNC/Sao kê báo có)
+            $this->attachFilesToEntity($request, $payment, "project-payments/{$project->id}/{$payment->id}", true);
+
             $this->financialService->confirmProjectPayment($payment, $user);
             if (!empty($validated['paid_date'])) {
                 $payment->update(['paid_date' => $validated['paid_date']]);
@@ -3177,7 +3180,7 @@ class CrmProjectsController extends Controller
         return back()->with('error', 'Thao tác không thành công.');
     }
 
-    public function confirmRentalAccountant(string $projectId, string $rentalId)
+    public function confirmRentalAccountant(Request $request, string $projectId, string $rentalId)
     {
         $project = Project::findOrFail($projectId);
         $user = auth('admin')->user();
@@ -3185,10 +3188,17 @@ class CrmProjectsController extends Controller
 
         $rental = \App\Models\EquipmentRental::where('project_id', $project->id)->findOrFail($rentalId);
 
-        if ($this->equipmentService->confirmRentalByAccountant($rental, $user)) {
-            return back()->with('success', 'Kế toán đã xác nhận. Thiết bị chuyển sang Đang sử dụng.');
+        try {
+            // Mandatorily attach uploaded files to the Equipment Rental
+            $this->attachFilesToEntity($request, $rental, "equipment-rentals/{$project->id}/{$rental->id}", true);
+
+            if ($this->equipmentService->confirmRentalByAccountant($rental, $user)) {
+                return back()->with('success', 'Kế toán đã xác nhận. Thiết bị chuyển sang Đang sử dụng.');
+            }
+            return back()->with('error', 'Thao tác không thành công.');
+        } catch (\Exception $e) {
+            return back()->with('error', 'Lỗi: ' . $e->getMessage());
         }
-        return back()->with('error', 'Thao tác không thành công.');
     }
 
     public function revertRentalToDraft(string $projectId, string $rentalId)
@@ -3368,7 +3378,7 @@ class CrmProjectsController extends Controller
         return back()->with('error', 'Thao tác không thành công.');
     }
 
-    public function confirmPurchaseAccountant(string $projectId, string $purchaseId)
+    public function confirmPurchaseAccountant(Request $request, string $projectId, string $purchaseId)
     {
         $project = Project::findOrFail($projectId);
         $user = auth('admin')->user();
@@ -3379,6 +3389,9 @@ class CrmProjectsController extends Controller
             ->findOrFail($purchaseId);
 
         try {
+            // Mandatorily attach uploaded files to the Equipment Purchase
+            $this->attachFilesToEntity($request, $purchase, "equipment-purchases/{$project->id}/{$purchase->id}", true);
+
             $this->equipmentService->confirmPurchaseByAccountant($purchase, $user);
 
             // Create global project cost for reporting
@@ -3534,7 +3547,7 @@ class CrmProjectsController extends Controller
     }
 
     // ─── Asset Usage: KT xác nhận (pending_accountant → in_use) ───
-    public function confirmAssetUsageAccountant(string $projectId, string $usageId)
+    public function confirmAssetUsageAccountant(Request $request, string $projectId, string $usageId)
     {
         $project = Project::findOrFail($projectId);
         $user = auth('admin')->user();
@@ -3542,10 +3555,17 @@ class CrmProjectsController extends Controller
 
         $usage = \App\Models\AssetUsage::where('project_id', $project->id)->findOrFail($usageId);
 
-        if ($this->equipmentService->confirmUsageByAccountant($usage, $user)) {
-            return back()->with('success', 'KT đã xác nhận. Thiết bị chuyển sang Đang sử dụng.');
+        try {
+            // Mandatorily attach uploaded files to the Asset Usage
+            $this->attachFilesToEntity($request, $usage, "asset-usages/{$project->id}/{$usage->id}", true);
+
+            if ($this->equipmentService->confirmUsageByAccountant($usage, $user)) {
+                return back()->with('success', 'KT đã xác nhận. Thiết bị chuyển sang Đang sử dụng.');
+            }
+            return back()->with('error', 'Thao tác không thành công.');
+        } catch (\Exception $e) {
+            return back()->with('error', 'Lỗi: ' . $e->getMessage());
         }
-        return back()->with('error', 'Thao tác không thành công.');
     }
 
     public function revertAssetUsageToDraft(string $projectId, string $usageId)

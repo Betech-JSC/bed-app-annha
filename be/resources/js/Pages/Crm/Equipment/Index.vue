@@ -229,6 +229,98 @@
       </div>
     </div>
   </a-drawer>
+
+  <!-- Accountant Confirm Equipment Modal with mandatory file upload -->
+  <a-modal v-model:open="showConfirmEquipmentModal" title="Kế toán xác nhận chi & Nhập kho" @ok="confirmApproveEquipment" ok-text="Xác nhận" cancel-text="Hủy" centered class="crm-modal" :ok-button-props="{ disabled: !confirmEquipmentFiles.length }">
+    <div class="p-4 space-y-4">
+      <div class="bg-blue-50 p-3 rounded-xl border border-blue-100 flex items-center gap-3">
+        <div class="w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center shadow-lg"><InfoCircleOutlined /></div>
+        <div class="text-[11px] text-blue-700 leading-tight">
+          Vui lòng kiểm tra chứng từ mua thiết bị trước khi đính kèm Biên lai chuyển tiền / Ủy nhiệm chi để xác nhận chi & nhập kho thiết bị.
+        </div>
+      </div>
+
+      <div v-if="confirmEquipmentTarget" class="bg-gray-50 p-3 rounded-lg border border-gray-100 text-xs">
+         <div class="flex justify-between">
+            <span class="text-gray-400">Thiết bị:</span>
+            <span class="font-bold text-gray-700">{{ confirmEquipmentTarget.name }}</span>
+         </div>
+         <div class="flex justify-between mt-1">
+            <span class="text-gray-400">Mã tài sản:</span>
+            <span class="font-medium text-gray-700">{{ confirmEquipmentTarget.code || 'NO-CODE' }}</span>
+         </div>
+         <div class="flex justify-between mt-1">
+            <span class="text-gray-400">Số lượng:</span>
+            <span class="font-bold text-gray-700">{{ confirmEquipmentTarget.quantity || 1 }} {{ confirmEquipmentTarget.unit || 'cái' }}</span>
+         </div>
+         <div class="flex justify-between mt-1">
+            <span class="text-gray-400">Thành tiền:</span>
+            <span class="font-bold text-red-600">{{ formatCurrency((confirmEquipmentTarget.quantity || 1) * (confirmEquipmentTarget.purchase_price || 0)) }}</span>
+         </div>
+      </div>
+
+      <!-- Existing attachments uploaded by creator -->
+      <div v-if="confirmEquipmentTarget?.attachments?.length" class="border border-dashed border-gray-200 rounded-xl p-3 bg-gray-50/50">
+        <div class="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1">
+          <PaperClipOutlined class="text-gray-400" /> Tệp chứng từ gốc ({{ confirmEquipmentTarget.attachments.length }})
+        </div>
+        <div class="space-y-1.5 max-h-[120px] overflow-y-auto">
+          <div v-for="att in confirmEquipmentTarget.attachments" :key="att.id" 
+               class="flex items-center justify-between p-2 rounded-lg border border-gray-100 bg-white hover:border-blue-300 transition-all cursor-pointer shadow-sm group"
+               @click="window.open(att.file_url || `/storage/${att.file_path}`, '_blank')">
+            <div class="flex items-center gap-2 min-w-0">
+               <FileOutlined class="text-gray-400 text-xs" />
+               <span class="text-[10px] text-gray-700 font-medium truncate max-w-[280px] hover:text-blue-600">{{ att.original_name || att.file_name }}</span>
+            </div>
+            <EyeOutlined class="text-[10px] text-gray-300 group-hover:text-blue-500" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Accountant payment proof upload (Mandatory) -->
+      <div class="border-t border-dashed pt-4">
+        <div class="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1">
+          <UploadOutlined class="text-blue-500" /> Chứng từ thanh toán / Ủy nhiệm chi * <span class="text-red-500">(Bắt buộc)</span>
+        </div>
+        
+        <div class="flex flex-col gap-2">
+          <!-- Selection Button -->
+          <div class="relative group">
+            <input 
+              type="file" 
+              multiple 
+              @change="e => confirmEquipmentFiles = [...(e.target.files || [])]" 
+              class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" 
+            />
+            <div class="flex items-center justify-center gap-2 py-3 px-4 border-2 border-dashed border-blue-100 rounded-xl group-hover:border-blue-400 group-hover:bg-blue-50 transition-all">
+              <UploadOutlined class="text-blue-400 group-hover:text-blue-600" />
+              <span class="text-xs font-semibold text-blue-500 group-hover:text-blue-700">
+                {{ confirmEquipmentFiles.length ? 'Thay đổi tệp đã chọn' : 'Chọn tệp chứng từ thanh toán' }}
+              </span>
+            </div>
+          </div>
+
+          <!-- File List -->
+          <div v-if="confirmEquipmentFiles.length" class="space-y-1.5 mt-1">
+            <div v-for="(file, idx) in confirmEquipmentFiles" :key="idx" class="flex items-center justify-between p-2 bg-blue-50/50 rounded-lg border border-blue-100/50">
+              <div class="flex items-center gap-2 min-w-0">
+                <PaperClipOutlined class="text-blue-400 text-xs" />
+                <span class="text-[10px] font-medium text-blue-700 truncate max-w-[280px]">{{ file.name }}</span>
+                <span class="text-[9px] text-gray-400">({{ formatFileSize(file.size) }})</span>
+              </div>
+              <a-button type="text" size="small" @click="confirmEquipmentFiles.splice(idx, 1)" class="h-5 w-5 p-0 flex items-center justify-center">
+                <CloseOutlined class="text-[10px] text-gray-400 hover:text-red-500" />
+              </a-button>
+            </div>
+          </div>
+          <div v-else class="text-[10px] text-red-500 pl-1 mt-1 font-medium flex items-center gap-1">
+            <span class="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span>
+            * Vui lòng đính kèm chứng từ chuyển khoản để hoàn tất xác nhận.
+          </div>
+        </div>
+      </div>
+    </div>
+  </a-modal>
 </template>
 
 <script setup>
@@ -237,7 +329,8 @@ import { Head, useForm, router, usePage } from '@inertiajs/vue3'
 import CrmLayout from '@/Layouts/CrmLayout.vue'
 import PageHeader from '@/Components/Crm/PageHeader.vue'
 import StatCard from '@/Components/Crm/StatCard.vue'
-import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined, UploadOutlined, SendOutlined, CheckCircleOutlined, CheckSquareOutlined, InfoCircleOutlined, SafetyCertificateOutlined, FileOutlined, DownloadOutlined } from '@ant-design/icons-vue'
+import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined, UploadOutlined, SendOutlined, CheckCircleOutlined, CheckSquareOutlined, InfoCircleOutlined, SafetyCertificateOutlined, FileOutlined, DownloadOutlined, CloseOutlined, PaperClipOutlined } from '@ant-design/icons-vue'
+import { message } from 'ant-design-vue'
 
 defineOptions({ layout: CrmLayout })
 const props = defineProps({ equipment: Object, stats: Object, filters: Object })
@@ -265,6 +358,9 @@ const showModal = ref(false)
 const showDetailDrawer = ref(false)
 const editing = ref(null)
 const selectedItem = ref(null)
+const showConfirmEquipmentModal = ref(false)
+const confirmEquipmentTarget = ref(null)
+const confirmEquipmentFiles = ref([])
 const rejectReason = ref('')
 const fileList = ref([])
 const imagePreviewVisible = ref(false)
@@ -354,7 +450,32 @@ const openDetail = (item) => { selectedItem.value = item; showDetailDrawer.value
 // Workflow actions
 const submitItem = (e) => router.post(`/equipment/${e.id}/submit`, {}, { preserveScroll: true })
 const approveItem = (e) => router.post(`/equipment/${e.id}/approve-management`, {}, { preserveScroll: true })
-const confirmItem = (e) => router.post(`/equipment/${e.id}/confirm-accountant`, {}, { preserveScroll: true })
+const confirmItem = (e) => {
+  confirmEquipmentTarget.value = e
+  confirmEquipmentFiles.value = []
+  showConfirmEquipmentModal.value = true
+}
+const confirmApproveEquipment = () => {
+  if (!confirmEquipmentFiles.value.length) {
+    message.error('Vui lòng đính kèm chứng từ thanh toán.')
+    return
+  }
+  const formData = new FormData()
+  confirmEquipmentFiles.value.forEach(f => {
+    formData.append('files[]', f)
+  })
+  router.post(`/equipment/${confirmEquipmentTarget.value.id}/confirm-accountant`, formData, {
+    forceFormData: true,
+    preserveScroll: true,
+    onSuccess: () => {
+      showConfirmEquipmentModal.value = false
+      confirmEquipmentTarget.value = null
+      confirmEquipmentFiles.value = []
+      showDetailDrawer.value = false
+      message.success('Xác nhận chi & nhập kho thiết bị thành công.')
+    }
+  })
+}
 const rejectItem = (e) => router.post(`/equipment/${e.id}/reject`, { reason: rejectReason.value }, { preserveScroll: true, onSuccess: () => { rejectReason.value = ''; showDetailDrawer.value = false } })
 const revertItem = (e) => router.post(`/equipment/${e.id}/revert`, {}, { preserveScroll: true, onSuccess: () => { showDetailDrawer.value = false } })
 const deleteItem = (e) => router.delete(`/equipment/${e.id}`)

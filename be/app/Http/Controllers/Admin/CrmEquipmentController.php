@@ -15,10 +15,12 @@ use Inertia\Inertia;
 class CrmEquipmentController extends Controller
 {
     protected $equipmentService;
+    protected $attachmentService;
 
-    public function __construct(EquipmentService $equipmentService)
+    public function __construct(EquipmentService $equipmentService, \App\Services\AttachmentService $attachmentService)
     {
         $this->equipmentService = $equipmentService;
+        $this->attachmentService = $attachmentService;
     }
     public function index(Request $request)
     {
@@ -234,7 +236,7 @@ class CrmEquipmentController extends Controller
     /**
      * KT xác nhận chi & nhập kho (pending_accountant → available)
      */
-    public function confirmAccountant($id)
+    public function confirmAccountant(Request $request, $id)
     {
         $user = auth()->user();
         if (!$user && auth('admin')->check()) {
@@ -257,9 +259,11 @@ class CrmEquipmentController extends Controller
                 : back()->with('error', $msg);
         }
 
-        // Financial Gatekeeper: Accountant MUST have attachments
-        if ($eq->attachments()->count() === 0) {
-            $msg = 'Phiếu mua thiết bị này bắt buộc phải có file chứng từ đính kèm (hóa đơn, phiếu chi...) trước khi kế toán xác nhận nhập kho.';
+        try {
+            // Mandatorily attach uploaded files to the Equipment Purchase
+            $this->attachmentService->handleCrmUpload($request, $eq, "equipment-attachments/{$eq->id}", true);
+        } catch (\Exception $e) {
+            $msg = 'Lỗi đính kèm chứng từ: ' . $e->getMessage();
             return request()->wantsJson() 
                 ? response()->json(['success' => false, 'message' => $msg], 422)
                 : back()->with('error', $msg);

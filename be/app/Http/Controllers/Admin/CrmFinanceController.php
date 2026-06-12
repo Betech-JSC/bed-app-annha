@@ -21,10 +21,12 @@ class CrmFinanceController extends Controller
     use CrmAuthorization;
 
     protected $financialService;
+    protected $attachmentService;
 
-    public function __construct(\App\Services\FinancialService $financialService)
+    public function __construct(\App\Services\FinancialService $financialService, \App\Services\AttachmentService $attachmentService)
     {
         $this->financialService = $financialService;
+        $this->attachmentService = $attachmentService;
     }
     public function index(Request $request)
     {
@@ -334,6 +336,8 @@ class CrmFinanceController extends Controller
                 $this->financialService->approveCostByManagement($cost, $user);
             } elseif ($cost->status === 'pending_accountant_approval') {
                 $this->crmRequire($user, Permissions::COMPANY_COST_APPROVE_ACCOUNTANT);
+                // Mandatorily attach uploaded files to the Company Cost
+                $this->attachmentService->handleCrmUpload($request, $cost, "company-costs/{$cost->id}", true);
                 $this->financialService->approveCostByAccountant($cost, [], $user);
             } else {
                 throw new \Exception('Trạng thái không hợp lệ để duyệt.');

@@ -359,6 +359,94 @@
       </div>
     </div>
   </a-modal>
+
+  <!-- ACCOUNTANT CONFIRM COMPANY COST MODAL -->
+  <a-modal v-model:open="showConfirmCompanyCostModal" title="Kế toán xác nhận - Chi phí Công ty" @ok="confirmApproveCompanyCost" ok-text="Xác nhận" cancel-text="Hủy" centered class="crm-modal" :ok-button-props="{ disabled: !confirmCostFiles.length }">
+    <div class="p-4 space-y-4">
+      <div class="bg-blue-50 p-3 rounded-xl border border-blue-100 flex items-center gap-3">
+        <div class="w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center shadow-lg"><InfoCircleOutlined /></div>
+        <div class="text-[11px] text-blue-700 leading-tight">
+          Vui lòng kiểm tra kỹ thông tin khoản chi và chứng từ gốc trước khi đính kèm Biên lai chuyển tiền để kế toán xác nhận hoàn thành.
+        </div>
+      </div>
+
+      <div v-if="confirmCostTarget" class="bg-gray-50 p-3 rounded-lg border border-gray-100 text-xs">
+         <div class="flex justify-between">
+            <span class="text-gray-400">Khoản chi:</span>
+            <span class="font-bold text-gray-700">{{ confirmCostTarget.name }}</span>
+         </div>
+         <div class="flex justify-between mt-1">
+            <span class="text-gray-400">Số tiền:</span>
+            <span class="font-bold text-red-600">{{ fmtCurrency(confirmCostTarget.amount) }}</span>
+         </div>
+         <div v-if="confirmCostTarget.description" class="flex flex-col mt-1.5 border-t border-gray-200/50 pt-1.5">
+            <span class="text-gray-400">Mô tả:</span>
+            <span class="text-gray-600 italic mt-0.5">{{ confirmCostTarget.description }}</span>
+         </div>
+      </div>
+
+      <!-- Existing attachments uploaded by creator -->
+      <div v-if="confirmCostTarget?.attachments?.length" class="border border-dashed border-gray-200 rounded-xl p-3 bg-gray-50/50">
+        <div class="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1">
+          <PaperClipOutlined class="text-gray-400" /> Tệp chứng từ của phiếu ({{ confirmCostTarget.attachments.length }})
+        </div>
+        <div class="space-y-1.5 max-h-[120px] overflow-y-auto">
+          <div v-for="att in confirmCostTarget.attachments" :key="att.id" 
+               class="flex items-center justify-between p-2 rounded-lg border border-gray-100 bg-white hover:border-blue-300 transition-all cursor-pointer shadow-sm group"
+               @click="window.open(att.file_url || `/storage/${att.file_path}`, '_blank')">
+            <div class="flex items-center gap-2 min-w-0">
+               <FileTextOutlined class="text-gray-400 text-xs" />
+               <span class="text-[10px] text-gray-700 font-medium truncate max-w-[280px] hover:text-blue-600">{{ att.original_name || att.file_name }}</span>
+            </div>
+            <EyeOutlined class="text-[10px] text-gray-300 group-hover:text-blue-500" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Accountant payment proof upload (Mandatory) -->
+      <div class="border-t border-dashed pt-4">
+        <div class="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1">
+          <UploadOutlined class="text-blue-500" /> Chứng từ thanh toán / Ủy nhiệm chi * <span class="text-red-500">(Bắt buộc)</span>
+        </div>
+        
+        <div class="flex flex-col gap-2">
+          <!-- Selection Button -->
+          <div class="relative group">
+            <input 
+              type="file" 
+              multiple 
+              @change="e => confirmCostFiles = [...(e.target.files || [])]" 
+              class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" 
+            />
+            <div class="flex items-center justify-center gap-2 py-3 px-4 border-2 border-dashed border-blue-100 rounded-xl group-hover:border-blue-400 group-hover:bg-blue-50 transition-all">
+              <UploadOutlined class="text-blue-400 group-hover:text-blue-600" />
+              <span class="text-xs font-semibold text-blue-500 group-hover:text-blue-700">
+                {{ confirmCostFiles.length ? 'Thay đổi tệp đã chọn' : 'Chọn tệp chứng từ thanh toán' }}
+              </span>
+            </div>
+          </div>
+
+          <!-- File List -->
+          <div v-if="confirmCostFiles.length" class="space-y-1.5 mt-1">
+            <div v-for="(file, idx) in confirmCostFiles" :key="idx" class="flex items-center justify-between p-2 bg-blue-50/50 rounded-lg border border-blue-100/50">
+              <div class="flex items-center gap-2 min-w-0">
+                <PaperClipOutlined class="text-blue-400 text-xs" />
+                <span class="text-[10px] font-medium text-blue-700 truncate max-w-[280px]">{{ file.name }}</span>
+                <span class="text-[9px] text-gray-400">({{ formatFileSize(file.size) }})</span>
+              </div>
+              <a-button type="text" size="small" @click="confirmCostFiles.splice(idx, 1)" class="h-5 w-5 p-0 flex items-center justify-center">
+                <CloseOutlined class="text-[10px] text-gray-400 hover:text-red-500" />
+              </a-button>
+            </div>
+          </div>
+          <div v-else class="text-[10px] text-red-500 pl-1 mt-1 font-medium flex items-center gap-1">
+            <span class="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span>
+            * Vui lòng đính kèm chứng từ chuyển khoản để hoàn tất xác nhận.
+          </div>
+        </div>
+      </div>
+    </div>
+  </a-modal>
 </template>
 
 <script setup>
@@ -378,7 +466,7 @@ import {
   PlusOutlined, DollarOutlined, CheckCircleOutlined, ClockCircleOutlined,
   FileTextOutlined, EditOutlined, DeleteOutlined, SendOutlined, UndoOutlined,
   UploadOutlined, InboxOutlined, PaperClipOutlined, EyeOutlined, InfoCircleOutlined,
-  CloseCircleOutlined,
+  CloseCircleOutlined, CloseOutlined,
 } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 
@@ -525,12 +613,59 @@ const showDetail = (record) => {
   drawerVisible.value = true
 }
 
+const showConfirmCompanyCostModal = ref(false)
+const confirmCostTarget = ref(null)
+const confirmCostFiles = ref([])
+
+const formatFileSize = (bytes) => {
+  if (!bytes) return ''
+  if (bytes < 1024) return bytes + ' B'
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
+}
+
 const approveCost = (id) => {
-  router.post(`/finance/company-costs/${id}/approve`, {}, {
+  // Find cost from costs list or selectedCost
+  const cost = props.costs?.data?.find(c => c.id === id) || (selectedCost.value?.id === id ? selectedCost.value : null)
+  if (cost && cost.status === 'pending_accountant_approval') {
+    confirmCostTarget.value = cost
+    confirmCostFiles.value = []
+    showConfirmCompanyCostModal.value = true
+  } else {
+    router.post(`/finance/company-costs/${id}/approve`, {}, {
+      preserveScroll: true,
+      onSuccess: () => {
+        message.success('Đã duyệt chi phí thành công')
+        refreshSelectedCost(id)
+      }
+    })
+  }
+}
+
+const confirmApproveCompanyCost = () => {
+  if (!confirmCostFiles.value.length) {
+    message.warning('Vui lòng chọn ít nhất một chứng từ chuyển khoản.')
+    return
+  }
+
+  const fd = new FormData()
+  confirmCostFiles.value.forEach(f => fd.append('files[]', f))
+
+  router.post(`/finance/company-costs/${confirmCostTarget.value.id}/approve`, fd, {
+    forceFormData: true,
     preserveScroll: true,
     onSuccess: () => {
-      message.success('Đã duyệt chi phí thành công')
-      refreshSelectedCost(id)
+      showConfirmCompanyCostModal.value = false
+      confirmCostFiles.value = []
+      message.success('Đã xác nhận chi phí thành công')
+      refreshSelectedCost(confirmCostTarget.value.id)
+    },
+    onError: (errs) => {
+      if (errs && errs.files) {
+        message.error(errs.files[0])
+      } else {
+        message.error('Đã xảy ra lỗi khi xác nhận.')
+      }
     }
   })
 }
