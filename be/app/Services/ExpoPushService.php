@@ -35,6 +35,15 @@ class ExpoPushService
                 return null;
             }
 
+            // Skip sending push notification in local environment unless enabled explicitly
+            if (config('app.env') === 'local' && !env('EXPO_PUSH_ENABLE_LOCAL', false)) {
+                Log::info('ExpoPushService: Skipped sending push notification in local environment', [
+                    'token_count' => count($tokens),
+                    'title' => $title,
+                ]);
+                return null;
+            }
+
             // Tạo payload cho Expo API
             $payloads = array_map(function ($t) use ($title, $body, $data) {
                 return [
@@ -58,7 +67,7 @@ class ExpoPushService
                     'Accept' => 'application/json',
                     'Content-Type' => 'application/json',
                     'Accept-Encoding' => 'gzip, deflate',
-                ])->timeout(30)->post('https://exp.host/--/api/v2/push/send', $chunk);
+                ])->timeout(3)->post('https://exp.host/--/api/v2/push/send', $chunk);
 
                 if (!$response->successful()) {
                     Log::error('Expo push failed', [
