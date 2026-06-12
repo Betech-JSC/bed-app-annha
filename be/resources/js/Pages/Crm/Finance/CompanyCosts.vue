@@ -361,7 +361,7 @@
   </a-modal>
 
   <!-- ACCOUNTANT CONFIRM COMPANY COST MODAL -->
-  <a-modal v-model:open="showConfirmCompanyCostModal" title="Kế toán xác nhận - Chi phí Công ty" @ok="confirmApproveCompanyCost" ok-text="Xác nhận" cancel-text="Hủy" centered class="crm-modal" :ok-button-props="{ disabled: !confirmCostFiles.length }">
+  <a-modal v-model:open="showConfirmCompanyCostModal" title="Kế toán xác nhận - Chi phí Công ty" @ok="confirmApproveCompanyCost" ok-text="Xác nhận" cancel-text="Hủy" centered class="crm-modal" :ok-button-props="{ disabled: !confirmCostFiles.length || confirmCostLoading }" :confirm-loading="confirmCostLoading">
     <div class="p-4 space-y-4">
       <div class="bg-blue-50 p-3 rounded-xl border border-blue-100 flex items-center gap-3">
         <div class="w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center shadow-lg"><InfoCircleOutlined /></div>
@@ -386,12 +386,12 @@
       </div>
 
       <!-- Existing attachments uploaded by creator -->
-      <div v-if="confirmCostTarget?.attachments?.length" class="border border-dashed border-gray-200 rounded-xl p-3 bg-gray-50/50">
+      <div v-if="confirmCostTarget?.attachments?.filter(att => att.description !== 'after')?.length" class="border border-dashed border-gray-200 rounded-xl p-3 bg-gray-50/50">
         <div class="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1">
-          <PaperClipOutlined class="text-gray-400" /> Tệp chứng từ của phiếu ({{ confirmCostTarget.attachments.length }})
+          <PaperClipOutlined class="text-gray-400" /> Tệp chứng từ gốc ({{ confirmCostTarget.attachments.filter(att => att.description !== 'after').length }})
         </div>
         <div class="space-y-1.5 max-h-[120px] overflow-y-auto">
-          <div v-for="att in confirmCostTarget.attachments" :key="att.id" 
+          <div v-for="att in confirmCostTarget.attachments.filter(att => att.description !== 'after')" :key="att.id" 
                class="flex items-center justify-between p-2 rounded-lg border border-gray-100 bg-white hover:border-blue-300 transition-all cursor-pointer shadow-sm group"
                @click="window.open(att.file_url || `/storage/${att.file_path}`, '_blank')">
             <div class="flex items-center gap-2 min-w-0">
@@ -616,6 +616,7 @@ const showDetail = (record) => {
 const showConfirmCompanyCostModal = ref(false)
 const confirmCostTarget = ref(null)
 const confirmCostFiles = ref([])
+const confirmCostLoading = ref(false)
 
 const formatFileSize = (bytes) => {
   if (!bytes) return ''
@@ -648,6 +649,7 @@ const confirmApproveCompanyCost = () => {
     return
   }
 
+  confirmCostLoading.value = true
   const fd = new FormData()
   confirmCostFiles.value.forEach(f => fd.append('files[]', f))
 
@@ -666,6 +668,9 @@ const confirmApproveCompanyCost = () => {
       } else {
         message.error('Đã xảy ra lỗi khi xác nhận.')
       }
+    },
+    onFinish: () => {
+      confirmCostLoading.value = false
     }
   })
 }

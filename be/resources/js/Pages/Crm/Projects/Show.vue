@@ -2633,10 +2633,15 @@
       <!-- Existing attachments -->
       <div v-if="attachTarget?.attachments?.length" class="mb-4">
         <div class="text-xs font-semibold text-gray-500 mb-2">File đã đính kèm ({{ attachTarget.attachments.length }})</div>
-        <div v-for="att in attachTarget.attachments" :key="att.id" class="flex items-center gap-2 py-1.5 px-3 bg-gray-50 rounded-lg mb-1 text-sm">
+        <div v-for="att in attachTarget.attachments" :key="att.id" class="flex items-center gap-2 py-1.5 px-3 bg-gray-50 rounded-lg mb-1 text-sm text-gray-700 hover:bg-gray-100 transition group">
           <FileOutlined class="text-gray-400" />
           <a href="#" @click.prevent="openFilePreview(att)" class="text-blue-600 hover:underline flex-1 truncate cursor-pointer">{{ att.original_name || att.file_name }}</a>
-          <span class="text-gray-400 text-xs">{{ formatFileSize(att.file_size) }}</span>
+          <span class="text-gray-400 text-xs mr-2">{{ formatFileSize(att.file_size) }}</span>
+          <a-popconfirm title="Xóa tệp đính kèm này?" ok-text="Xóa" cancel-text="Hủy" @confirm="deleteUploadedFileDirectly(att.id)">
+            <a-button type="text" size="small" class="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity hover:text-red-500">
+              <DeleteOutlined class="text-xs" />
+            </a-button>
+          </a-popconfirm>
         </div>
       </div>
       <!-- Upload new files -->
@@ -3275,25 +3280,47 @@
       </div>
 
       <!-- Attachments Section -->
-      <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
-        <div class="flex justify-between items-center mb-4">
-           <div class="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2 text-blue-500"><FileProtectOutlined /> Chứng từ đính kèm ({{ costDetailRecord.attachments?.length || 0 }})</div>
-           <a-button v-if="can('cost.update') || (costDetailRecord.status === 'pending_accountant_approval' && can('cost.approve.accountant'))" type="link" size="small" @click="openAttachModal('cost', costDetailRecord)" class="p-0">Thêm tệp</a-button>
-        </div>
-        <div v-if="costDetailRecord.attachments?.length" class="flex flex-wrap gap-2">
-           <div v-for="att in costDetailRecord.attachments" :key="att.id" 
-                class="group relative w-16 h-16 rounded-lg border border-gray-200 overflow-hidden cursor-pointer hover:border-blue-400 transition"
-                @click="openFilePreview(att)">
-             <img v-if="isImageFile(att)" :src="att.file_url || att.url" class="w-full h-full object-cover" />
-             <div v-else class="w-full h-full flex flex-col items-center justify-center bg-gray-50 text-[10px] font-bold text-gray-400">
-               {{ fileExt(att).toUpperCase() }}
+      <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm space-y-6">
+        <div>
+          <div class="flex justify-between items-center mb-4">
+             <div class="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2 text-blue-500"><FileProtectOutlined /> Chứng từ đính kèm ({{ (costDetailRecord.attachments || []).filter(a => a.description !== 'after').length }})</div>
+             <a-button v-if="can('cost.update') || (costDetailRecord.status === 'pending_accountant_approval' && can('cost.approve.accountant'))" type="link" size="small" @click="openAttachModal('cost', costDetailRecord)" class="p-0">Thêm tệp</a-button>
+          </div>
+          <div v-if="(costDetailRecord.attachments || []).filter(a => a.description !== 'after').length" class="flex flex-wrap gap-2">
+             <div v-for="att in costDetailRecord.attachments.filter(a => a.description !== 'after')" :key="att.id" 
+                  class="group relative w-16 h-16 rounded-lg border border-gray-200 overflow-hidden cursor-pointer hover:border-blue-400 transition"
+                  @click="openFilePreview(att)">
+               <img v-if="isImageFile(att)" :src="att.file_url || att.url" class="w-full h-full object-cover" />
+               <div v-else class="w-full h-full flex flex-col items-center justify-center bg-gray-50 text-[10px] font-bold text-gray-400">
+                 {{ fileExt(att).toUpperCase() }}
+               </div>
+               <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
+                 <EyeOutlined class="text-white text-lg" />
+               </div>
              </div>
-             <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
-               <EyeOutlined class="text-white text-lg" />
-             </div>
-           </div>
+          </div>
+          <a-empty v-else :image="null" description="Chưa có chứng từ gốc" class="text-gray-300 my-0 py-2" />
         </div>
-        <a-empty v-else :image="null" description="Chưa có chứng từ" class="text-gray-300 my-0 py-2" />
+
+        <div>
+          <div class="flex justify-between items-center mb-4">
+             <div class="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2 text-green-600"><FileProtectOutlined /> Chứng từ thanh toán ({{ (costDetailRecord.attachments || []).filter(a => a.description === 'after').length }})</div>
+          </div>
+          <div v-if="(costDetailRecord.attachments || []).filter(a => a.description === 'after').length" class="flex flex-wrap gap-2">
+             <div v-for="att in costDetailRecord.attachments.filter(a => a.description === 'after')" :key="att.id" 
+                  class="group relative w-16 h-16 rounded-lg border border-gray-200 overflow-hidden cursor-pointer hover:border-blue-400 transition"
+                  @click="openFilePreview(att)">
+               <img v-if="isImageFile(att)" :src="att.file_url || att.url" class="w-full h-full object-cover" />
+               <div v-else class="w-full h-full flex flex-col items-center justify-center bg-gray-50 text-[10px] font-bold text-gray-400">
+                 {{ fileExt(att).toUpperCase() }}
+               </div>
+               <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
+                 <EyeOutlined class="text-white text-lg" />
+               </div>
+             </div>
+          </div>
+          <a-empty v-else :image="null" description="Chưa có chứng từ thanh toán" class="text-gray-300 my-0 py-2" />
+        </div>
       </div>
 
     </div>
@@ -3519,25 +3546,47 @@
       </div>
 
       <!-- Attachments -->
-      <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
-        <div class="flex justify-between items-center mb-4">
-          <div class="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2 text-blue-500"><CameraOutlined /> Chứng từ nhập hàng ({{ materialDetail.attachments?.length || 0 }})</div>
-          <a-button type="link" size="small" @click="openAttachModal('material_bill', materialDetail)" class="p-0">Thêm tệp</a-button>
-        </div>
-        <div v-if="materialDetail.attachments?.length" class="flex flex-wrap gap-2">
-          <div v-for="att in materialDetail.attachments" :key="att.id" 
-               class="group relative w-16 h-16 rounded-lg border border-gray-200 overflow-hidden cursor-pointer hover:border-blue-400 transition"
-               @click="openFilePreview(att)">
-            <img v-if="isImageFile(att)" :src="att.file_url || att.url" class="w-full h-full object-cover" />
-            <div v-else class="w-full h-full flex flex-col items-center justify-center bg-gray-50 text-[10px] font-bold text-gray-400">
-              {{ fileExt(att).toUpperCase() }}
-            </div>
-            <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
-              <EyeOutlined class="text-white text-lg" />
+      <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm space-y-6">
+        <div>
+          <div class="flex justify-between items-center mb-4">
+            <div class="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2 text-blue-500"><CameraOutlined /> Chứng từ nhập hàng ({{ (materialDetail.attachments || []).filter(a => a.description !== 'after').length }})</div>
+            <a-button type="link" size="small" @click="openAttachModal('material_bill', materialDetail)" class="p-0">Thêm tệp</a-button>
+          </div>
+          <div v-if="(materialDetail.attachments || []).filter(a => a.description !== 'after').length" class="flex flex-wrap gap-2">
+            <div v-for="att in materialDetail.attachments.filter(a => a.description !== 'after')" :key="att.id" 
+                 class="group relative w-16 h-16 rounded-lg border border-gray-200 overflow-hidden cursor-pointer hover:border-blue-400 transition"
+                 @click="openFilePreview(att)">
+              <img v-if="isImageFile(att)" :src="att.file_url || att.url" class="w-full h-full object-cover" />
+              <div v-else class="w-full h-full flex flex-col items-center justify-center bg-gray-50 text-[10px] font-bold text-gray-400">
+                {{ fileExt(att).toUpperCase() }}
+              </div>
+              <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
+                <EyeOutlined class="text-white text-lg" />
+              </div>
             </div>
           </div>
+          <a-empty v-else :image="null" description="Chưa có ảnh chứng từ nhập hàng" class="text-gray-300 my-0 py-2" />
         </div>
-        <a-empty v-else :image="null" description="Chưa có ảnh chứng từ" class="text-gray-300 my-0 py-2" />
+
+        <div>
+          <div class="flex justify-between items-center mb-4">
+            <div class="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2 text-green-600"><FileProtectOutlined /> Chứng từ thanh toán ({{ (materialDetail.attachments || []).filter(a => a.description === 'after').length }})</div>
+          </div>
+          <div v-if="(materialDetail.attachments || []).filter(a => a.description === 'after').length" class="flex flex-wrap gap-2">
+            <div v-for="att in materialDetail.attachments.filter(a => a.description === 'after')" :key="att.id" 
+                 class="group relative w-16 h-16 rounded-lg border border-gray-200 overflow-hidden cursor-pointer hover:border-blue-400 transition"
+                 @click="openFilePreview(att)">
+              <img v-if="isImageFile(att)" :src="att.file_url || att.url" class="w-full h-full object-cover" />
+              <div v-else class="w-full h-full flex flex-col items-center justify-center bg-gray-50 text-[10px] font-bold text-gray-400">
+                {{ fileExt(att).toUpperCase() }}
+              </div>
+              <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
+                <EyeOutlined class="text-white text-lg" />
+              </div>
+            </div>
+          </div>
+          <a-empty v-else :image="null" description="Chưa có chứng từ thanh toán" class="text-gray-300 my-0 py-2" />
+        </div>
       </div>
 
       <!-- Action Footer -->
@@ -3829,24 +3878,46 @@
         <div class="text-sm text-gray-600 leading-relaxed">{{ selectedRental.notes }}</div>
       </div>
 
-      <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
-        <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2 text-indigo-500"><FileOutlined /> Tệp đính kèm ({{ selectedRental.attachments?.length || 0 }})</div>
-        <div v-if="selectedRental.attachments?.length" class="space-y-2">
-          <div v-for="file in selectedRental.attachments" :key="file.id" class="flex items-center justify-between p-3 rounded-xl bg-gray-50 border border-gray-100 group hover:border-blue-200 transition-colors cursor-pointer" @click="openFilePreview(file)">
-             <div class="flex items-center gap-3">
-                <FilePdfOutlined v-if="isPdfFile(file)" class="text-red-500" />
-                <PictureOutlined v-else-if="isImageFile(file)" class="text-blue-500" />
-                <FileOutlined v-else class="text-gray-400" />
-                <span class="text-xs font-medium text-gray-700">{{ file.original_name }}</span>
-             </div>
-             <DownloadOutlined class="text-gray-300 group-hover:text-blue-500 transition-colors" />
+      <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm space-y-6">
+        <div>
+          <div class="flex justify-between items-center mb-4">
+             <div class="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2 text-blue-500"><FileOutlined /> Chứng từ đính kèm ({{ (selectedRental.attachments || []).filter(a => a.description !== 'after').length }})</div>
           </div>
+          <div v-if="(selectedRental.attachments || []).filter(a => a.description !== 'after').length" class="space-y-2">
+            <div v-for="file in selectedRental.attachments.filter(a => a.description !== 'after')" :key="file.id" class="flex items-center justify-between p-3 rounded-xl bg-gray-50 border border-gray-100 group hover:border-blue-200 transition-colors cursor-pointer" @click="openFilePreview(file)">
+               <div class="flex items-center gap-3">
+                  <FilePdfOutlined v-if="isPdfFile(file)" class="text-red-500" />
+                  <PictureOutlined v-else-if="isImageFile(file)" class="text-blue-500" />
+                  <FileOutlined v-else class="text-gray-400" />
+                  <span class="text-xs font-medium text-gray-700">{{ file.original_name || file.file_name }}</span>
+               </div>
+               <DownloadOutlined class="text-gray-300 group-hover:text-blue-500 transition-colors" />
+            </div>
+          </div>
+          <a-empty v-else :image="null" description="Chưa có chứng từ gốc" class="text-gray-300 my-0 py-2" />
         </div>
-        <a-empty v-else :image="null" description="Không có tệp" class="my-0" />
+
+        <div>
+          <div class="flex justify-between items-center mb-4">
+             <div class="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2 text-green-600"><FileProtectOutlined /> Chứng từ thanh toán ({{ (selectedRental.attachments || []).filter(a => a.description === 'after').length }})</div>
+          </div>
+          <div v-if="(selectedRental.attachments || []).filter(a => a.description === 'after').length" class="space-y-2">
+            <div v-for="file in selectedRental.attachments.filter(a => a.description === 'after')" :key="file.id" class="flex items-center justify-between p-3 rounded-xl bg-gray-50 border border-gray-100 group hover:border-blue-200 transition-colors cursor-pointer" @click="openFilePreview(file)">
+               <div class="flex items-center gap-3">
+                  <FilePdfOutlined v-if="isPdfFile(file)" class="text-red-500" />
+                  <PictureOutlined v-else-if="isImageFile(file)" class="text-blue-500" />
+                  <FileOutlined v-else class="text-gray-400" />
+                  <span class="text-xs font-medium text-gray-700">{{ file.original_name || file.file_name }}</span>
+               </div>
+               <DownloadOutlined class="text-gray-300 group-hover:text-blue-500 transition-colors" />
+            </div>
+          </div>
+          <a-empty v-else :image="null" description="Chưa có chứng từ thanh toán" class="text-gray-300 my-0 py-2" />
+        </div>
       </div>
 
       <!-- Warning: Missing attachments for rental accountant step -->
-      <div v-if="selectedRental.status === 'pending_accountant' && !selectedRental.attachments?.length" class="p-4 bg-red-50 rounded-2xl border-2 border-red-200">
+      <div v-if="selectedRental.status === 'pending_accountant' && !(selectedRental.attachments || []).filter(a => a.description !== 'after').length" class="p-4 bg-red-50 rounded-2xl border-2 border-red-200">
         <div class="text-xs font-bold text-red-500 uppercase tracking-wider mb-2 flex items-center gap-2"><ExclamationCircleOutlined /> Thiếu chứng từ</div>
         <div class="text-sm text-red-700">Phiếu thuê thiết bị chưa có file chứng từ đính kèm. <span class="font-bold">Kế toán không thể xác nhận</span> khi thiếu chứng từ. Vui lòng yêu cầu người tạo phiếu bổ sung.</div>
       </div>
@@ -3862,8 +3933,8 @@
            <a-button v-if="selectedRental.status === 'draft' && can('equipment.update')" @click="openRentalModal(selectedRental)"><EditOutlined /> Sửa</a-button>
            <a-button v-if="selectedRental.status === 'draft' && can('equipment.update')" type="primary" @click="submitRental(selectedRental)">Gửi duyệt</a-button>
            <a-button v-if="selectedRental.status === 'pending_management' && can('equipment.approve')" type="primary" class="!bg-green-500 !border-green-500 hover:!bg-green-600" @click="approveRentalMgmt(selectedRental)"><CheckCircleOutlined /> BĐH Duyệt</a-button>
-            <a-tooltip v-if="selectedRental.status === 'pending_accountant' && can('equipment.approve')" :title="!selectedRental.attachments?.length ? 'Thiếu chứng từ — Không thể xác nhận' : ''">
-              <a-button type="primary" :disabled="!selectedRental.attachments?.length" @click="confirmRentalKT(selectedRental)"><CheckOutlined /> KT Xác nhận</a-button>
+            <a-tooltip v-if="selectedRental.status === 'pending_accountant' && can('equipment.approve')" :title="!(selectedRental.attachments || []).filter(a => a.description !== 'after').length ? 'Thiếu chứng từ — Không thể xác nhận' : ''">
+              <a-button type="primary" :disabled="!(selectedRental.attachments || []).filter(a => a.description !== 'after').length" @click="confirmRentalKT(selectedRental)"><CheckOutlined /> KT Xác nhận</a-button>
             </a-tooltip>
             <a-button v-if="selectedRental.status === 'in_use' && can('equipment.update')" type="primary" class="!bg-orange-500 !border-orange-500 hover:!bg-orange-600" @click="requestReturnRental(selectedRental)">Đánh dấu đã trả</a-button>
             <a-button v-if="selectedRental.status === 'pending_return' && can('equipment.approve')" type="primary" @click="confirmReturnRentalAction(selectedRental)"><CheckOutlined /> KT Xác nhận trả</a-button>
@@ -3987,23 +4058,46 @@
         </div>
       </div>
 
-      <div v-if="selectedUsage.attachments?.length" class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
-        <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2 text-indigo-500"><FileOutlined /> Tệp đính kèm ({{ selectedUsage.attachments.length }})</div>
-        <div class="space-y-2">
-          <div v-for="file in selectedUsage.attachments" :key="file.id" class="flex items-center justify-between p-3 rounded-xl bg-gray-50 border border-gray-100 group hover:border-blue-200 transition-colors cursor-pointer" @click="openFilePreview(file)">
-             <div class="flex items-center gap-3">
-                <FilePdfOutlined v-if="isPdfFile(file)" class="text-red-500" />
-                <PictureOutlined v-else-if="isImageFile(file)" class="text-blue-500" />
-                <FileOutlined v-else class="text-gray-400" />
-                <span class="text-xs font-medium text-gray-700">{{ file.original_name }}</span>
-             </div>
-             <DownloadOutlined class="text-gray-300 group-hover:text-blue-500 transition-colors" />
+      <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm space-y-6">
+        <div>
+          <div class="flex justify-between items-center mb-4">
+             <div class="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2 text-blue-500"><FileOutlined /> Chứng từ đính kèm ({{ (selectedUsage.attachments || []).filter(a => a.description !== 'after').length }})</div>
           </div>
+          <div v-if="(selectedUsage.attachments || []).filter(a => a.description !== 'after').length" class="space-y-2">
+            <div v-for="file in selectedUsage.attachments.filter(a => a.description !== 'after')" :key="file.id" class="flex items-center justify-between p-3 rounded-xl bg-gray-50 border border-gray-100 group hover:border-blue-200 transition-colors cursor-pointer" @click="openFilePreview(file)">
+               <div class="flex items-center gap-3">
+                  <FilePdfOutlined v-if="isPdfFile(file)" class="text-red-500" />
+                  <PictureOutlined v-else-if="isImageFile(file)" class="text-blue-500" />
+                  <FileOutlined v-else class="text-gray-400" />
+                  <span class="text-xs font-medium text-gray-700">{{ file.original_name || file.file_name }}</span>
+               </div>
+               <DownloadOutlined class="text-gray-300 group-hover:text-blue-500 transition-colors" />
+            </div>
+          </div>
+          <a-empty v-else :image="null" description="Chưa có chứng từ gốc" class="text-gray-300 my-0 py-2" />
+        </div>
+
+        <div>
+          <div class="flex justify-between items-center mb-4">
+             <div class="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2 text-green-600"><FileProtectOutlined /> Chứng từ thanh toán ({{ (selectedUsage.attachments || []).filter(a => a.description === 'after').length }})</div>
+          </div>
+          <div v-if="(selectedUsage.attachments || []).filter(a => a.description === 'after').length" class="space-y-2">
+            <div v-for="file in selectedUsage.attachments.filter(a => a.description === 'after')" :key="file.id" class="flex items-center justify-between p-3 rounded-xl bg-gray-50 border border-gray-100 group hover:border-blue-200 transition-colors cursor-pointer" @click="openFilePreview(file)">
+               <div class="flex items-center gap-3">
+                  <FilePdfOutlined v-if="isPdfFile(file)" class="text-red-500" />
+                  <PictureOutlined v-else-if="isImageFile(file)" class="text-blue-500" />
+                  <FileOutlined v-else class="text-gray-400" />
+                  <span class="text-xs font-medium text-gray-700">{{ file.original_name || file.file_name }}</span>
+               </div>
+               <DownloadOutlined class="text-gray-300 group-hover:text-blue-500 transition-colors" />
+            </div>
+          </div>
+          <a-empty v-else :image="null" description="Chưa có chứng từ thanh toán" class="text-gray-300 my-0 py-2" />
         </div>
       </div>
 
       <!-- Warning: Missing attachments for accountant step -->
-      <div v-if="selectedUsage.status === 'pending_accountant' && !selectedUsage.attachments?.length" class="p-4 bg-red-50 rounded-2xl border-2 border-red-200">
+      <div v-if="selectedUsage.status === 'pending_accountant' && !(selectedUsage.attachments || []).filter(a => a.description !== 'after').length" class="p-4 bg-red-50 rounded-2xl border-2 border-red-200">
         <div class="text-xs font-bold text-red-500 uppercase tracking-wider mb-2 flex items-center gap-2"><ExclamationCircleOutlined /> Thiếu chứng từ</div>
         <div class="text-sm text-red-700">Phiếu này chưa có file chứng từ đính kèm. <span class="font-bold">Kế toán không thể xác nhận</span> khi thiếu chứng từ (hóa đơn, phiếu chi, biên lai...). Vui lòng yêu cầu người tạo phiếu bổ sung.</div>
       </div>
@@ -4052,8 +4146,8 @@
            </a-popconfirm>
 
            <!-- Pending Accountant: KT xác nhận / Từ chối -->
-           <a-tooltip v-if="selectedUsage.status === 'pending_accountant' && can('cost.approve.accountant')" :title="!selectedUsage.attachments?.length ? 'Thiếu chứng từ — Không thể xác nhận' : ''">
-             <a-button type="primary" class="!bg-purple-500 !border-purple-500 hover:!bg-purple-600" :disabled="!selectedUsage.attachments?.length" @click="confirmUsageAccountant(selectedUsage)"><CheckOutlined /> KT Xác nhận</a-button>
+           <a-tooltip v-if="selectedUsage.status === 'pending_accountant' && can('cost.approve.accountant')" :title="!(selectedUsage.attachments || []).filter(a => a.description !== 'after').length ? 'Thiếu chứng từ — Không thể xác nhận' : ''">
+             <a-button type="primary" class="!bg-purple-500 !border-purple-500 hover:!bg-purple-600" :disabled="!(selectedUsage.attachments || []).filter(a => a.description !== 'after').length" @click="confirmUsageAccountant(selectedUsage)"><CheckOutlined /> KT Xác nhận</a-button>
            </a-tooltip>
            <a-popconfirm v-if="selectedUsage.status === 'pending_accountant' && can('cost.approve.accountant')" title="Từ chối phiếu?" @confirm="rejectUsage(selectedUsage)" ok-text="Từ chối" cancel-text="Hủy">
              <template #description>
@@ -5021,19 +5115,37 @@
       </div>
 
       <!-- Attachments -->
-      <div v-if="subPaymentDetail.attachments?.length" class="mb-6">
-         <div class="text-xs font-bold text-gray-500 uppercase mb-2 flex items-center gap-2">
-           <PaperClipOutlined /> Chứng từ đính kèm ({{ subPaymentDetail.attachments.length }})
+      <div v-if="subPaymentDetail.attachments?.length" class="mb-6 space-y-4">
+         <div v-if="subPaymentDetail.attachments.filter(a => a.description !== 'after').length">
+            <div class="text-[11px] font-bold text-gray-500 uppercase mb-2 flex items-center gap-2 text-blue-500">
+              <PaperClipOutlined /> Chứng từ đính kèm ({{ subPaymentDetail.attachments.filter(a => a.description !== 'after').length }})
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+               <a-button v-for="file in subPaymentDetail.attachments.filter(a => a.description !== 'after')" :key="file.id" type="dashed" class="h-auto py-2 flex items-center justify-start text-left hover:border-blue-300 hover:text-blue-500 transition-colors" @click="openFilePreview(file)">
+                  <FileOutlined class="text-blue-400 text-lg mr-2" />
+                  <div class="flex-1 min-w-0">
+                     <div class="text-xs font-medium truncate text-gray-700">{{ file.original_name || file.file_name }}</div>
+                     <div class="text-[9px] text-gray-400 uppercase">{{ file.file_type || file.mime_type || 'File' }}</div>
+                  </div>
+                  <EyeOutlined class="text-gray-300" />
+               </a-button>
+            </div>
          </div>
-         <div class="grid grid-cols-2 gap-2">
-            <a-button v-for="file in subPaymentDetail.attachments" :key="file.id" type="dashed" class="h-auto py-2 flex items-center justify-start text-left hover:border-blue-300 hover:text-blue-500 transition-colors" @click="openFilePreview(file)">
-               <FileOutlined class="text-blue-400 text-lg mr-2" />
-               <div class="flex-1 min-w-0">
-                  <div class="text-xs font-medium truncate text-gray-700">{{ file.file_name }}</div>
-                  <div class="text-[9px] text-gray-400 uppercase">{{ file.file_type || 'File' }}</div>
-               </div>
-               <EyeOutlined class="text-gray-300" />
-            </a-button>
+
+         <div v-if="subPaymentDetail.attachments.filter(a => a.description === 'after').length">
+            <div class="text-[11px] font-bold text-gray-500 uppercase mb-2 flex items-center gap-2 text-green-600">
+              <FileProtectOutlined /> Chứng từ thanh toán ({{ subPaymentDetail.attachments.filter(a => a.description === 'after').length }})
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+               <a-button v-for="file in subPaymentDetail.attachments.filter(a => a.description === 'after')" :key="file.id" type="dashed" class="h-auto py-2 flex items-center justify-start text-left hover:border-blue-300 hover:text-blue-500 transition-colors" @click="openFilePreview(file)">
+                  <FileProtectOutlined class="text-green-500 text-lg mr-2" />
+                  <div class="flex-1 min-w-0">
+                     <div class="text-xs font-medium truncate text-gray-700">{{ file.original_name || file.file_name }}</div>
+                     <div class="text-[9px] text-gray-400 uppercase">{{ file.file_type || file.mime_type || 'File' }}</div>
+                  </div>
+                  <EyeOutlined class="text-gray-300" />
+               </a-button>
+            </div>
          </div>
       </div>
 
@@ -6291,7 +6403,7 @@
   </a-modal>
 
   <!-- ACCOUNTANT CONFIRM PAYMENT MODAL (Unified for Material, Sub, Rental, Usage, Purchase, Project Payment) -->
-  <a-modal v-model:open="showConfirmPaymentModal" :title="{ material: 'Kế toán xác nhận - Phiếu Vật tư', cost: 'Kế toán xác nhận - Phiếu chi', sub: 'Kế toán xác nhận - Thanh toán thầu phụ', rental: 'Kế toán xác nhận - Thuê thiết bị', usage: 'Kế toán xác nhận - Sử dụng thiết bị', purchase: 'Kế toán xác nhận - Mua thiết bị', project_payment: 'Kế toán xác nhận - Đợt thanh toán từ Khách hàng' }[confirmPaymentType]" @ok="confirmApprovePayment" ok-text="Xác nhận" cancel-text="Hủy" centered class="crm-modal" :ok-button-props="{ disabled: !confirmPaymentFiles.length }">
+  <a-modal v-model:open="showConfirmPaymentModal" :title="{ material: 'Kế toán xác nhận - Phiếu Vật tư', cost: 'Kế toán xác nhận - Phiếu chi', sub: 'Kế toán xác nhận - Thanh toán thầu phụ', rental: 'Kế toán xác nhận - Thuê thiết bị', usage: 'Kế toán xác nhận - Sử dụng thiết bị', purchase: 'Kế toán xác nhận - Mua thiết bị', project_payment: 'Kế toán xác nhận - Đợt thanh toán từ Khách hàng' }[confirmPaymentType]" @ok="confirmApprovePayment" ok-text="Xác nhận" cancel-text="Hủy" centered class="crm-modal" :ok-button-props="{ disabled: !confirmPaymentFiles.length || confirmPaymentLoading }" :confirm-loading="confirmPaymentLoading">
     <div class="p-4 space-y-4">
       <div class="bg-blue-50 p-3 rounded-xl border border-blue-100 flex items-center gap-3">
         <div class="w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center shadow-lg"><InfoCircleOutlined /></div>
@@ -6326,12 +6438,12 @@
       </div>
 
       <!-- Existing attachments uploaded by creator -->
-      <div v-if="confirmPaymentTarget?.attachments?.length" class="border border-dashed border-gray-200 rounded-xl p-3 bg-gray-50/50">
+      <div v-if="confirmPaymentTarget?.attachments?.filter(a => a.description !== 'after')?.length" class="border border-dashed border-gray-200 rounded-xl p-3 bg-gray-50/50">
         <div class="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1">
-          <PaperClipOutlined class="text-gray-400" /> Tệp chứng từ của phiếu ({{ confirmPaymentTarget.attachments.length }})
+          <PaperClipOutlined class="text-gray-400" /> Tệp chứng từ gốc ({{ confirmPaymentTarget.attachments.filter(a => a.description !== 'after').length }})
         </div>
         <div class="space-y-1.5 max-h-[120px] overflow-y-auto">
-          <div v-for="att in confirmPaymentTarget.attachments" :key="att.id" 
+          <div v-for="att in confirmPaymentTarget.attachments.filter(a => a.description !== 'after')" :key="att.id" 
                class="flex items-center justify-between p-2 rounded-lg border border-gray-100 bg-white hover:border-blue-300 transition-all cursor-pointer shadow-sm group"
                @click="openFilePreview(att)">
             <div class="flex items-center gap-2 min-w-0">
@@ -8662,6 +8774,39 @@ const submitAttachFiles = () => {
   }))
 }
 
+const deleteUploadedFileDirectly = (fileId) => {
+  router.delete(`/admin/files/${fileId}`, {
+    preserveScroll: true,
+    onSuccess: () => {
+      message.success('Đã xóa tệp đính kèm thành công.')
+      if (attachTarget.value && attachTarget.value.attachments) {
+        attachTarget.value.attachments = attachTarget.value.attachments.filter(a => a.id !== fileId)
+      }
+      if (materialDetail.value && materialDetail.value.attachments) {
+        materialDetail.value.attachments = materialDetail.value.attachments.filter(a => a.id !== fileId)
+      }
+      if (costDetailRecord.value && costDetailRecord.value.attachments) {
+        costDetailRecord.value.attachments = costDetailRecord.value.attachments.filter(a => a.id !== fileId)
+      }
+      if (additionalCostDetail.value && additionalCostDetail.value.attachments) {
+        additionalCostDetail.value.attachments = additionalCostDetail.value.attachments.filter(a => a.id !== fileId)
+      }
+      if (paymentDetailRecord.value && paymentDetailRecord.value.attachments) {
+        paymentDetailRecord.value.attachments = paymentDetailRecord.value.attachments.filter(a => a.id !== fileId)
+      }
+      if (subPaymentDetail.value && subPaymentDetail.value.attachments) {
+        subPaymentDetail.value.attachments = subPaymentDetail.value.attachments.filter(a => a.id !== fileId)
+      }
+      if (selectedRental.value && selectedRental.value.attachments) {
+        selectedRental.value.attachments = selectedRental.value.attachments.filter(a => a.id !== fileId)
+      }
+      if (selectedUsage.value && selectedUsage.value.attachments) {
+        selectedUsage.value.attachments = selectedUsage.value.attachments.filter(a => a.id !== fileId)
+      }
+    }
+  })
+}
+
 // ============ PERSONNEL CRUD ============
 const showPersonnelModal = ref(false)
 const personnelForm = ref({ user_id: null, personnel_role_id: null })
@@ -10306,6 +10451,7 @@ const confirmPaymentTarget = ref(null)
 const confirmPaymentSub = ref(null) // Only for sub
 const confirmPaymentBudgetItem = ref(null)
 const confirmPaymentFiles = ref([])
+const confirmPaymentLoading = ref(false)
 
 const approveBillAccountant = (bill) => {
   if (!bill.attachments?.length && !(bill.attachments_count > 0)) {
@@ -10342,91 +10488,63 @@ const confirmApprovePayment = () => {
     return
   }
 
+  confirmPaymentLoading.value = true
   const fd = new FormData()
   if (confirmPaymentBudgetItem.value) {
     fd.append('budget_item_id', confirmPaymentBudgetItem.value)
   }
   confirmPaymentFiles.value.forEach(f => fd.append('files[]', f))
 
-  if (confirmPaymentType.value === 'material') {
-    router.post(`/projects/${props.project.id}/material-bills/${confirmPaymentTarget.value.id}/approve-accountant`, fd, {
-      forceFormData: true,
-      onSuccess: () => {
-        showConfirmPaymentModal.value = false
+  const options = {
+    forceFormData: true,
+    onSuccess: () => {
+      showConfirmPaymentModal.value = false
+      confirmPaymentFiles.value = []
+      if (confirmPaymentType.value === 'material') {
         materialDetail.value = null
         showMaterialDetailDrawer.value = false
-        confirmPaymentFiles.value = []
         message.success('Đã xác nhận thanh toán và ghi nhận ngân sách')
-      },
-      onError: showValidationErrors
-    })
-  } else if (confirmPaymentType.value === 'sub') {
-    router.post(`/projects/${props.project.id}/subcontractors/${confirmPaymentSub.value.id}/payments/${confirmPaymentTarget.value.id}/confirm`, fd, {
-      forceFormData: true,
-      onSuccess: () => {
-        showConfirmPaymentModal.value = false
-        confirmPaymentFiles.value = []
+      } else if (confirmPaymentType.value === 'sub') {
         message.success('Đã xác nhận thanh toán thầu phụ')
-      },
-      onError: showValidationErrors
-    })
-  } else if (confirmPaymentType.value === 'cost') {
-    router.post(`/projects/${props.project.id}/costs/${confirmPaymentTarget.value.id}/approve-accountant`, fd, {
-      forceFormData: true,
-      onSuccess: () => {
-        showConfirmPaymentModal.value = false
+      } else if (confirmPaymentType.value === 'cost') {
         costDetailRecord.value = null
         showCostDetail.value = false
-        confirmPaymentFiles.value = []
         message.success('Đã xác nhận phiếu chi và ghi nhận ngân sách')
-      },
-      onError: showValidationErrors
-    })
-  } else if (confirmPaymentType.value === 'rental') {
-    router.post(`/projects/${props.project.id}/equipment-rentals/${confirmPaymentTarget.value.id}/confirm-accountant`, fd, {
-      forceFormData: true,
-      onSuccess: () => {
-        showConfirmPaymentModal.value = false
-        confirmPaymentFiles.value = []
+      } else if (confirmPaymentType.value === 'rental') {
         showRentalDetailDrawer.value = false
         message.success('Kế toán đã xác nhận thuê thiết bị')
-      },
-      onError: showValidationErrors
-    })
-  } else if (confirmPaymentType.value === 'usage') {
-    router.post(`/projects/${props.project.id}/asset-usages/${confirmPaymentTarget.value.id}/confirm-accountant`, fd, {
-      forceFormData: true,
-      onSuccess: () => {
-        showConfirmPaymentModal.value = false
-        confirmPaymentFiles.value = []
+      } else if (confirmPaymentType.value === 'usage') {
         showUsageDetailDrawer.value = false
         message.success('Kế toán đã xác nhận sử dụng thiết bị')
-      },
-      onError: showValidationErrors
-    })
-  } else if (confirmPaymentType.value === 'purchase') {
-    router.post(`/projects/${props.project.id}/equipment-purchases/${confirmPaymentTarget.value.id}/confirm-accountant`, fd, {
-      forceFormData: true,
-      onSuccess: () => {
-        showConfirmPaymentModal.value = false
-        confirmPaymentFiles.value = []
+      } else if (confirmPaymentType.value === 'purchase') {
         showPurchaseDetailDrawer.value = false
         message.success('Kế toán đã xác nhận mua thiết bị')
-      },
-      onError: showValidationErrors
-    })
-  } else if (confirmPaymentType.value === 'project_payment') {
-    fd.append('paid_date', new Date().toISOString().slice(0, 10))
-    router.post(`/projects/${props.project.id}/payments/${confirmPaymentTarget.value.id}/confirm`, fd, {
-      forceFormData: true,
-      onSuccess: () => {
-        showConfirmPaymentModal.value = false
-        confirmPaymentFiles.value = []
+      } else if (confirmPaymentType.value === 'project_payment') {
         showPaymentDetail.value = false
         message.success('Đã xác nhận thanh toán (Kế toán).')
-      },
-      onError: showValidationErrors
-    })
+      }
+    },
+    onError: showValidationErrors,
+    onFinish: () => {
+      confirmPaymentLoading.value = false
+    }
+  }
+
+  if (confirmPaymentType.value === 'material') {
+    router.post(`/projects/${props.project.id}/material-bills/${confirmPaymentTarget.value.id}/approve-accountant`, fd, options)
+  } else if (confirmPaymentType.value === 'sub') {
+    router.post(`/projects/${props.project.id}/subcontractors/${confirmPaymentSub.value.id}/payments/${confirmPaymentTarget.value.id}/confirm`, fd, options)
+  } else if (confirmPaymentType.value === 'cost') {
+    router.post(`/projects/${props.project.id}/costs/${confirmPaymentTarget.value.id}/approve-accountant`, fd, options)
+  } else if (confirmPaymentType.value === 'rental') {
+    router.post(`/projects/${props.project.id}/equipment-rentals/${confirmPaymentTarget.value.id}/confirm-accountant`, fd, options)
+  } else if (confirmPaymentType.value === 'usage') {
+    router.post(`/projects/${props.project.id}/asset-usages/${confirmPaymentTarget.value.id}/confirm-accountant`, fd, options)
+  } else if (confirmPaymentType.value === 'purchase') {
+    router.post(`/projects/${props.project.id}/equipment-purchases/${confirmPaymentTarget.value.id}/confirm-accountant`, fd, options)
+  } else if (confirmPaymentType.value === 'project_payment') {
+    fd.append('paid_date', new Date().toISOString().slice(0, 10))
+    router.post(`/projects/${props.project.id}/payments/${confirmPaymentTarget.value.id}/confirm`, fd, options)
   }
 }
 

@@ -824,6 +824,7 @@ class CrmProjectsController extends Controller
 
         try {
             // Mandatorily attach uploaded files to the Project Payment (UNC/Sao kê báo có)
+            $request->merge(['description' => 'after']);
             $this->attachFilesToEntity($request, $payment, "project-payments/{$project->id}/{$payment->id}", true);
 
             $this->financialService->confirmProjectPayment($payment, $user);
@@ -2184,6 +2185,7 @@ class CrmProjectsController extends Controller
 
         try {
             // Mandatorily attach uploaded files to the payment
+            $request->merge(['description' => 'after']);
             $this->attachFilesToEntity($request, $payment, "sub-payments/{$project->id}/{$payment->id}", true);
 
             $this->financialService->processSubPayment($payment, $request->all(), $admin);
@@ -3190,6 +3192,7 @@ class CrmProjectsController extends Controller
 
         try {
             // Mandatorily attach uploaded files to the Equipment Rental
+            $request->merge(['description' => 'after']);
             $this->attachFilesToEntity($request, $rental, "equipment-rentals/{$project->id}/{$rental->id}", true);
 
             if ($this->equipmentService->confirmRentalByAccountant($rental, $user)) {
@@ -3390,6 +3393,7 @@ class CrmProjectsController extends Controller
 
         try {
             // Mandatorily attach uploaded files to the Equipment Purchase
+            $request->merge(['description' => 'after']);
             $this->attachFilesToEntity($request, $purchase, "equipment-purchases/{$project->id}/{$purchase->id}", true);
 
             $this->equipmentService->confirmPurchaseByAccountant($purchase, $user);
@@ -3557,6 +3561,7 @@ class CrmProjectsController extends Controller
 
         try {
             // Mandatorily attach uploaded files to the Asset Usage
+            $request->merge(['description' => 'after']);
             $this->attachFilesToEntity($request, $usage, "asset-usages/{$project->id}/{$usage->id}", true);
 
             if ($this->equipmentService->confirmUsageByAccountant($usage, $user)) {

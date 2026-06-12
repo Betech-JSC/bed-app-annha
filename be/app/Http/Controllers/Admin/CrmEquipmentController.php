@@ -261,6 +261,7 @@ class CrmEquipmentController extends Controller
 
         try {
             // Mandatorily attach uploaded files to the Equipment Purchase
+            $request->merge(['description' => 'after']);
             $this->attachmentService->handleCrmUpload($request, $eq, "equipment-attachments/{$eq->id}", true);
         } catch (\Exception $e) {
             $msg = 'Lỗi đính kèm chứng từ: ' . $e->getMessage();

@@ -712,7 +712,7 @@
   </a-modal>
 
   <!-- Accountant Quick Approval Modal with mandatory file upload -->
-  <a-modal v-model:open="showConfirmApprovalModal" title="Kế toán xác nhận phê duyệt" @ok="confirmApproveAccountant" ok-text="Xác nhận" cancel-text="Hủy" centered class="crm-modal" :ok-button-props="{ disabled: !confirmApprovalFiles.length }">
+  <a-modal v-model:open="showConfirmApprovalModal" title="Kế toán xác nhận phê duyệt" @ok="confirmApproveAccountant" ok-text="Xác nhận" cancel-text="Hủy" centered class="crm-modal" :ok-button-props="{ disabled: !confirmApprovalFiles.length || confirmApprovalLoading }" :confirm-loading="confirmApprovalLoading">
     <div class="p-4 space-y-4">
       <div class="bg-blue-50 p-3 rounded-xl border border-blue-100 flex items-center gap-3">
         <div class="w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center shadow-lg"><InfoCircleOutlined /></div>
@@ -741,12 +741,12 @@
       </div>
 
       <!-- Existing attachments uploaded by creator -->
-      <div v-if="confirmApprovalTarget?.attachments?.length" class="border border-dashed border-gray-200 rounded-xl p-3 bg-gray-50/50">
+      <div v-if="confirmApprovalTarget?.attachments?.filter(a => a.tag !== 'after')?.length" class="border border-dashed border-gray-200 rounded-xl p-3 bg-gray-50/50">
         <div class="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1">
-          <PaperClipOutlined class="text-gray-400" /> Tệp chứng từ gốc ({{ confirmApprovalTarget.attachments.length }})
+          <PaperClipOutlined class="text-gray-400" /> Tệp chứng từ gốc ({{ confirmApprovalTarget.attachments.filter(a => a.tag !== 'after').length }})
         </div>
         <div class="space-y-1.5 max-h-[120px] overflow-y-auto">
-          <div v-for="att in confirmApprovalTarget.attachments" :key="att.id" 
+          <div v-for="att in confirmApprovalTarget.attachments.filter(a => a.tag !== 'after')" :key="att.id" 
                class="flex items-center justify-between p-2 rounded-lg border border-gray-100 bg-white hover:border-blue-300 transition-all cursor-pointer shadow-sm group"
                @click="window.open(att.url || `/storage/${att.file_path}`, '_blank')">
             <div class="flex items-center gap-2 min-w-0">
@@ -925,6 +925,7 @@ const showConfirmApprovalModal = ref(false)
 const confirmApprovalTarget = ref(null)
 const confirmApprovalType = ref('')
 const confirmApprovalFiles = ref([])
+const confirmApprovalLoading = ref(false)
 
 const typeColors = {
   project_cost: 'blue',
@@ -1425,11 +1426,15 @@ const confirmApproveAccountant = () => {
     return
   }
 
+  confirmApprovalLoading.value = true
   const fd = new FormData()
   confirmApprovalFiles.value.forEach(f => fd.append('files[]', f))
 
   const urlFn = approveUrlMap[confirmApprovalType.value]
-  if (!urlFn) return
+  if (!urlFn) {
+    confirmApprovalLoading.value = false
+    return
+  }
 
   router.post(urlFn(confirmApprovalTarget.value), fd, {
     forceFormData: true,
@@ -1446,6 +1451,9 @@ const confirmApproveAccountant = () => {
       } else {
         message.error('Đã xảy ra lỗi khi xác nhận.')
       }
+    },
+    onFinish: () => {
+      confirmApprovalLoading.value = false
     }
   })
 }

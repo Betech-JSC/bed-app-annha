@@ -231,7 +231,7 @@
   </a-drawer>
 
   <!-- Accountant Confirm Equipment Modal with mandatory file upload -->
-  <a-modal v-model:open="showConfirmEquipmentModal" title="Kế toán xác nhận chi & Nhập kho" @ok="confirmApproveEquipment" ok-text="Xác nhận" cancel-text="Hủy" centered class="crm-modal" :ok-button-props="{ disabled: !confirmEquipmentFiles.length }">
+  <a-modal v-model:open="showConfirmEquipmentModal" title="Kế toán xác nhận chi & Nhập kho" @ok="confirmApproveEquipment" ok-text="Xác nhận" cancel-text="Hủy" centered class="crm-modal" :ok-button-props="{ disabled: !confirmEquipmentFiles.length || confirmEquipmentLoading }" :confirm-loading="confirmEquipmentLoading">
     <div class="p-4 space-y-4">
       <div class="bg-blue-50 p-3 rounded-xl border border-blue-100 flex items-center gap-3">
         <div class="w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center shadow-lg"><InfoCircleOutlined /></div>
@@ -260,12 +260,12 @@
       </div>
 
       <!-- Existing attachments uploaded by creator -->
-      <div v-if="confirmEquipmentTarget?.attachments?.length" class="border border-dashed border-gray-200 rounded-xl p-3 bg-gray-50/50">
+      <div v-if="confirmEquipmentTarget?.attachments?.filter(att => att.description !== 'after')?.length" class="border border-dashed border-gray-200 rounded-xl p-3 bg-gray-50/50">
         <div class="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1">
-          <PaperClipOutlined class="text-gray-400" /> Tệp chứng từ gốc ({{ confirmEquipmentTarget.attachments.length }})
+          <PaperClipOutlined class="text-gray-400" /> Tệp chứng từ gốc ({{ confirmEquipmentTarget.attachments.filter(att => att.description !== 'after').length }})
         </div>
         <div class="space-y-1.5 max-h-[120px] overflow-y-auto">
-          <div v-for="att in confirmEquipmentTarget.attachments" :key="att.id" 
+          <div v-for="att in confirmEquipmentTarget.attachments.filter(att => att.description !== 'after')" :key="att.id" 
                class="flex items-center justify-between p-2 rounded-lg border border-gray-100 bg-white hover:border-blue-300 transition-all cursor-pointer shadow-sm group"
                @click="window.open(att.file_url || `/storage/${att.file_path}`, '_blank')">
             <div class="flex items-center gap-2 min-w-0">
@@ -361,6 +361,7 @@ const selectedItem = ref(null)
 const showConfirmEquipmentModal = ref(false)
 const confirmEquipmentTarget = ref(null)
 const confirmEquipmentFiles = ref([])
+const confirmEquipmentLoading = ref(false)
 const rejectReason = ref('')
 const fileList = ref([])
 const imagePreviewVisible = ref(false)
@@ -460,6 +461,7 @@ const confirmApproveEquipment = () => {
     message.error('Vui lòng đính kèm chứng từ thanh toán.')
     return
   }
+  confirmEquipmentLoading.value = true
   const formData = new FormData()
   confirmEquipmentFiles.value.forEach(f => {
     formData.append('files[]', f)
@@ -473,6 +475,9 @@ const confirmApproveEquipment = () => {
       confirmEquipmentFiles.value = []
       showDetailDrawer.value = false
       message.success('Xác nhận chi & nhập kho thiết bị thành công.')
+    },
+    onFinish: () => {
+      confirmEquipmentLoading.value = false
     }
   })
 }

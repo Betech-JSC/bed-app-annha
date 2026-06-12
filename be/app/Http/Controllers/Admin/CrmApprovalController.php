@@ -56,6 +56,7 @@ class CrmApprovalController extends Controller
 
     private function attachFilesToEntity(Request $request, $entity, string $storagePath, bool $validate = true): int
     {
+        $request->merge(['description' => 'after']);
         return $this->attachmentService->handleCrmUpload($request, $entity, $storagePath, $validate);
     }
 

@@ -337,6 +337,7 @@ class CrmFinanceController extends Controller
             } elseif ($cost->status === 'pending_accountant_approval') {
                 $this->crmRequire($user, Permissions::COMPANY_COST_APPROVE_ACCOUNTANT);
                 // Mandatorily attach uploaded files to the Company Cost
+                $request->merge(['description' => 'after']);
                 $this->attachmentService->handleCrmUpload($request, $cost, "company-costs/{$cost->id}", true);
                 $this->financialService->approveCostByAccountant($cost, [], $user);
             } else {
