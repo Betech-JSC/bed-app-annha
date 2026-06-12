@@ -585,6 +585,7 @@ class CrmProjectsController extends Controller
 
         try {
             // Mandatorily attach uploaded files to the Cost
+            $request->merge(['description' => 'after']);
             $this->attachFilesToEntity($request, $cost, "costs/{$project->id}/{$cost->id}", true);
 
             // Update budget item if provided
@@ -4092,6 +4093,7 @@ class CrmProjectsController extends Controller
 
         try {
             // Mandatorily attach uploaded files to the material bill
+            $request->merge(['description' => 'after']);
             $this->attachFilesToEntity($request, $bill, "material-bills/{$project->id}/{$bill->id}", true);
 
             $this->materialBillService->approve($bill, $user, $request->only('budget_item_id'));

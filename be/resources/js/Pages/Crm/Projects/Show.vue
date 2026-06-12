@@ -4004,20 +4004,52 @@
         </div>
       </div>
 
-      <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
-        <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2 text-indigo-500"><FileOutlined /> Tệp đính kèm ({{ selectedPurchase.attachments?.length || 0 }})</div>
-        <div v-if="selectedPurchase.attachments?.length" class="space-y-2">
-          <div v-for="file in selectedPurchase.attachments" :key="file.id" class="flex items-center justify-between p-3 rounded-xl bg-gray-50 border border-gray-100 group hover:border-blue-200 transition-colors cursor-pointer" @click="openFilePreview(file)">
-             <div class="flex items-center gap-3">
-                <FilePdfOutlined v-if="isPdfFile(file)" class="text-red-500" />
-                <PictureOutlined v-else-if="isImageFile(file)" class="text-blue-500" />
-                <FileOutlined v-else class="text-gray-400" />
-                <span class="text-xs font-medium text-gray-700">{{ file.original_name }}</span>
-             </div>
-             <DownloadOutlined class="text-gray-300 group-hover:text-blue-500 transition-colors" />
+      <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm space-y-6">
+        <div>
+          <div class="flex justify-between items-center mb-4">
+             <div class="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2 text-blue-500"><FileOutlined /> Chứng từ đính kèm ({{ (selectedPurchase.attachments || []).filter(a => a.description !== 'after').length }})</div>
           </div>
+          <div v-if="(selectedPurchase.attachments || []).filter(a => a.description !== 'after').length" class="space-y-2">
+            <div v-for="file in selectedPurchase.attachments.filter(a => a.description !== 'after')" :key="file.id" class="flex items-center justify-between p-3 rounded-xl bg-gray-50 border border-gray-100 group hover:border-blue-200 transition-colors cursor-pointer" @click="openFilePreview(file)">
+               <div class="flex items-center gap-3">
+                  <FilePdfOutlined v-if="isPdfFile(file)" class="text-red-500" />
+                  <PictureOutlined v-else-if="isImageFile(file)" class="text-blue-500" />
+                  <FileOutlined v-else class="text-gray-400" />
+                  <span class="text-xs font-medium text-gray-700">{{ file.original_name || file.file_name }}</span>
+               </div>
+               <div class="flex items-center gap-2">
+                 <a-popconfirm title="Xóa tệp đính kèm này?" ok-text="Xóa" cancel-text="Hủy" @confirm="deleteUploadedFileDirectly(file.id)">
+                   <DeleteOutlined class="text-gray-300 hover:text-red-500 transition-colors cursor-pointer text-sm" @click.stop />
+                 </a-popconfirm>
+                 <DownloadOutlined class="text-gray-300 group-hover:text-blue-500 transition-colors" />
+               </div>
+            </div>
+          </div>
+          <a-empty v-else :image="null" description="Chưa có chứng từ gốc" class="text-gray-300 my-0 py-2" />
         </div>
-        <a-empty v-else :image="null" description="Không có tệp" class="my-0" />
+
+        <div>
+          <div class="flex justify-between items-center mb-4">
+             <div class="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2 text-green-600"><FileProtectOutlined /> Chứng từ thanh toán ({{ (selectedPurchase.attachments || []).filter(a => a.description === 'after').length }})</div>
+          </div>
+          <div v-if="(selectedPurchase.attachments || []).filter(a => a.description === 'after').length" class="space-y-2">
+            <div v-for="file in selectedPurchase.attachments.filter(a => a.description === 'after')" :key="file.id" class="flex items-center justify-between p-3 rounded-xl bg-gray-50 border border-gray-100 group hover:border-blue-200 transition-colors cursor-pointer" @click="openFilePreview(file)">
+               <div class="flex items-center gap-3">
+                  <FilePdfOutlined v-if="isPdfFile(file)" class="text-red-500" />
+                  <PictureOutlined v-else-if="isImageFile(file)" class="text-blue-500" />
+                  <FileOutlined v-else class="text-gray-400" />
+                  <span class="text-xs font-medium text-gray-700">{{ file.original_name || file.file_name }}</span>
+               </div>
+               <div class="flex items-center gap-2">
+                 <a-popconfirm title="Xóa tệp đính kèm này?" ok-text="Xóa" cancel-text="Hủy" @confirm="deleteUploadedFileDirectly(file.id)">
+                   <DeleteOutlined class="text-gray-300 hover:text-red-500 transition-colors cursor-pointer text-sm" @click.stop />
+                 </a-popconfirm>
+                 <DownloadOutlined class="text-gray-300 group-hover:text-blue-500 transition-colors" />
+               </div>
+            </div>
+          </div>
+          <a-empty v-else :image="null" description="Chưa có chứng từ thanh toán" class="text-gray-300 my-0 py-2" />
+        </div>
       </div>
 
       <div class="fixed bottom-0 right-0 w-[560px] p-4 bg-white/80 backdrop-blur-md border-t border-gray-100 flex justify-between items-center z-20">
@@ -5011,25 +5043,53 @@
       </div>
 
       <!-- Attachments -->
-      <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
-        <div class="flex justify-between items-center mb-4">
-           <div class="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2 text-blue-500"><CameraOutlined /> Chứng từ thanh toán ({{ paymentDetailRecord.attachments?.length || 0 }})</div>
-           <a-button v-if="can('payment.update') && paymentDetailRecord.status === 'draft'" type="link" size="small" @click="openAttachModal('payment', paymentDetailRecord)" class="p-0">Thêm tệp</a-button>
-        </div>
-        <div v-if="paymentDetailRecord.attachments?.length" class="flex flex-wrap gap-2">
-           <div v-for="att in paymentDetailRecord.attachments" :key="att.id" 
-                class="group relative w-16 h-16 rounded-lg border border-gray-200 overflow-hidden cursor-pointer hover:border-blue-400 transition"
-                @click="openFilePreview(att)">
-             <img v-if="isImageFile(att)" :src="att.file_url || att.url" class="w-full h-full object-cover" />
-             <div v-else class="w-full h-full flex flex-col items-center justify-center bg-gray-50 text-[10px] font-bold text-gray-400">
-               {{ fileExt(att).toUpperCase() }}
+      <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm space-y-6">
+        <div>
+          <div class="flex justify-between items-center mb-4">
+             <div class="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2 text-blue-500"><CameraOutlined /> Chứng từ đính kèm ({{ (paymentDetailRecord.attachments || []).filter(a => a.description !== 'after').length }})</div>
+             <a-button v-if="can('payment.update') && paymentDetailRecord.status === 'draft'" type="link" size="small" @click="openAttachModal('payment', paymentDetailRecord)" class="p-0">Thêm tệp</a-button>
+          </div>
+          <div v-if="(paymentDetailRecord.attachments || []).filter(a => a.description !== 'after').length" class="flex flex-wrap gap-2">
+             <div v-for="att in paymentDetailRecord.attachments.filter(a => a.description !== 'after')" :key="att.id" 
+                  class="group relative w-16 h-16 rounded-lg border border-gray-200 overflow-hidden cursor-pointer hover:border-blue-400 transition"
+                  @click="openFilePreview(att)">
+               <img v-if="isImageFile(att)" :src="att.file_url || att.url" class="w-full h-full object-cover" />
+               <div v-else class="w-full h-full flex flex-col items-center justify-center bg-gray-50 text-[10px] font-bold text-gray-400">
+                 {{ fileExt(att).toUpperCase() }}
+               </div>
+               <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition gap-2">
+                 <EyeOutlined class="text-white text-base" />
+                 <a-popconfirm title="Xóa tệp đính kèm này?" ok-text="Xóa" cancel-text="Hủy" @confirm="deleteUploadedFileDirectly(att.id)">
+                   <DeleteOutlined class="text-red-400 hover:text-red-500 text-base cursor-pointer" @click.stop />
+                 </a-popconfirm>
+               </div>
              </div>
-             <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
-               <EyeOutlined class="text-white text-lg" />
-             </div>
-           </div>
+          </div>
+          <a-empty v-else :image="null" description="Chưa có chứng từ gốc" class="text-gray-300 my-0 py-2" />
         </div>
-        <a-empty v-else :image="null" description="Chưa có ảnh chứng từ / UNC" class="text-gray-300 my-0 py-2" />
+
+        <div>
+          <div class="flex justify-between items-center mb-4">
+             <div class="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2 text-green-600"><FileProtectOutlined /> Chứng từ thanh toán ({{ (paymentDetailRecord.attachments || []).filter(a => a.description === 'after').length }})</div>
+          </div>
+          <div v-if="(paymentDetailRecord.attachments || []).filter(a => a.description === 'after').length" class="flex flex-wrap gap-2">
+             <div v-for="att in paymentDetailRecord.attachments.filter(a => a.description === 'after')" :key="att.id" 
+                  class="group relative w-16 h-16 rounded-lg border border-gray-200 overflow-hidden cursor-pointer hover:border-blue-400 transition"
+                  @click="openFilePreview(att)">
+               <img v-if="isImageFile(att)" :src="att.file_url || att.url" class="w-full h-full object-cover" />
+               <div v-else class="w-full h-full flex flex-col items-center justify-center bg-gray-50 text-[10px] font-bold text-gray-400">
+                 {{ fileExt(att).toUpperCase() }}
+               </div>
+               <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition gap-2">
+                 <EyeOutlined class="text-white text-base" />
+                 <a-popconfirm title="Xóa tệp đính kèm này?" ok-text="Xóa" cancel-text="Hủy" @confirm="deleteUploadedFileDirectly(att.id)">
+                   <DeleteOutlined class="text-red-400 hover:text-red-500 text-base cursor-pointer" @click.stop />
+                 </a-popconfirm>
+               </div>
+             </div>
+          </div>
+          <a-empty v-else :image="null" description="Chưa có chứng từ thanh toán" class="text-gray-300 my-0 py-2" />
+        </div>
       </div>
 
     </div>

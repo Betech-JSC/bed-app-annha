@@ -434,6 +434,7 @@ class CrmApprovalController extends Controller
 
         try {
             // Mandatorily attach uploaded files to the payment
+            $request->merge(['description' => 'after']);
             $this->attachFilesToEntity($request, $payment, "sub-payments/{$payment->project_id}/{$payment->id}", true);
 
             // Link to budget if provided (pre-processing before service call)
@@ -470,6 +471,7 @@ class CrmApprovalController extends Controller
         try {
             // Mandatorily attach uploaded files to the Material Bill if status is pending_accountant (Accountant step)
             if ($bill->status === 'pending_accountant') {
+                $request->merge(['description' => 'after']);
                 $this->attachFilesToEntity($request, $bill, "material-bills/{$bill->project_id}/{$bill->id}", true);
             }
 
@@ -539,6 +541,7 @@ class CrmApprovalController extends Controller
 
         try {
             // Mandatorily attach uploaded files to the Project Payment (UNC/Sao kê báo có)
+            $request->merge(['description' => 'after']);
             $this->attachFilesToEntity($request, $payment, "project-payments/{$payment->project_id}/{$payment->id}", true);
 
             return $this->delegateApprove($user, 'project_payment_confirm', $id);
@@ -691,6 +694,7 @@ class CrmApprovalController extends Controller
 
         try {
             // Mandatorily attach uploaded files to the Equipment Purchase
+            $request->merge(['description' => 'after']);
             $this->attachFilesToEntity($request, $purchase, "equipment-purchases/{$purchase->project_id}/{$purchase->id}", true);
 
             return $this->delegateApprove($user, 'equipment_purchase_accountant', $id);
