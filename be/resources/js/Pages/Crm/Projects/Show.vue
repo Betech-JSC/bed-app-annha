@@ -3294,8 +3294,11 @@
                <div v-else class="w-full h-full flex flex-col items-center justify-center bg-gray-50 text-[10px] font-bold text-gray-400">
                  {{ fileExt(att).toUpperCase() }}
                </div>
-               <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
-                 <EyeOutlined class="text-white text-lg" />
+               <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition gap-2">
+                 <EyeOutlined class="text-white text-base" />
+                 <a-popconfirm title="Xóa tệp đính kèm này?" ok-text="Xóa" cancel-text="Hủy" @confirm="deleteUploadedFileDirectly(att.id)">
+                   <DeleteOutlined class="text-red-400 hover:text-red-500 text-base cursor-pointer" @click.stop />
+                 </a-popconfirm>
                </div>
              </div>
           </div>
@@ -3314,8 +3317,11 @@
                <div v-else class="w-full h-full flex flex-col items-center justify-center bg-gray-50 text-[10px] font-bold text-gray-400">
                  {{ fileExt(att).toUpperCase() }}
                </div>
-               <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
-                 <EyeOutlined class="text-white text-lg" />
+               <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition gap-2">
+                 <EyeOutlined class="text-white text-base" />
+                 <a-popconfirm title="Xóa tệp đính kèm này?" ok-text="Xóa" cancel-text="Hủy" @confirm="deleteUploadedFileDirectly(att.id)">
+                   <DeleteOutlined class="text-red-400 hover:text-red-500 text-base cursor-pointer" @click.stop />
+                 </a-popconfirm>
                </div>
              </div>
           </div>
@@ -3560,8 +3566,11 @@
               <div v-else class="w-full h-full flex flex-col items-center justify-center bg-gray-50 text-[10px] font-bold text-gray-400">
                 {{ fileExt(att).toUpperCase() }}
               </div>
-              <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
-                <EyeOutlined class="text-white text-lg" />
+              <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition gap-2">
+                <EyeOutlined class="text-white text-base" />
+                <a-popconfirm title="Xóa tệp đính kèm này?" ok-text="Xóa" cancel-text="Hủy" @confirm="deleteUploadedFileDirectly(att.id)">
+                  <DeleteOutlined class="text-red-400 hover:text-red-500 text-base cursor-pointer" @click.stop />
+                </a-popconfirm>
               </div>
             </div>
           </div>
@@ -3580,8 +3589,11 @@
               <div v-else class="w-full h-full flex flex-col items-center justify-center bg-gray-50 text-[10px] font-bold text-gray-400">
                 {{ fileExt(att).toUpperCase() }}
               </div>
-              <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
-                <EyeOutlined class="text-white text-lg" />
+              <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition gap-2">
+                <EyeOutlined class="text-white text-base" />
+                <a-popconfirm title="Xóa tệp đính kèm này?" ok-text="Xóa" cancel-text="Hủy" @confirm="deleteUploadedFileDirectly(att.id)">
+                  <DeleteOutlined class="text-red-400 hover:text-red-500 text-base cursor-pointer" @click.stop />
+                </a-popconfirm>
               </div>
             </div>
           </div>
@@ -3891,7 +3903,12 @@
                   <FileOutlined v-else class="text-gray-400" />
                   <span class="text-xs font-medium text-gray-700">{{ file.original_name || file.file_name }}</span>
                </div>
-               <DownloadOutlined class="text-gray-300 group-hover:text-blue-500 transition-colors" />
+               <div class="flex items-center gap-2">
+                 <a-popconfirm title="Xóa tệp đính kèm này?" ok-text="Xóa" cancel-text="Hủy" @confirm="deleteUploadedFileDirectly(file.id)">
+                   <DeleteOutlined class="text-gray-300 hover:text-red-500 transition-colors cursor-pointer text-sm" @click.stop />
+                 </a-popconfirm>
+                 <DownloadOutlined class="text-gray-300 group-hover:text-blue-500 transition-colors" />
+               </div>
             </div>
           </div>
           <a-empty v-else :image="null" description="Chưa có chứng từ gốc" class="text-gray-300 my-0 py-2" />
@@ -3909,7 +3926,12 @@
                   <FileOutlined v-else class="text-gray-400" />
                   <span class="text-xs font-medium text-gray-700">{{ file.original_name || file.file_name }}</span>
                </div>
-               <DownloadOutlined class="text-gray-300 group-hover:text-blue-500 transition-colors" />
+               <div class="flex items-center gap-2">
+                 <a-popconfirm title="Xóa tệp đính kèm này?" ok-text="Xóa" cancel-text="Hủy" @confirm="deleteUploadedFileDirectly(file.id)">
+                   <DeleteOutlined class="text-gray-300 hover:text-red-500 transition-colors cursor-pointer text-sm" @click.stop />
+                 </a-popconfirm>
+                 <DownloadOutlined class="text-gray-300 group-hover:text-blue-500 transition-colors" />
+               </div>
             </div>
           </div>
           <a-empty v-else :image="null" description="Chưa có chứng từ thanh toán" class="text-gray-300 my-0 py-2" />
@@ -4071,7 +4093,12 @@
                   <FileOutlined v-else class="text-gray-400" />
                   <span class="text-xs font-medium text-gray-700">{{ file.original_name || file.file_name }}</span>
                </div>
-               <DownloadOutlined class="text-gray-300 group-hover:text-blue-500 transition-colors" />
+               <div class="flex items-center gap-2">
+                 <a-popconfirm title="Xóa tệp đính kèm này?" ok-text="Xóa" cancel-text="Hủy" @confirm="deleteUploadedFileDirectly(file.id)">
+                   <DeleteOutlined class="text-gray-300 hover:text-red-500 transition-colors cursor-pointer text-sm" @click.stop />
+                 </a-popconfirm>
+                 <DownloadOutlined class="text-gray-300 group-hover:text-blue-500 transition-colors" />
+               </div>
             </div>
           </div>
           <a-empty v-else :image="null" description="Chưa có chứng từ gốc" class="text-gray-300 my-0 py-2" />
@@ -4089,7 +4116,12 @@
                   <FileOutlined v-else class="text-gray-400" />
                   <span class="text-xs font-medium text-gray-700">{{ file.original_name || file.file_name }}</span>
                </div>
-               <DownloadOutlined class="text-gray-300 group-hover:text-blue-500 transition-colors" />
+               <div class="flex items-center gap-2">
+                 <a-popconfirm title="Xóa tệp đính kèm này?" ok-text="Xóa" cancel-text="Hủy" @confirm="deleteUploadedFileDirectly(file.id)">
+                   <DeleteOutlined class="text-gray-300 hover:text-red-500 transition-colors cursor-pointer text-sm" @click.stop />
+                 </a-popconfirm>
+                 <DownloadOutlined class="text-gray-300 group-hover:text-blue-500 transition-colors" />
+               </div>
             </div>
           </div>
           <a-empty v-else :image="null" description="Chưa có chứng từ thanh toán" class="text-gray-300 my-0 py-2" />
@@ -5121,14 +5153,23 @@
               <PaperClipOutlined /> Chứng từ đính kèm ({{ subPaymentDetail.attachments.filter(a => a.description !== 'after').length }})
             </div>
             <div class="grid grid-cols-2 gap-2">
-               <a-button v-for="file in subPaymentDetail.attachments.filter(a => a.description !== 'after')" :key="file.id" type="dashed" class="h-auto py-2 flex items-center justify-start text-left hover:border-blue-300 hover:text-blue-500 transition-colors" @click="openFilePreview(file)">
-                  <FileOutlined class="text-blue-400 text-lg mr-2" />
-                  <div class="flex-1 min-w-0">
-                     <div class="text-xs font-medium truncate text-gray-700">{{ file.original_name || file.file_name }}</div>
-                     <div class="text-[9px] text-gray-400 uppercase">{{ file.file_type || file.mime_type || 'File' }}</div>
+               <div v-for="file in subPaymentDetail.attachments.filter(a => a.description !== 'after')" :key="file.id" 
+                    class="p-2 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-between group hover:border-blue-200 transition-colors cursor-pointer"
+                    @click="openFilePreview(file)">
+                  <div class="flex items-center gap-2 min-w-0">
+                     <FileOutlined class="text-blue-400 text-lg shrink-0" />
+                     <div class="min-w-0">
+                        <div class="text-xs font-medium truncate text-gray-700">{{ file.original_name || file.file_name }}</div>
+                        <div class="text-[9px] text-gray-400 uppercase">{{ file.file_type || file.mime_type || 'File' }}</div>
+                     </div>
                   </div>
-                  <EyeOutlined class="text-gray-300" />
-               </a-button>
+                  <div class="flex items-center gap-1.5 shrink-0">
+                    <a-popconfirm title="Xóa tệp đính kèm này?" ok-text="Xóa" cancel-text="Hủy" @confirm="deleteUploadedFileDirectly(file.id)">
+                      <DeleteOutlined class="text-gray-300 hover:text-red-500 transition-colors cursor-pointer text-xs" @click.stop />
+                    </a-popconfirm>
+                    <EyeOutlined class="text-gray-300 group-hover:text-blue-500 transition-colors text-xs" />
+                  </div>
+               </div>
             </div>
          </div>
 
@@ -5137,14 +5178,23 @@
               <FileProtectOutlined /> Chứng từ thanh toán ({{ subPaymentDetail.attachments.filter(a => a.description === 'after').length }})
             </div>
             <div class="grid grid-cols-2 gap-2">
-               <a-button v-for="file in subPaymentDetail.attachments.filter(a => a.description === 'after')" :key="file.id" type="dashed" class="h-auto py-2 flex items-center justify-start text-left hover:border-blue-300 hover:text-blue-500 transition-colors" @click="openFilePreview(file)">
-                  <FileProtectOutlined class="text-green-500 text-lg mr-2" />
-                  <div class="flex-1 min-w-0">
-                     <div class="text-xs font-medium truncate text-gray-700">{{ file.original_name || file.file_name }}</div>
-                     <div class="text-[9px] text-gray-400 uppercase">{{ file.file_type || file.mime_type || 'File' }}</div>
+               <div v-for="file in subPaymentDetail.attachments.filter(a => a.description === 'after')" :key="file.id" 
+                    class="p-2 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-between group hover:border-blue-200 transition-colors cursor-pointer"
+                    @click="openFilePreview(file)">
+                  <div class="flex items-center gap-2 min-w-0">
+                     <FileProtectOutlined class="text-green-500 text-lg shrink-0" />
+                     <div class="min-w-0">
+                        <div class="text-xs font-medium truncate text-gray-700">{{ file.original_name || file.file_name }}</div>
+                        <div class="text-[9px] text-gray-400 uppercase">{{ file.file_type || file.mime_type || 'File' }}</div>
+                     </div>
                   </div>
-                  <EyeOutlined class="text-gray-300" />
-               </a-button>
+                  <div class="flex items-center gap-1.5 shrink-0">
+                    <a-popconfirm title="Xóa tệp đính kèm này?" ok-text="Xóa" cancel-text="Hủy" @confirm="deleteUploadedFileDirectly(file.id)">
+                      <DeleteOutlined class="text-gray-300 hover:text-red-500 transition-colors cursor-pointer text-xs" @click.stop />
+                    </a-popconfirm>
+                    <EyeOutlined class="text-gray-300 group-hover:text-blue-500 transition-colors text-xs" />
+                  </div>
+               </div>
             </div>
          </div>
       </div>
