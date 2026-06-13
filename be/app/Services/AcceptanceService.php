@@ -354,10 +354,11 @@ class AcceptanceService
                 return;
             }
 
-            $logDate    = now()->toDateString();
-            $existing   = \App\Models\ConstructionLog::where('project_id', $acceptance->project_id)
-                ->where('log_date', $logDate)
+            // Find the latest existing log for this task in the project (regardless of log_date)
+            // so we can preserve its metadata (date, creator, weather, personnel, attachments)
+            $existing = \App\Models\ConstructionLog::where('project_id', $acceptance->project_id)
                 ->where('task_id', $task->id)
+                ->orderBy('log_date', 'desc')
                 ->first();
 
             if ($existing) {
@@ -367,13 +368,23 @@ class AcceptanceService
                         . "Nghiệm thu đã được khách hàng phê duyệt: {$acceptance->name}",
                 ]);
             } else {
+                // If no log exists, create a new one.
+                // Keep the date consistent with the acceptance submission or creation date, not the approval date.
+                $logDate = $acceptance->submitted_at 
+                    ? $acceptance->submitted_at->toDateString() 
+                    : ($acceptance->created_at ? $acceptance->created_at->toDateString() : now()->toDateString());
+
+                // Set creator to the submitter/creator of the acceptance instead of the customer who approved it.
+                $createdBy = $acceptance->submitted_by ?? $acceptance->created_by ?? $user->id;
+
                 \App\Models\ConstructionLog::create([
                     'project_id'            => $acceptance->project_id,
                     'task_id'               => $task->id,
                     'log_date'              => $logDate,
                     'completion_percentage' => 100,
                     'notes'                 => "Nghiệm thu đã được khách hàng phê duyệt: {$acceptance->name}",
-                    'created_by'            => $user->id,
+                    'created_by'            => $createdBy,
+                    'approval_status'       => 'approved',
                 ]);
             }
         } catch (\Exception $e) {

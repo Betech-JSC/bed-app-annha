@@ -4980,6 +4980,76 @@
         <p class="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed" :class="logDetailRecord.notes ? '' : 'italic text-gray-400'">{{ logDetailRecord.notes || 'Không có ghi chú mô tả.' }}</p>
       </div>
 
+      <!-- Approval Steps -->
+      <div v-if="relatedAcceptance" class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
+        <div class="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-4 flex items-center gap-1.5">
+          <SafetyCertificateOutlined class="text-emerald-500" /> Trình tự duyệt nghiệm thu
+        </div>
+        
+        <a-steps direction="vertical" size="small" class="mt-2">
+          <!-- Step 1: Khởi tạo -->
+          <a-step title="Khởi tạo & Gửi duyệt" status="finish">
+            <template #description>
+              <div class="text-xs mt-1 text-gray-500">
+                Gửi bởi: <b>{{ relatedAcceptance.submitter?.name || 'Giám sát' }}</b>
+                <span v-if="relatedAcceptance.submitted_at"> lúc {{ fmtDateTime(relatedAcceptance.submitted_at) }}</span>
+              </div>
+            </template>
+          </a-step>
+
+          <!-- Step 2: Giám sát xác nhận -->
+          <a-step title="Giám sát xác nhận" 
+                  :status="relatedAcceptance.workflow_status === 'submitted' ? 'process' : (['supervisor_approved', 'customer_approved'].includes(relatedAcceptance.workflow_status) ? 'finish' : (relatedAcceptance.workflow_status === 'rejected' && !relatedAcceptance.supervisor_approved_at ? 'error' : 'wait'))">
+            <template #description>
+              <div class="text-xs mt-1 text-gray-500">
+                <template v-if="['supervisor_approved', 'customer_approved'].includes(relatedAcceptance.workflow_status)">
+                  Xác nhận bởi: <b>{{ relatedAcceptance.supervisorApprover?.name || 'Giám sát' }}</b>
+                  <span v-if="relatedAcceptance.supervisor_approved_at"> lúc {{ fmtDateTime(relatedAcceptance.supervisor_approved_at) }}</span>
+                </template>
+                <template v-else-if="relatedAcceptance.workflow_status === 'rejected' && !relatedAcceptance.supervisor_approved_at">
+                  Từ chối bởi: <b>{{ relatedAcceptance.rejector?.name || 'Giám sát' }}</b>
+                  <span v-if="relatedAcceptance.rejected_at"> lúc {{ fmtDateTime(relatedAcceptance.rejected_at) }}</span>
+                </template>
+                <template v-else-if="relatedAcceptance.workflow_status === 'submitted'">
+                  Chờ giám sát xác nhận
+                </template>
+                <template v-else>
+                  Chờ giám sát xác nhận
+                </template>
+              </div>
+            </template>
+          </a-step>
+
+          <!-- Step 3: Khách hàng phê duyệt -->
+          <a-step title="Khách hàng phê duyệt" 
+                  :status="relatedAcceptance.workflow_status === 'customer_approved' ? 'finish' : (relatedAcceptance.workflow_status === 'supervisor_approved' ? 'process' : (relatedAcceptance.workflow_status === 'rejected' && relatedAcceptance.supervisor_approved_at ? 'error' : 'wait'))">
+            <template #description>
+              <div class="text-xs mt-1 text-gray-500">
+                <template v-if="relatedAcceptance.workflow_status === 'customer_approved'">
+                  Phê duyệt bởi: <b>{{ relatedAcceptance.customerApprover?.name || 'Khách hàng' }}</b>
+                  <span v-if="relatedAcceptance.customer_approved_at"> lúc {{ fmtDateTime(relatedAcceptance.customer_approved_at) }}</span>
+                </template>
+                <template v-else-if="relatedAcceptance.workflow_status === 'rejected' && relatedAcceptance.supervisor_approved_at">
+                  Từ chối bởi: <b>{{ relatedAcceptance.rejector?.name || 'Khách hàng' }}</b>
+                  <span v-if="relatedAcceptance.rejected_at"> lúc {{ fmtDateTime(relatedAcceptance.rejected_at) }}</span>
+                </template>
+                <template v-else-if="relatedAcceptance.workflow_status === 'supervisor_approved'">
+                  Chờ khách hàng phê duyệt
+                </template>
+                <template v-else>
+                  Chờ khách hàng phê duyệt
+                </template>
+              </div>
+            </template>
+          </a-step>
+        </a-steps>
+
+        <div v-if="relatedAcceptance.workflow_status === 'rejected' && relatedAcceptance.rejection_reason" class="mt-4 p-3 bg-red-50 rounded-xl border border-red-100 text-xs text-red-700">
+          <div class="font-bold flex items-center gap-1.5 mb-1"><CloseCircleOutlined class="text-red-500" /> Lý do từ chối:</div>
+          <p class="m-0 leading-relaxed whitespace-pre-wrap">{{ relatedAcceptance.rejection_reason }}</p>
+        </div>
+      </div>
+
       <!-- Attachments -->
       <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
         <div class="flex justify-between items-center mb-4">
@@ -9211,6 +9281,13 @@ const getSubPayStepCurrent = (status) => {
 
 const showLogDetailDrawer = ref(false)
 const logDetailRecord = ref(null)
+
+const relatedAcceptance = computed(() => {
+  if (!logDetailRecord.value?.task_id) return null
+  const acceptances = props.monitorData?.acceptances || []
+  return acceptances.find(a => a.task_id === logDetailRecord.value.task_id)
+})
+
 const openLogDetailDrawer = (log) => {
   logDetailRecord.value = log
   showLogDetailDrawer.value = true

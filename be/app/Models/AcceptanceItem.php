@@ -269,46 +269,42 @@ class AcceptanceItem extends Model
 
             // Nếu nghiệm thu được approve và có task_id, tạo/update ConstructionLog với 100%
             // This ensures progress is calculated from logs (single source of truth)
-            // BUSINESS RULE: Unique constraint is ['project_id', 'log_date'], not including task_id
-            // So we use updateOrCreate to handle existing logs for the same project and date
-            // Nếu nghiệm thu được approve và có task_id, tạo/update ConstructionLog với 100%
-            // This ensures progress is calculated from logs (single source of truth)
-            // BUSINESS RULE: Unique constraint is ['project_id', 'log_date'], not including task_id
-            // So we use updateOrCreate to handle existing logs for the same project and date
             if ($this->workflow_status === 'customer_approved' && $this->task_id) {
                 $task = $this->task;
                 if ($task) {
-                    // Use acceptance end_date or today as log date
-                    $logDate = $this->end_date ? $this->end_date->toDateString() : now()->toDateString();
-
-                    // BUSINESS RULE: Unique constraint is ['project_id', 'log_date']
-                    // Use updateOrCreate to handle existing logs
+                    // Find the latest existing log for this task in the project (regardless of log_date)
+                    // so we can preserve its metadata (date, creator, weather, personnel, attachments)
                     $existingLog = \App\Models\ConstructionLog::where('project_id', $project->id)
-                        ->where('log_date', $logDate)
+                        ->where('task_id', $task->id)
+                        ->orderBy('log_date', 'desc')
                         ->first();
 
                     if ($existingLog) {
-                        // Update existing log - set completion to 100% and add note
-                        // Update task_id if it's different (for multiple tasks on same day)
                         $existingLog->update([
-                            'task_id' => $task->id, // Update task_id if different
-                            'completion_percentage' => 100, // Always set to 100% when acceptance approved
+                            'completion_percentage' => 100,
                             'notes' => ($existingLog->notes ? $existingLog->notes . "\n" : '') .
                                 "Nghiệm thu đã được phê duyệt: {$this->name}",
                         ]);
                     } else {
-                        // Create new construction log with 100% completion
-                        // This will trigger task progress recalculation via ConstructionLog event
+                        // If no log exists, create a new one.
+                        // Keep the date consistent with the acceptance submission, creation, or end date, not the approval date.
+                        $logDate = $this->submitted_at 
+                            ? $this->submitted_at->toDateString() 
+                            : ($this->created_at ? $this->created_at->toDateString() : ($this->end_date ? $this->end_date->toDateString() : now()->toDateString()));
+
+                        // Set creator to the submitter/creator of the acceptance instead of the customer who approved it.
+                        $createdBy = $this->submitted_by ?? $this->created_by ?? (\Illuminate\Support\Facades\Auth::check() ? \Illuminate\Support\Facades\Auth::id() : null) ?? $this->approved_by ?? 1;
+
                         \App\Models\ConstructionLog::create([
                             'project_id' => $project->id,
                             'task_id' => $task->id,
                             'log_date' => $logDate,
                             'completion_percentage' => 100,
                             'notes' => "Nghiệm thu đã được phê duyệt: {$this->name}",
-                            'created_by' => (\Illuminate\Support\Facades\Auth::check() ? \Illuminate\Support\Facades\Auth::id() : null) ?? $this->approved_by ?? $this->created_by ?? 1,
+                            'created_by' => $createdBy,
+                            'approval_status' => 'approved',
                         ]);
                     }
-                    // Task progress will be automatically recalculated via ConstructionLog::created/updated event
                 }
             }
 
