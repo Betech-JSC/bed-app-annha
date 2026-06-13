@@ -547,7 +547,7 @@ class CrmProjectsController extends Controller
         
         $canRevert = $isSuperAdmin 
             || $user->can(Permissions::COST_REVERT)
-            || ($cost->status === 'pending_management_approval' && $cost->created_by === $user->id)
+            || (in_array($cost->status, ['pending_management_approval', 'rejected']) && $cost->created_by === $user->id)
             || ($cost->status === 'pending_accountant_approval' && $user->can(Permissions::COST_APPROVE_MANAGEMENT));
 
         if (!$canRevert) {
@@ -555,6 +555,10 @@ class CrmProjectsController extends Controller
         }
 
         try {
+            $this->financialService->revertCostToDraft($cost, $user);
+            $msg = $cost->status === 'pending_accountant_approval' 
+                ? 'Đã đưa phiếu chi về trạng thái chờ Kế toán xác nhận.' 
+                : 'Đã đưa phiếu chi về trạng thái nháp.';
             return back()->with('success', $msg);
         } catch (\Exception $e) {
             return back()->with('error', 'Lỗi: ' . $e->getMessage());
@@ -2202,9 +2206,13 @@ class CrmProjectsController extends Controller
         
         $payment = SubcontractorPayment::where('project_id', $project->id)->findOrFail($paymentId);
 
-        // Permission: Requires dedicated revert permission
+        // Permission: Requires dedicated revert permission or being the creator for pending/rejected
         $isSuperAdmin = method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
-        if (!$user->can(Permissions::SUBCONTRACTOR_PAYMENT_REVERT) && !$isSuperAdmin) {
+        $canRevert = $isSuperAdmin 
+            || $user->can(Permissions::SUBCONTRACTOR_PAYMENT_REVERT)
+            || (in_array($payment->status, ['pending_management_approval', 'rejected']) && $payment->created_by === $user->id);
+
+        if (!$canRevert) {
             return back()->with('error', 'Bạn không có quyền hoàn duyệt phiếu thanh toán này.');
         }
 
@@ -4207,7 +4215,7 @@ class CrmProjectsController extends Controller
 
         $canRevert = $isSuperAdmin 
             || $user->can(Permissions::MATERIAL_REVERT) || $user->can(Permissions::COST_REVERT)
-            || ($bill->status === 'pending_management' && $bill->created_by === $user->id)
+            || (in_array($bill->status, ['pending_management', 'rejected']) && $bill->created_by === $user->id)
             || ($bill->status === 'pending_accountant' && ($user->can(Permissions::MATERIAL_APPROVE_MANAGEMENT) || $user->can(Permissions::COST_APPROVE_MANAGEMENT)));
 
         if (!$canRevert) {
