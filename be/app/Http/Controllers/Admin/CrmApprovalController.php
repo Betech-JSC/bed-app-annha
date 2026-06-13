@@ -466,20 +466,24 @@ class CrmApprovalController extends Controller
     {
         $bill = MaterialBill::findOrFail($id);
         $user = Auth::guard('admin')->user();
-        $this->crmRequire($user, Permissions::MATERIAL_APPROVE, $bill->project);
+
+        // Enforce stage-specific permission checks
+        if ($bill->status === 'pending_management') {
+            if (!$user->isSuperAdmin() && !$user->hasPermission(Permissions::COST_APPROVE_MANAGEMENT) && !$user->hasPermission(Permissions::MATERIAL_APPROVE_MANAGEMENT)) {
+                return back()->with('error', 'Bạn không có quyền duyệt phiếu vật tư ở trạng thái chờ Ban điều hành duyệt.');
+            }
+        } elseif ($bill->status === 'pending_accountant') {
+            if (!$user->isSuperAdmin() && !$user->hasPermission(Permissions::COST_APPROVE_ACCOUNTANT) && !$user->hasPermission(Permissions::MATERIAL_APPROVE_ACCOUNTANT)) {
+                return back()->with('error', 'Bạn không có quyền xác nhận phiếu vật tư ở trạng thái chờ Kế toán xác nhận.');
+            }
+            // Mandatorily attach uploaded files to the Material Bill if status is pending_accountant (Accountant step)
+            $request->merge(['description' => 'after']);
+            $this->attachFilesToEntity($request, $bill, "material-bills/{$bill->project_id}/{$bill->id}", true);
+        } else {
+            return back()->with('error', 'Phiếu vật tư không ở trạng thái chờ duyệt. Trạng thái hiện tại: ' . ($bill->status ?? 'Nháp'));
+        }
 
         try {
-            // Mandatorily attach uploaded files to the Material Bill if status is pending_accountant (Accountant step)
-            if ($bill->status === 'pending_accountant') {
-                $request->merge(['description' => 'after']);
-                $this->attachFilesToEntity($request, $bill, "material-bills/{$bill->project_id}/{$bill->id}", true);
-            }
-
-            // Normalize edge-case statuses before service call
-            if (in_array($bill->status, ['draft', 'pending', 'rejected'])) {
-                $bill->update(['status' => 'pending_management']);
-            }
-
             return $this->delegateApprove($user, 'material_bill', $id);
         } catch (\Exception $e) {
             return back()->with('error', 'Lỗi: ' . $e->getMessage());
@@ -491,7 +495,19 @@ class CrmApprovalController extends Controller
         $request->validate(['reason' => 'required|string|max:500']);
         $bill = MaterialBill::findOrFail($id);
         $user = Auth::guard('admin')->user();
-        $this->crmRequire($user, Permissions::MATERIAL_APPROVE, $bill->project);
+
+        // Enforce stage-specific permission checks for rejection
+        if ($bill->status === 'pending_management') {
+            if (!$user->isSuperAdmin() && !$user->hasPermission(Permissions::COST_APPROVE_MANAGEMENT) && !$user->hasPermission(Permissions::MATERIAL_APPROVE_MANAGEMENT)) {
+                return back()->with('error', 'Bạn không có quyền từ chối phiếu vật tư ở trạng thái chờ Ban điều hành duyệt.');
+            }
+        } elseif ($bill->status === 'pending_accountant') {
+            if (!$user->isSuperAdmin() && !$user->hasPermission(Permissions::COST_APPROVE_ACCOUNTANT) && !$user->hasPermission(Permissions::MATERIAL_APPROVE_ACCOUNTANT)) {
+                return back()->with('error', 'Bạn không có quyền từ chối phiếu vật tư ở trạng thái chờ Kế toán xác nhận.');
+            }
+        } else {
+            return back()->with('error', 'Phiếu vật tư không ở trạng thái chờ duyệt để từ chối.');
+        }
 
         return $this->delegateReject($user, 'material_bill', $id, $request->reason);
     }
@@ -533,6 +549,10 @@ class CrmApprovalController extends Controller
         $payment = ProjectPayment::findOrFail($id);
         $user = Auth::guard('admin')->user();
         $this->crmRequire($user, Permissions::PAYMENT_CONFIRM, $payment->project);
+
+        if ($payment->status !== 'customer_paid') {
+            return back()->with('error', 'Yêu cầu thanh toán không ở trạng thái khách hàng đã chuyển khoản. Trạng thái hiện tại: ' . ($payment->status ?? 'Nháp'));
+        }
 
         // Financial Gatekeeper: Accountant MUST have attachments
         if ($payment->attachments()->count() === 0) {
@@ -684,6 +704,12 @@ class CrmApprovalController extends Controller
     public function approveEquipmentPurchaseManagement(Request $request, $id)
     {
         $user = Auth::guard('admin')->user();
+        $purchase = \App\Models\EquipmentPurchase::findOrFail($id);
+
+        if ($purchase->status !== 'pending_management') {
+            return back()->with('error', 'Phiếu mua thiết bị không ở trạng thái chờ Ban điều hành duyệt. Trạng thái hiện tại: ' . ($purchase->status ?? 'Nháp'));
+        }
+
         return $this->delegateApprove($user, 'equipment_purchase_management', $id);
     }
 
@@ -691,6 +717,10 @@ class CrmApprovalController extends Controller
     {
         $user = Auth::guard('admin')->user();
         $purchase = \App\Models\EquipmentPurchase::findOrFail($id);
+
+        if ($purchase->status !== 'pending_accountant') {
+            return back()->with('error', 'Phiếu mua thiết bị không ở trạng thái chờ Kế toán xác nhận. Trạng thái hiện tại: ' . ($purchase->status ?? 'Nháp'));
+        }
 
         try {
             // Mandatorily attach uploaded files to the Equipment Purchase
@@ -1360,27 +1390,84 @@ class CrmApprovalController extends Controller
 
     private function formatRecentActivity(array $recent): \Illuminate\Support\Collection
     {
-        return collect([])
-            ->concat($recent['costs']->map(fn($i) => $this->formatItem($i)))
-            ->concat($recent['change_requests']->map(fn($i) => $this->formatChangeRequestItem($i)))
-            ->concat($recent['additional_costs']->map(fn($i) => $this->formatAdditionalCostItem($i)))
-            ->concat($recent['sub_payments']->map(fn($i) => $this->formatSubPaymentItem($i)))
-            ->concat($recent['acceptances']->map(fn($i) => $this->formatAcceptanceItem($i, 'Nghiệm thu', 'customer')))
-            ->concat($recent['budgets']->map(fn($i) => $this->formatBudget($i)))
-            ->concat($recent['equipment_rentals']->map(fn($i) => $this->formatEquipmentRentalItem($i)))
-            ->concat($recent['asset_usages']->map(fn($i) => $this->formatAssetUsageItem($i)))
-            ->concat($recent['contracts']->map(fn($i) => $this->formatContractItem($i)))
-            ->concat($recent['project_payments']->map(fn($i) => $this->formatPaymentItem($i)))
-            ->concat($recent['material_bills']->map(fn($i) => $this->formatMaterialBillItem($i)))
-            ->concat($recent['sub_acceptances']->map(fn($i) => $this->formatSubAcceptanceItem($i)))
-            ->concat($recent['supplier_acceptances']->map(fn($i) => $this->formatSupplierAcceptanceItem($i)))
-            // construction_logs removed — BUSINESS RULE: Nhật ký không cần duyệt
-            ->concat($recent['schedule_adjustments']->map(fn($i) => $this->formatScheduleAdjustmentItem($i)))
-            ->concat($recent['defects']->map(fn($i) => $this->formatDefectItem($i)))
-            ->concat($recent['attendances']->map(fn($i) => $this->formatAttendanceItem($i)))
-            ->concat($recent['maintenances']->map(fn($i) => $this->formatMaintenanceItem($i)))
-            ->concat($recent['warranties']->map(fn($i) => $this->formatWarrantyItem($i)))
-            ->unique(fn($item) => ($item['type'] ?? '') . '_' . $item['id'])->sortByDesc(fn($i) => $i['created_at'])->take(30)->values();
+        $approvals = $recent['approvals'] ?? collect([]);
+        
+        return $approvals->map(function ($approval) {
+            $model = $approval->approvable;
+            if (!$model) {
+                return null;
+            }
+            
+            $formatted = null;
+            $class = get_class($model);
+            
+            switch ($class) {
+                case \App\Models\Cost::class:
+                    $formatted = $this->formatItem($model);
+                    break;
+                case \App\Models\ChangeRequest::class:
+                    $formatted = $this->formatChangeRequestItem($model);
+                    break;
+                case \App\Models\AdditionalCost::class:
+                    $formatted = $this->formatAdditionalCostItem($model);
+                    break;
+                case \App\Models\SubcontractorPayment::class:
+                    $formatted = $this->formatSubPaymentItem($model);
+                    break;
+                case \App\Models\Acceptance::class:
+                    $formatted = $this->formatAcceptanceItem($model, 'Nghiệm thu', 'customer');
+                    break;
+                case \App\Models\ProjectBudget::class:
+                    $formatted = $this->formatBudget($model);
+                    break;
+                case \App\Models\EquipmentRental::class:
+                    $formatted = $this->formatEquipmentRentalItem($model);
+                    break;
+                case \App\Models\AssetUsage::class:
+                    $formatted = $this->formatAssetUsageItem($model);
+                    break;
+                case \App\Models\Contract::class:
+                    $formatted = $this->formatContractItem($model);
+                    break;
+                case \App\Models\ProjectPayment::class:
+                    $formatted = $this->formatPaymentItem($model);
+                    break;
+                case \App\Models\MaterialBill::class:
+                    $formatted = $this->formatMaterialBillItem($model);
+                    break;
+                case \App\Models\SubcontractorAcceptance::class:
+                    $formatted = $this->formatSubAcceptanceItem($model);
+                    break;
+                case \App\Models\SupplierAcceptance::class:
+                    $formatted = $this->formatSupplierAcceptanceItem($model);
+                    break;
+                case \App\Models\ScheduleAdjustment::class:
+                    $formatted = $this->formatScheduleAdjustmentItem($model);
+                    break;
+                case \App\Models\Defect::class:
+                    $formatted = $this->formatDefectItem($model);
+                    break;
+                case \App\Models\Attendance::class:
+                    $formatted = $this->formatAttendanceItem($model);
+                    break;
+                case \App\Models\ProjectMaintenance::class:
+                    $formatted = $this->formatMaintenanceItem($model);
+                    break;
+                case \App\Models\ProjectWarranty::class:
+                    $formatted = $this->formatWarrantyItem($model);
+                    break;
+                case \App\Models\EquipmentPurchase::class:
+                    $formatted = $this->formatEquipmentPurchaseItem($model);
+                    break;
+            }
+            
+            if ($formatted) {
+                $formatted['status'] = $approval->status;
+                $formatted['status_label'] = $this->getStatusLabel($approval->status);
+            }
+            
+            return $formatted;
+        })->filter()->values();
     }
 
     private function getStatusLabel(string $status): string

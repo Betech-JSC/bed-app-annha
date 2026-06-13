@@ -188,6 +188,30 @@ class CrmFilesController extends Controller
     {
         $file = Attachment::findOrFail($id);
 
+        if ($file->attachable) {
+            $parent = $file->attachable;
+            $status = $parent->status ?? $parent->approval_status ?? null;
+            if ($status) {
+                $approvedStatuses = [
+                    'pending_accountant', 
+                    'pending_accountant_approval', 
+                    'pending_accountant_confirmation',
+                    'approved', 
+                    'completed', 
+                    'in_use', 
+                    'returned', 
+                    'paid', 
+                    'confirmed', 
+                    'customer_approved', 
+                    'verified',
+                    'supervisor_approved'
+                ];
+                if (in_array($status, $approvedStatuses)) {
+                    return redirect()->back()->with('error', 'Không thể xóa tệp đính kèm của hồ sơ đã được duyệt hoặc đang chờ xác nhận thanh toán.');
+                }
+            }
+        }
+
         // Delete from storage
         if ($file->file_path && Storage::exists($file->file_path)) {
             Storage::delete($file->file_path);
@@ -209,14 +233,43 @@ class CrmFilesController extends Controller
         ]);
 
         $files = Attachment::whereIn('id', $validated['ids'])->get();
+        $deletedCount = 0;
+        $approvedStatuses = [
+            'pending_accountant', 
+            'pending_accountant_approval', 
+            'pending_accountant_confirmation',
+            'approved', 
+            'completed', 
+            'in_use', 
+            'returned', 
+            'paid', 
+            'confirmed', 
+            'customer_approved', 
+            'verified',
+            'supervisor_approved'
+        ];
+
         foreach ($files as $file) {
+            if ($file->attachable) {
+                $parent = $file->attachable;
+                $status = $parent->status ?? $parent->approval_status ?? null;
+                if ($status && in_array($status, $approvedStatuses)) {
+                    continue; // Skip deleting files of approved records
+                }
+            }
+
             if ($file->file_path && Storage::exists($file->file_path)) {
                 Storage::delete($file->file_path);
             }
             $file->delete();
+            $deletedCount++;
         }
 
-        return redirect()->back()->with('success', 'Đã xóa ' . count($validated['ids']) . ' file.');
+        if ($deletedCount === 0 && count($validated['ids']) > 0) {
+            return redirect()->back()->with('error', 'Tất cả các tệp chọn đều thuộc hồ sơ đã được duyệt, không thể xóa.');
+        }
+
+        return redirect()->back()->with('success', 'Đã xóa ' . $deletedCount . ' file.');
     }
 
     /**

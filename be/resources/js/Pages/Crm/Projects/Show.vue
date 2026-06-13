@@ -540,7 +540,7 @@
 
               <!-- Nút Hoàn duyệt về nháp -->
               <a-button 
-                v-if="['pending_customer_approval', 'rejected', 'approved'].includes(project.contract.status) && can('contract.revert')" 
+                v-if="['pending_customer_approval', 'rejected', 'approved'].includes(project.contract.status) && hasSystemPermission('contract.revert')" 
                 danger 
                 ghost 
                 @click="revertContractAction(project.contract)"
@@ -2251,7 +2251,7 @@
       <a-form-item label="Tên dự án" required v-bind="fieldStatus('name')"><a-input v-model:value="projectForm.name" size="large" /></a-form-item>
       <a-row :gutter="16">
         <a-col :span="12"><a-form-item label="Khách hàng" v-bind="fieldStatus('customer_id')"><a-select v-model:value="projectForm.customer_id" show-search option-filter-prop="label" size="large" class="w-full">
-          <a-select-option v-for="u in users" :key="u.id" :value="u.id" :label="u.name">{{ u.name }}</a-select-option>
+          <a-select-option v-for="c in customers" :key="c.id" :value="c.id" :label="c.name">{{ c.name }}</a-select-option>
         </a-select></a-form-item></a-col>
         <a-col :span="12"><a-form-item label="Quản lý"><a-select v-model:value="projectForm.project_manager_id" show-search option-filter-prop="label" size="large" class="w-full" allow-clear>
           <a-select-option v-for="u in users" :key="u.id" :value="u.id" :label="u.name">{{ u.name }}</a-select-option>
@@ -2637,7 +2637,7 @@
           <FileOutlined class="text-gray-400" />
           <a href="#" @click.prevent="openFilePreview(att)" class="text-blue-600 hover:underline flex-1 truncate cursor-pointer">{{ att.original_name || att.file_name }}</a>
           <span class="text-gray-400 text-xs mr-2">{{ formatFileSize(att.file_size) }}</span>
-          <a-popconfirm title="Xóa tệp đính kèm này?" ok-text="Xóa" cancel-text="Hủy" @confirm="deleteUploadedFileDirectly(att.id)">
+          <a-popconfirm v-if="!isApproved(attachTarget)" title="Xóa tệp đính kèm này?" ok-text="Xóa" cancel-text="Hủy" @confirm="deleteUploadedFileDirectly(att.id)">
             <a-button type="text" size="small" class="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity hover:text-red-500">
               <DeleteOutlined class="text-xs" />
             </a-button>
@@ -3115,7 +3115,10 @@
             </div>
             <!-- New Uploads -->
             <div class="mt-2">
-              <label class="text-[10px] font-bold text-gray-500 uppercase mt-2 block">Upload thêm chứng từ ({{ subPayFiles.length }})</label>
+              <div class="flex justify-between items-center mt-2 mb-1">
+                <label class="text-[10px] font-bold text-gray-500 uppercase block">Upload thêm chứng từ ({{ subPayFiles.length }})</label>
+                <a-tag v-if="subDetail?.category && subDetail.category.toLowerCase().trim() === 'nhân công'" color="error" class="text-[9px] m-0 rounded border-0">Bắt buộc cho Nhân công</a-tag>
+              </div>
             <div class="mt-1 flex flex-wrap gap-2">
               <div v-for="(file, idx) in subPayFiles" :key="idx" class="relative group">
                 <div class="w-16 h-16 rounded-lg bg-white border border-blue-200 flex flex-col items-center justify-center overflow-hidden">
@@ -3210,7 +3213,7 @@
         <div class="flex gap-2">
           <a-button type="link" @click="openSubModal(subDetail)" class="p-0 border-0 shadow-none"><EditOutlined /> Sửa thông tin</a-button>
           <a-button v-if="subDetail.progress_status === 'not_started'" type="primary" size="small" @click="approveSub(subDetail)">Bắt đầu</a-button>
-          <a-button v-if="subDetail.status === 'pending_customer_approval' && can('subcontractor.revert')" type="primary" size="small" ghost danger @click="revertSubcontractorAction(subDetail)">Hoàn duyệt</a-button>
+          <a-button v-if="subDetail.status === 'pending_customer_approval' && hasSystemPermission('subcontractor.revert')" type="primary" size="small" ghost danger @click="revertSubcontractorAction(subDetail)">Hoàn duyệt</a-button>
         </div>
       </div>
 
@@ -3296,7 +3299,7 @@
                </div>
                <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition gap-2">
                  <EyeOutlined class="text-white text-base" />
-                 <a-popconfirm title="Xóa tệp đính kèm này?" ok-text="Xóa" cancel-text="Hủy" @confirm="deleteUploadedFileDirectly(att.id)">
+                 <a-popconfirm v-if="!isApproved(costDetailRecord)" title="Xóa tệp đính kèm này?" ok-text="Xóa" cancel-text="Hủy" @confirm="deleteUploadedFileDirectly(att.id)">
                    <DeleteOutlined class="text-red-400 hover:text-red-500 text-base cursor-pointer" @click.stop />
                  </a-popconfirm>
                </div>
@@ -3319,7 +3322,7 @@
                </div>
                <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition gap-2">
                  <EyeOutlined class="text-white text-base" />
-                 <a-popconfirm title="Xóa tệp đính kèm này?" ok-text="Xóa" cancel-text="Hủy" @confirm="deleteUploadedFileDirectly(att.id)">
+                 <a-popconfirm v-if="!isApproved(costDetailRecord)" title="Xóa tệp đính kèm này?" ok-text="Xóa" cancel-text="Hủy" @confirm="deleteUploadedFileDirectly(att.id)">
                    <DeleteOutlined class="text-red-400 hover:text-red-500 text-base cursor-pointer" @click.stop />
                  </a-popconfirm>
                </div>
@@ -3327,6 +3330,18 @@
           </div>
           <a-empty v-else :image="null" description="Chưa có chứng từ thanh toán" class="text-gray-300 my-0 py-2" />
         </div>
+      </div>
+
+      <!-- Rejected Reason -->
+      <div v-if="costDetailRecord.rejected_reason" class="p-5 bg-red-50 rounded-2xl border border-red-100">
+        <div class="text-xs font-bold text-red-500 uppercase tracking-wider mb-2 flex items-center gap-2"><CloseCircleOutlined /> Lý do từ chối</div>
+        <div class="text-sm text-red-700">{{ costDetailRecord.rejected_reason }}</div>
+      </div>
+
+      <!-- Edit comment -->
+      <div v-if="costDetailRecord.status === 'draft'" class="p-5 bg-blue-50/50 rounded-2xl border border-blue-100/50">
+        <div class="text-xs font-bold text-blue-600 uppercase tracking-wider mb-2">Ghi chú hiệu chỉnh (khi gửi duyệt lại)</div>
+        <a-textarea v-model:value="submitComment" placeholder="Nhập những nội dung đã hiệu chỉnh so với phiếu cũ bị từ chối..." :rows="2" />
       </div>
 
     </div>
@@ -3339,28 +3354,33 @@
            <a-button v-if="can('cost.update') && costDetailRecord.status === 'draft'" @click="openCostModal(costDetailRecord)"><EditOutlined /> Sửa</a-button>
         </div>
         <div class="flex gap-2">
-          <template v-if="costDetailRecord.status === 'draft' && can('cost.submit')">
-            <a-button type="primary" :loading="actionLoading[`submit-cost-${costDetailRecord.id}`]" @click="handleSubmitCost(costDetailRecord)"><SendOutlined /> Gửi duyệt</a-button>
+          <template v-if="costDetailRecord.status === 'rejected'">
+            <a-button danger type="primary" class="bg-red-600 border-red-600" @click="cancelCostAction(costDetailRecord)">Đồng ý (Hủy)</a-button>
+            <a-button type="primary" ghost @click="revertCostAction(costDetailRecord)"><ReloadOutlined /> Hoàn duyệt</a-button>
           </template>
-          <template v-if="costDetailRecord.status === 'pending_management_approval' && can('cost.approve.management')">
-            <a-button type="primary" class="bg-green-600 border-green-600" @click="approveCostMgmt(costDetailRecord)">BĐH Duyệt</a-button>
-            <a-button danger ghost @click="openRejectCostModal(costDetailRecord)">Từ chối</a-button>
-          </template>
-          <template v-if="costDetailRecord.status === 'pending_accountant_approval' && can('cost.approve.accountant')">
-            <a-button type="primary" class="bg-green-600 border-green-600" @click="approveCostAcct(costDetailRecord)">KT Xác nhận</a-button>
-            <a-button danger ghost @click="openRejectCostModal(costDetailRecord)">Từ chối</a-button>
-          </template>
+          <template v-else>
+            <template v-if="costDetailRecord.status === 'draft' && can('cost.submit')">
+              <a-button type="primary" :loading="actionLoading[`submit-cost-${costDetailRecord.id}`]" @click="handleSubmitCost(costDetailRecord)"><SendOutlined /> Gửi duyệt</a-button>
+            </template>
+            <template v-if="costDetailRecord.status === 'pending_management_approval' && can('cost.approve.management')">
+              <a-button type="primary" class="bg-green-600 border-green-600" @click="approveCostMgmt(costDetailRecord)">BĐH Duyệt</a-button>
+              <a-button danger ghost @click="openRejectCostModal(costDetailRecord)">Từ chối</a-button>
+            </template>
+            <template v-if="costDetailRecord.status === 'pending_accountant_approval' && can('cost.approve.accountant')">
+              <a-button type="primary" class="bg-green-600 border-green-600" @click="approveCostAcct(costDetailRecord)">KT Xác nhận</a-button>
+              <a-button danger ghost @click="openRejectCostModal(costDetailRecord)">Từ chối</a-button>
+            </template>
 
-          <!-- Hoàn duyệt action -->
-          <a-button v-if="
-            (costDetailRecord.status === 'pending_management_approval' && (costDetailRecord.created_by === page.props.auth?.user?.id || can('cost.revert'))) ||
-            (costDetailRecord.status === 'pending_accountant_approval' && (can('cost.approve.management') || can('cost.revert'))) ||
-            (costDetailRecord.status === 'approved' && (can('cost.approve.accountant') || can('cost.revert'))) ||
-            (costDetailRecord.status === 'rejected' && can('cost.revert'))
-          "
-                    danger ghost @click="revertCostAction(costDetailRecord)">
-            <ReloadOutlined /> Hoàn duyệt
-          </a-button>
+            <!-- Hoàn duyệt action -->
+            <a-button v-slot:default v-if="
+              (costDetailRecord.status === 'pending_management_approval' && (costDetailRecord.created_by === page.props.auth?.user?.id || hasSystemPermission('cost.revert'))) ||
+              (costDetailRecord.status === 'pending_accountant_approval' && (can('cost.approve.management') || hasSystemPermission('cost.revert'))) ||
+              (costDetailRecord.status === 'approved' && hasSystemPermission('cost.revert'))
+            "
+                      danger ghost @click="revertCostAction(costDetailRecord)">
+              <ReloadOutlined /> Hoàn duyệt
+            </a-button>
+          </template>
         </div>
       </div>
     </template>
@@ -3459,7 +3479,7 @@
             <a-button danger ghost @click="openRejectContractModal(contractDetailRecord)">Từ chối</a-button>
           </template>
           <!-- Hoàn duyệt hợp đồng -->
-          <a-button v-if="['pending_customer_approval', 'rejected'].includes(contractDetailRecord.status) && can('contract.revert')" danger ghost @click="revertContractAction(contractDetailRecord)"><ReloadOutlined /> Hoàn duyệt</a-button>
+          <a-button v-if="['pending_customer_approval', 'rejected'].includes(contractDetailRecord.status) && hasSystemPermission('contract.revert')" danger ghost @click="revertContractAction(contractDetailRecord)"><ReloadOutlined /> Hoàn duyệt</a-button>
         </div>
       </div>
     </template>
@@ -3551,6 +3571,12 @@
         <div class="text-sm text-red-700">{{ materialDetail.rejected_reason }}</div>
       </div>
 
+      <!-- Edit comment -->
+      <div v-if="materialDetail.status === 'draft'" class="p-5 bg-blue-50/50 rounded-2xl border border-blue-100/50">
+        <div class="text-xs font-bold text-blue-600 uppercase tracking-wider mb-2">Ghi chú hiệu chỉnh (khi gửi duyệt lại)</div>
+        <a-textarea v-model:value="submitComment" placeholder="Nhập những nội dung đã hiệu chỉnh so với phiếu cũ bị từ chối..." :rows="2" />
+      </div>
+
       <!-- Attachments -->
       <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm space-y-6">
         <div>
@@ -3568,7 +3594,7 @@
               </div>
               <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition gap-2">
                 <EyeOutlined class="text-white text-base" />
-                <a-popconfirm title="Xóa tệp đính kèm này?" ok-text="Xóa" cancel-text="Hủy" @confirm="deleteUploadedFileDirectly(att.id)">
+                <a-popconfirm v-if="!isApproved(materialDetail)" title="Xóa tệp đính kèm này?" ok-text="Xóa" cancel-text="Hủy" @confirm="deleteUploadedFileDirectly(att.id)">
                   <DeleteOutlined class="text-red-400 hover:text-red-500 text-base cursor-pointer" @click.stop />
                 </a-popconfirm>
               </div>
@@ -3591,7 +3617,7 @@
               </div>
               <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition gap-2">
                 <EyeOutlined class="text-white text-base" />
-                <a-popconfirm title="Xóa tệp đính kèm này?" ok-text="Xóa" cancel-text="Hủy" @confirm="deleteUploadedFileDirectly(att.id)">
+                <a-popconfirm v-if="!isApproved(materialDetail)" title="Xóa tệp đính kèm này?" ok-text="Xóa" cancel-text="Hủy" @confirm="deleteUploadedFileDirectly(att.id)">
                   <DeleteOutlined class="text-red-400 hover:text-red-500 text-base cursor-pointer" @click.stop />
                 </a-popconfirm>
               </div>
@@ -3610,24 +3636,29 @@
           <a-button v-if="can('material.update') && materialDetail.status === 'draft'" size="small" @click="openBillModal(materialDetail)"><EditOutlined /> Sửa</a-button>
         </div>
         <div class="flex gap-2">
-          <template v-if="materialDetail.status === 'draft' && can('material.update')">
-            <a-button type="primary" @click="submitBill(materialDetail)">Gửi duyệt</a-button>
+          <template v-if="materialDetail.status === 'rejected'">
+            <a-button danger type="primary" class="bg-red-600 border-red-600" @click="cancelMaterialBillAction(materialDetail)">Đồng ý (Hủy)</a-button>
+            <a-button type="primary" ghost @click="revertMaterialBillAction(materialDetail)">Hoàn duyệt (Sửa)</a-button>
           </template>
-          <template v-if="materialDetail.status === 'pending_management' && can('cost.approve.management')">
-            <a-button type="primary" class="bg-green-600 border-green-600" @click="approveBillManagement(materialDetail)">BĐH Duyệt</a-button>
-            <a-button danger ghost @click="openRejectBillModal(materialDetail)">Từ chối</a-button>
+          <template v-else>
+            <template v-if="materialDetail.status === 'draft' && can('material.update')">
+              <a-button type="primary" @click="submitBill(materialDetail)">Gửi duyệt</a-button>
+            </template>
+            <template v-if="materialDetail.status === 'pending_management' && can('cost.approve.management')">
+              <a-button type="primary" class="bg-green-600 border-green-600" @click="approveBillManagement(materialDetail)">BĐH Duyệt</a-button>
+              <a-button danger ghost @click="openRejectBillModal(materialDetail)">Từ chối</a-button>
+            </template>
+            <template v-if="materialDetail.status === 'pending_accountant' && can('cost.approve.accountant')">
+              <a-button type="primary" class="bg-green-600 border-green-600" @click="approveBillAccountant(materialDetail)">KT Xác nhận</a-button>
+              <a-button danger ghost @click="openRejectBillModal(materialDetail)">Từ chối</a-button>
+            </template>
+            <!-- Hoàn duyệt phiếu vật liệu -->
+            <a-button v-if="
+              (materialDetail.status === 'pending_management' && (materialDetail.created_by === page.props.auth?.user?.id || hasSystemPermission('material.revert') || hasSystemPermission('cost.revert'))) ||
+              (materialDetail.status === 'pending_accountant' && (can('cost.approve.management') || can('material.approve.management') || hasSystemPermission('material.revert') || hasSystemPermission('cost.revert'))) ||
+              (materialDetail.status === 'approved' && (hasSystemPermission('material.revert') || hasSystemPermission('cost.revert')))
+            " danger ghost @click="revertMaterialBillAction(materialDetail)">Hoàn duyệt</a-button>
           </template>
-          <template v-if="materialDetail.status === 'pending_accountant' && can('cost.approve.accountant')">
-            <a-button type="primary" class="bg-green-600 border-green-600" @click="approveBillAccountant(materialDetail)">KT Xác nhận</a-button>
-            <a-button danger ghost @click="openRejectBillModal(materialDetail)">Từ chối</a-button>
-          </template>
-          <!-- Hoàn duyệt phiếu vật liệu -->
-          <a-button v-if="
-            (materialDetail.status === 'pending_management' && (materialDetail.created_by === page.props.auth?.user?.id || can('material.revert'))) ||
-            (materialDetail.status === 'pending_accountant' && (can('cost.approve.management') || can('material.revert'))) ||
-            (materialDetail.status === 'approved' && (can('cost.approve.accountant') || can('material.revert'))) ||
-            (materialDetail.status === 'rejected' && can('material.revert'))
-          " danger ghost @click="revertMaterialBillAction(materialDetail)">Hoàn duyệt</a-button>
         </div>
       </div>
     </div>
@@ -3904,7 +3935,7 @@
                   <span class="text-xs font-medium text-gray-700">{{ file.original_name || file.file_name }}</span>
                </div>
                <div class="flex items-center gap-2">
-                 <a-popconfirm title="Xóa tệp đính kèm này?" ok-text="Xóa" cancel-text="Hủy" @confirm="deleteUploadedFileDirectly(file.id)">
+                 <a-popconfirm v-if="!isApproved(selectedRental)" title="Xóa tệp đính kèm này?" ok-text="Xóa" cancel-text="Hủy" @confirm="deleteUploadedFileDirectly(file.id)">
                    <DeleteOutlined class="text-gray-300 hover:text-red-500 transition-colors cursor-pointer text-sm" @click.stop />
                  </a-popconfirm>
                  <DownloadOutlined class="text-gray-300 group-hover:text-blue-500 transition-colors" />
@@ -3927,7 +3958,7 @@
                   <span class="text-xs font-medium text-gray-700">{{ file.original_name || file.file_name }}</span>
                </div>
                <div class="flex items-center gap-2">
-                 <a-popconfirm title="Xóa tệp đính kèm này?" ok-text="Xóa" cancel-text="Hủy" @confirm="deleteUploadedFileDirectly(file.id)">
+                 <a-popconfirm v-if="!isApproved(selectedRental)" title="Xóa tệp đính kèm này?" ok-text="Xóa" cancel-text="Hủy" @confirm="deleteUploadedFileDirectly(file.id)">
                    <DeleteOutlined class="text-gray-300 hover:text-red-500 transition-colors cursor-pointer text-sm" @click.stop />
                  </a-popconfirm>
                  <DownloadOutlined class="text-gray-300 group-hover:text-blue-500 transition-colors" />
@@ -3960,7 +3991,7 @@
             </a-tooltip>
             <a-button v-if="selectedRental.status === 'in_use' && can('equipment.update')" type="primary" class="!bg-orange-500 !border-orange-500 hover:!bg-orange-600" @click="requestReturnRental(selectedRental)">Đánh dấu đã trả</a-button>
             <a-button v-if="selectedRental.status === 'pending_return' && can('equipment.approve')" type="primary" @click="confirmReturnRentalAction(selectedRental)"><CheckOutlined /> KT Xác nhận trả</a-button>
-            <a-button v-if="['pending_management', 'pending_accountant', 'available', 'rejected'].includes(selectedRental.status) && can('equipment.revert')" danger ghost @click="revertRentalAction && revertRentalAction(selectedRental)">Hoàn duyệt</a-button>
+            <a-button v-if="['pending_management', 'pending_accountant', 'available', 'rejected'].includes(selectedRental.status) && hasSystemPermission('equipment.revert')" danger ghost @click="revertRentalAction && revertRentalAction(selectedRental)">Hoàn duyệt</a-button>
             <a-popconfirm v-if="['pending_management','pending_accountant'].includes(selectedRental.status) && can('equipment.approve')" title="Từ chối phiếu thuê?" @confirm="rejectRental(selectedRental)">
              <template #description>
                <a-input v-model:value="rejectReason" placeholder="Nhập lý do từ chối..." class="mt-2" />
@@ -4018,7 +4049,7 @@
                   <span class="text-xs font-medium text-gray-700">{{ file.original_name || file.file_name }}</span>
                </div>
                <div class="flex items-center gap-2">
-                 <a-popconfirm title="Xóa tệp đính kèm này?" ok-text="Xóa" cancel-text="Hủy" @confirm="deleteUploadedFileDirectly(file.id)">
+                 <a-popconfirm v-if="!isApproved(selectedPurchase)" title="Xóa tệp đính kèm này?" ok-text="Xóa" cancel-text="Hủy" @confirm="deleteUploadedFileDirectly(file.id)">
                    <DeleteOutlined class="text-gray-300 hover:text-red-500 transition-colors cursor-pointer text-sm" @click.stop />
                  </a-popconfirm>
                  <DownloadOutlined class="text-gray-300 group-hover:text-blue-500 transition-colors" />
@@ -4041,7 +4072,7 @@
                   <span class="text-xs font-medium text-gray-700">{{ file.original_name || file.file_name }}</span>
                </div>
                <div class="flex items-center gap-2">
-                 <a-popconfirm title="Xóa tệp đính kèm này?" ok-text="Xóa" cancel-text="Hủy" @confirm="deleteUploadedFileDirectly(file.id)">
+                 <a-popconfirm v-if="!isApproved(selectedPurchase)" title="Xóa tệp đính kèm này?" ok-text="Xóa" cancel-text="Hủy" @confirm="deleteUploadedFileDirectly(file.id)">
                    <DeleteOutlined class="text-gray-300 hover:text-red-500 transition-colors cursor-pointer text-sm" @click.stop />
                  </a-popconfirm>
                  <DownloadOutlined class="text-gray-300 group-hover:text-blue-500 transition-colors" />
@@ -4126,7 +4157,7 @@
                   <span class="text-xs font-medium text-gray-700">{{ file.original_name || file.file_name }}</span>
                </div>
                <div class="flex items-center gap-2">
-                 <a-popconfirm title="Xóa tệp đính kèm này?" ok-text="Xóa" cancel-text="Hủy" @confirm="deleteUploadedFileDirectly(file.id)">
+                 <a-popconfirm v-if="!isApproved(selectedUsage)" title="Xóa tệp đính kèm này?" ok-text="Xóa" cancel-text="Hủy" @confirm="deleteUploadedFileDirectly(file.id)">
                    <DeleteOutlined class="text-gray-300 hover:text-red-500 transition-colors cursor-pointer text-sm" @click.stop />
                  </a-popconfirm>
                  <DownloadOutlined class="text-gray-300 group-hover:text-blue-500 transition-colors" />
@@ -4149,7 +4180,7 @@
                   <span class="text-xs font-medium text-gray-700">{{ file.original_name || file.file_name }}</span>
                </div>
                <div class="flex items-center gap-2">
-                 <a-popconfirm title="Xóa tệp đính kèm này?" ok-text="Xóa" cancel-text="Hủy" @confirm="deleteUploadedFileDirectly(file.id)">
+                 <a-popconfirm v-if="!isApproved(selectedUsage)" title="Xóa tệp đính kèm này?" ok-text="Xóa" cancel-text="Hủy" @confirm="deleteUploadedFileDirectly(file.id)">
                    <DeleteOutlined class="text-gray-300 hover:text-red-500 transition-colors cursor-pointer text-sm" @click.stop />
                  </a-popconfirm>
                  <DownloadOutlined class="text-gray-300 group-hover:text-blue-500 transition-colors" />
@@ -4315,7 +4346,7 @@
           <!-- Cập nhật trạng thái -->
           <a-button v-if="additionalCostDetail.status === 'draft'" type="primary" class="shadow-md shadow-blue-200" @click="submitAC(additionalCostDetail); showAdditionalCostDetailDrawer = false"><SendOutlined /> Gửi duyệt</a-button>
           <!-- Hoàn duyệt -->
-          <a-button v-if="['pending_approval', 'pending', 'approved', 'rejected'].includes(additionalCostDetail.status) && can('additional_cost.revert')"
+          <a-button v-if="['pending_approval', 'pending', 'approved', 'rejected'].includes(additionalCostDetail.status) && hasSystemPermission('additional_cost.revert')"
                     danger ghost @click="revertACAction && revertACAction(additionalCostDetail)">
             <ReloadOutlined /> Hoàn duyệt
           </a-button>
@@ -4856,7 +4887,7 @@
         </a-tooltip>
 
         <a-button 
-          v-if="['rejected'].includes(selectedAttendance.workflow_status) && can('attendance.revert')" 
+          v-if="['rejected'].includes(selectedAttendance.workflow_status) && hasSystemPermission('attendance.revert')" 
           danger 
           ghost
           size="large" 
@@ -5059,7 +5090,7 @@
                </div>
                <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition gap-2">
                  <EyeOutlined class="text-white text-base" />
-                 <a-popconfirm title="Xóa tệp đính kèm này?" ok-text="Xóa" cancel-text="Hủy" @confirm="deleteUploadedFileDirectly(att.id)">
+                 <a-popconfirm v-if="!isApproved(paymentDetailRecord)" title="Xóa tệp đính kèm này?" ok-text="Xóa" cancel-text="Hủy" @confirm="deleteUploadedFileDirectly(att.id)">
                    <DeleteOutlined class="text-red-400 hover:text-red-500 text-base cursor-pointer" @click.stop />
                  </a-popconfirm>
                </div>
@@ -5082,7 +5113,7 @@
                </div>
                <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition gap-2">
                  <EyeOutlined class="text-white text-base" />
-                 <a-popconfirm title="Xóa tệp đính kèm này?" ok-text="Xóa" cancel-text="Hủy" @confirm="deleteUploadedFileDirectly(att.id)">
+                 <a-popconfirm v-if="!isApproved(paymentDetailRecord)" title="Xóa tệp đính kèm này?" ok-text="Xóa" cancel-text="Hủy" @confirm="deleteUploadedFileDirectly(att.id)">
                    <DeleteOutlined class="text-red-400 hover:text-red-500 text-base cursor-pointer" @click.stop />
                  </a-popconfirm>
                </div>
@@ -5125,7 +5156,7 @@
           </template>
 
           <!-- Hoàn duyệt: Khi đã gửi phiếu xong (không còn ở trạng thái nháp) -->
-          <template v-if="paymentDetailRecord.status !== 'draft' && can('payment.revert')">
+          <template v-if="paymentDetailRecord.status !== 'draft' && hasSystemPermission('payment.revert')">
              <a-button danger ghost @click="revertPaymentAction(paymentDetailRecord)"><ReloadOutlined /> Hoàn duyệt</a-button>
           </template>
         </div>
@@ -5224,7 +5255,7 @@
                      </div>
                   </div>
                   <div class="flex items-center gap-1.5 shrink-0">
-                    <a-popconfirm title="Xóa tệp đính kèm này?" ok-text="Xóa" cancel-text="Hủy" @confirm="deleteUploadedFileDirectly(file.id)">
+                    <a-popconfirm v-if="!isApproved(subPaymentDetail)" title="Xóa tệp đính kèm này?" ok-text="Xóa" cancel-text="Hủy" @confirm="deleteUploadedFileDirectly(file.id)">
                       <DeleteOutlined class="text-gray-300 hover:text-red-500 transition-colors cursor-pointer text-xs" @click.stop />
                     </a-popconfirm>
                     <EyeOutlined class="text-gray-300 group-hover:text-blue-500 transition-colors text-xs" />
@@ -5249,7 +5280,7 @@
                      </div>
                   </div>
                   <div class="flex items-center gap-1.5 shrink-0">
-                    <a-popconfirm title="Xóa tệp đính kèm này?" ok-text="Xóa" cancel-text="Hủy" @confirm="deleteUploadedFileDirectly(file.id)">
+                    <a-popconfirm v-if="!isApproved(subPaymentDetail)" title="Xóa tệp đính kèm này?" ok-text="Xóa" cancel-text="Hủy" @confirm="deleteUploadedFileDirectly(file.id)">
                       <DeleteOutlined class="text-gray-300 hover:text-red-500 transition-colors cursor-pointer text-xs" @click.stop />
                     </a-popconfirm>
                     <EyeOutlined class="text-gray-300 group-hover:text-blue-500 transition-colors text-xs" />
@@ -5291,6 +5322,18 @@
         </a-steps>
       </div>
 
+      <!-- Rejected Reason -->
+      <div v-if="subPaymentDetail.rejected_reason" class="mt-6 p-4 bg-red-50 rounded-xl border border-red-100">
+        <div class="text-xs font-bold text-red-500 uppercase mb-2 flex items-center gap-2"><CloseCircleOutlined /> Lý do từ chối</div>
+        <div class="text-sm text-red-700">{{ subPaymentDetail.rejected_reason }}</div>
+      </div>
+
+      <!-- Edit comment -->
+      <div v-if="subPaymentDetail.status === 'draft'" class="mt-6 bg-blue-50/50 rounded-xl border border-blue-100/50 p-4">
+        <div class="text-xs font-bold text-blue-600 uppercase mb-2">Ghi chú hiệu chỉnh (khi gửi duyệt lại)</div>
+        <a-textarea v-model:value="submitComment" placeholder="Nhập những nội dung đã hiệu chỉnh so với phiếu cũ bị từ chối..." :rows="2" />
+      </div>
+
     </div>
 
     <!-- Action Footer -->
@@ -5301,25 +5344,31 @@
             <a-popconfirm v-if="subPaymentDetail.status === 'draft' && can('subcontractor_payment.delete')" title="Xóa phiếu này?" @confirm="deleteSubPayment(subPaymentDetail.subcontractor || subDetail, subPaymentDetail); showSubPaymentDetailDrawer = false">
                <a-button type="text" danger class="rounded-lg"><DeleteOutlined /> Xóa</a-button>
             </a-popconfirm>
-            <a-button v-if="['pending_management_approval', 'pending_accountant_confirmation', 'rejected'].includes(subPaymentDetail.status) && can('subcontractor_payment.revert')" type="text" danger class="rounded-lg" @click="revertSubPayment(subPaymentDetail.subcontractor || subDetail, subPaymentDetail); showSubPaymentDetailDrawer = false">
+            <a-button v-if="['pending_management_approval', 'pending_accountant_confirmation'].includes(subPaymentDetail.status) && hasSystemPermission('subcontractor_payment.revert')" type="text" danger class="rounded-lg" @click="revertSubPayment(subPaymentDetail.subcontractor || subDetail, subPaymentDetail); showSubPaymentDetailDrawer = false">
                <ReloadOutlined /> Hoàn duyệt
             </a-button>
           </div>
 
-          <!-- Right side actions (Approve, Submit) -->
+          <!-- Right side actions (Approve, Submit, Cancel/Revert for Rejected) -->
           <div class="flex gap-2">
-            <a-button v-if="subPaymentDetail.status === 'draft' && can('subcontractor_payment.update')" @click="editSubPayment(subPaymentDetail.subcontractor || subDetail, subPaymentDetail); showSubPaymentDetailDrawer = false" class="rounded-lg">Sửa</a-button>
-            <a-popconfirm v-if="subPaymentDetail.status === 'draft' && can('subcontractor_payment.create')" title="Gửi duyệt phiếu này?" @confirm="submitSubPayment(subPaymentDetail.subcontractor || subDetail, subPaymentDetail); showSubPaymentDetailDrawer = false">
-               <a-button type="primary" class="rounded-lg shadow-sm">Gửi duyệt</a-button>
-            </a-popconfirm>
-            
-            <a-popconfirm v-if="subPaymentDetail.status === 'pending_management_approval' && can('subcontractor_payment.approve')" title="BĐH duyệt phiếu này?" @confirm="approveSubPayment(subPaymentDetail.subcontractor || subDetail, subPaymentDetail); showSubPaymentDetailDrawer = false" ok-text="Duyệt">
-               <a-button type="primary" class="rounded-lg !bg-green-500 !border-green-500 shadow-sm shadow-green-500/20"><CheckCircleOutlined /> Duyệt phiếu</a-button>
-            </a-popconfirm>
-            
-            <a-popconfirm v-if="subPaymentDetail.status === 'pending_accountant_confirmation' && can('subcontractor_payment.mark_paid')" title="Kế toán xác nhận đã chi?" @confirm="confirmSubPayment(subPaymentDetail.subcontractor || subDetail, subPaymentDetail); showSubPaymentDetailDrawer = false" ok-text="Xác nhận">
-               <a-button type="primary" class="rounded-lg !bg-blue-600 !border-blue-600 shadow-sm shadow-blue-600/20"><CheckOutlined /> KT Xác nhận chi</a-button>
-            </a-popconfirm>
+            <template v-if="subPaymentDetail.status === 'rejected'">
+              <a-button type="primary" danger class="rounded-lg bg-red-600 border-red-600" @click="cancelSubPaymentAction(subPaymentDetail.subcontractor || subDetail, subPaymentDetail); showSubPaymentDetailDrawer = false">Đồng ý (Hủy)</a-button>
+              <a-button type="primary" ghost class="rounded-lg" @click="revertSubPayment(subPaymentDetail.subcontractor || subDetail, subPaymentDetail); showSubPaymentDetailDrawer = false"><ReloadOutlined /> Hoàn duyệt</a-button>
+            </template>
+            <template v-else>
+              <a-button v-if="subPaymentDetail.status === 'draft' && can('subcontractor_payment.update')" @click="editSubPayment(subPaymentDetail.subcontractor || subDetail, subPaymentDetail); showSubPaymentDetailDrawer = false" class="rounded-lg">Sửa</a-button>
+              <a-popconfirm v-if="subPaymentDetail.status === 'draft' && can('subcontractor_payment.create')" title="Gửi duyệt phiếu này?" @confirm="submitSubPayment(subPaymentDetail.subcontractor || subDetail, subPaymentDetail); showSubPaymentDetailDrawer = false">
+                 <a-button type="primary" class="rounded-lg shadow-sm">Gửi duyệt</a-button>
+              </a-popconfirm>
+              
+              <a-popconfirm v-if="subPaymentDetail.status === 'pending_management_approval' && can('subcontractor_payment.approve')" title="BĐH duyệt phiếu này?" @confirm="approveSubPayment(subPaymentDetail.subcontractor || subDetail, subPaymentDetail); showSubPaymentDetailDrawer = false" ok-text="Duyệt">
+                 <a-button type="primary" class="rounded-lg !bg-green-500 !border-green-500 shadow-sm shadow-green-500/20"><CheckCircleOutlined /> Duyệt phiếu</a-button>
+              </a-popconfirm>
+              
+              <a-popconfirm v-if="subPaymentDetail.status === 'pending_accountant_confirmation' && can('subcontractor_payment.mark_paid')" title="Kế toán xác nhận đã chi?" @confirm="confirmSubPayment(subPaymentDetail.subcontractor || subDetail, subPaymentDetail); showSubPaymentDetailDrawer = false" ok-text="Xác nhận">
+                 <a-button type="primary" class="rounded-lg !bg-blue-600 !border-blue-600 shadow-sm shadow-blue-600/20"><CheckOutlined /> KT Xác nhận chi</a-button>
+              </a-popconfirm>
+            </template>
           </div>
        </div>
     </template>
@@ -5386,7 +5435,7 @@
         <div class="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
           <div class="flex justify-between items-center mb-2">
             <label class="font-medium text-gray-700 text-sm">Chứng từ đính kèm</label>
-            <a-tag color="error" class="text-[10px] m-0 rounded border-0" v-if="!subPayFiles.length">Bắt buộc</a-tag>
+            <a-tag color="error" class="text-[10px] m-0 rounded border-0" v-if="isLaborSub && !subPayFiles.length">Bắt buộc</a-tag>
           </div>
           <div class="border-2 border-dashed border-gray-300 rounded-xl p-5 text-center bg-gray-50 flex flex-col items-center cursor-pointer hover:bg-blue-50 hover:border-blue-400 transition-all duration-300 group" @click="$refs.subPayFilesInput.click()">
             <div class="w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-sm mb-2 group-hover:scale-110 transition-transform">
@@ -5414,11 +5463,11 @@
        <div class="flex justify-between items-center w-full">
           <div class="text-xs text-gray-500 font-medium ml-2">
              <span v-if="subPayFiles.length" class="text-green-600">Đã đính kèm {{subPayFiles.length}} tệp</span>
-             <span v-else class="text-red-400">Vui lòng đính kèm tệp</span>
+             <span v-else-if="isLaborSub" class="text-red-400">Vui lòng đính kèm tệp</span>
           </div>
           <div class="flex gap-2">
             <a-button @click="showSubPayCreateDrawer = false" class="rounded-lg">Hủy</a-button>
-            <a-button type="primary" @click="saveSubPayment" :disabled="!subPayFiles.length" :loading="actionLoading['save-sub-payment'] || false" class="rounded-lg bg-blue-600 border-none px-6 shadow-md shadow-blue-500/20 hover:bg-blue-500 transition-colors">Tạo phiếu chi</a-button>
+            <a-button type="primary" @click="saveSubPayment" :disabled="isLaborSub && !subPayFiles.length" :loading="actionLoading['save-sub-payment'] || false" class="rounded-lg bg-blue-600 border-none px-6 shadow-md shadow-blue-500/20 hover:bg-blue-500 transition-colors">Tạo phiếu chi</a-button>
           </div>
        </div>
     </template>
@@ -5771,6 +5820,11 @@
           </div>
         </div>
         <div v-else class="mt-1 text-xs text-gray-400">Kéo thả hoặc chọn file chứng từ</div>
+      </div>
+
+      <div class="mt-4">
+        <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Ghi chú hiệu chỉnh (khi gửi duyệt lại)</div>
+        <a-textarea v-model:value="submitComment" placeholder="Nhập những nội dung đã hiệu chỉnh so với phiếu cũ bị từ chối..." :rows="2" />
       </div>
 
       <div class="flex justify-end gap-2 mt-4">
@@ -6293,7 +6347,7 @@
                       danger ghost size="large" class="rounded-xl h-10 px-4 font-bold" @click="openRejectAcceptModal(acceptDetailStage)">
               Từ chối
             </a-button>
-            <a-button v-if="['submitted','supervisor_approved','rejected'].includes(acceptDetailStage.workflow_status) && can('acceptance.revert')"
+            <a-button v-if="['submitted','supervisor_approved','rejected'].includes(acceptDetailStage.workflow_status) && hasSystemPermission('acceptance.revert')"
                       size="large" class="rounded-xl h-10 px-4 font-bold" @click="revertAccept(acceptDetailStage)">
               <ReloadOutlined /> Hoàn duyệt
             </a-button>
@@ -7283,6 +7337,7 @@ const page = usePage()
 const props = defineProps({
   project: Object,
   users: Array,
+  customers: { type: Array, default: () => [] },
   permissions: Array,
   counts: { type: Object, default: () => ({}) },
   costGroups: { type: Array, default: () => [] },
@@ -7422,6 +7477,11 @@ const can = (perm) => {
 
   // Fallback to global auth user permissions (useful for global admins/accountants)
   const authPerms = usePage().props.auth?.user?.permissions || []
+  return authPerms.includes('*') || authPerms.includes(perm)
+}
+
+const hasSystemPermission = (perm) => {
+  const authPerms = page.props.auth?.user?.permissions || []
   return authPerms.includes('*') || authPerms.includes(perm)
 }
 
@@ -8520,7 +8580,11 @@ const submitCostFiles = ref([])
 const handleSubmitCost = (c) => {
   if (c.attachments?.length > 0) {
     // Đã có chứng từ → gửi duyệt trực tiếp
-    router.post(`/projects/${props.project.id}/costs/${c.id}/submit`, {}, loadingOptions(`submit-cost-${c.id}`))
+    router.post(`/projects/${props.project.id}/costs/${c.id}/submit`, { comment: submitComment.value }, loadingOptions(`submit-cost-${c.id}`, {
+      onSuccess: () => {
+        submitComment.value = ''
+      }
+    }))
   } else {
     // Chưa có chứng từ → mở modal bắt upload
     submitCostTarget.value = c
@@ -8535,9 +8599,16 @@ const doSubmitCostWithFiles = () => {
   if (!submitCostFiles.value.length || !submitCostTarget.value) return
   const formData = new FormData()
   submitCostFiles.value.forEach(f => formData.append('files[]', f))
+  if (submitComment.value) {
+    formData.append('comment', submitComment.value)
+  }
   router.post(`/projects/${props.project.id}/costs/${submitCostTarget.value.id}/submit`, formData, savingOptions({
     forceFormData: true,
-    onSuccess: () => { showSubmitCostModal.value = false; submitCostFiles.value = [] },
+    onSuccess: () => {
+      showSubmitCostModal.value = false
+      submitCostFiles.value = []
+      submitComment.value = ''
+    },
   }))
 }
 
@@ -8622,6 +8693,7 @@ const toggleBudgetExpand = (id) => {
   else expandedBudgets.value.push(id)
 }
 
+const submitComment = ref('')
 const showRejectCostModal = ref(false)
 const rejectingCost = ref(null)
 const rejectCostReason = ref('')
@@ -8640,6 +8712,36 @@ const revertCostAction = (c) => {
     onOk: () => router.post(`/projects/${props.project.id}/costs/${c.id}/revert`, {}, loadingOptions(`revert-cost-${c.id}`))
   })
 }
+const cancelCostAction = (c) => {
+  router.post(`/projects/${props.project.id}/costs/${c.id}/cancel`, {}, {
+    preserveScroll: true,
+    onSuccess: () => {
+      showCostDetail.value = false
+      message.success('Đã xác nhận từ chối và hủy phiếu chi.')
+    }
+  })
+}
+
+const cancelMaterialBillAction = (bill) => {
+  router.post(`/projects/${props.project.id}/material-bills/${bill.id}/cancel`, {}, {
+    preserveScroll: true,
+    onSuccess: () => {
+      showMaterialDetailDrawer.value = false
+      message.success('Đã xác nhận từ chối và hủy phiếu vật tư.')
+    }
+  })
+}
+
+const cancelSubPaymentAction = (sub, p) => {
+  router.post(`/projects/${props.project.id}/subcontractors/${sub.id}/payments/${p.id}/cancel`, {}, {
+    preserveScroll: true,
+    onSuccess: () => {
+      showSubPaymentDetailDrawer.value = false
+      message.success('Đã xác nhận từ chối và hủy phiếu thanh toán NTP.')
+    }
+  })
+}
+
 
 // ============ CONTRACT CRUD ============
 const showContractModal = ref(false)
@@ -8882,6 +8984,25 @@ const submitAttachFiles = () => {
     forceFormData: true,
     onSuccess: () => { showAttachModal.value = false; attachFiles.value = [] },
   }))
+}
+
+const isApproved = (record) => {
+  if (!record || !record.status) return false
+  const approvedStatuses = [
+    'pending_accountant', 
+    'pending_accountant_approval', 
+    'pending_accountant_confirmation',
+    'approved', 
+    'completed', 
+    'in_use', 
+    'returned', 
+    'paid', 
+    'confirmed', 
+    'customer_approved', 
+    'verified',
+    'supervisor_approved'
+  ]
+  return approvedStatuses.includes(record.status)
 }
 
 const deleteUploadedFileDirectly = (fileId) => {
@@ -9477,6 +9598,7 @@ const subPayTarget = ref(null)
 const subPayFiles = ref([])
 const editingSubPayId = ref(null)
 const subPayForm = ref({ payment_stage: '', amount: null, payment_date: null, payment_method: 'bank_transfer', reference_number: '', description: '' })
+const isLaborSub = computed(() => subPayTarget.value?.category?.toLowerCase().trim() === 'nhân công')
 const openSubPaymentHistory = (sub) => {
   subDetail.value = sub
   showSubPayDrawer.value = true
@@ -9510,6 +9632,17 @@ const editSubPayment = (sub, p) => {
 const saveSubPayment = (sub) => {
   if (!sub) sub = subPayTarget.value
   if (!sub) return
+
+  const isLabor = sub.category && sub.category.toLowerCase().trim() === 'nhân công'
+  if (isLabor) {
+    const existingPayment = sub.payments?.find(p => p.id === editingSubPayId.value)
+    const existingCount = existingPayment?.attachments?.length || existingPayment?.attachments_count || 0
+    if (!subPayFiles.value.length && existingCount === 0) {
+      message.warning('Bắt buộc phải tải lên chứng từ/phiếu chi cho nhà thầu phụ thuộc danh mục Nhân công.')
+      return
+    }
+  }
+
   const baseUrl = `/projects/${props.project.id}/subcontractors/${sub.id}/payments`
   
   const resetForm = () => {
@@ -9552,7 +9685,12 @@ const saveSubPayment = (sub) => {
     })
   }
 }
-const submitSubPayment = (sub, p) => router.post(`/projects/${props.project.id}/subcontractors/${sub.id}/payments/${p.id}/submit`, {}, loadingOptions(`submit-subpay-${p.id}`, { preserveScroll: true }))
+const submitSubPayment = (sub, p) => router.post(`/projects/${props.project.id}/subcontractors/${sub.id}/payments/${p.id}/submit`, { comment: submitComment.value }, loadingOptions(`submit-subpay-${p.id}`, {
+  preserveScroll: true,
+  onSuccess: () => {
+    submitComment.value = ''
+  }
+}))
 const approveSubPayment = (sub, p) => router.post(`/projects/${props.project.id}/subcontractors/${sub.id}/payments/${p.id}/approve`, {}, loadingOptions(`approve-subpay-${p.id}`, { preserveScroll: true }))
 const rejectSubPayment = (sub, p) => router.post(`/projects/${props.project.id}/subcontractors/${sub.id}/payments/${p.id}/reject`, {}, loadingOptions(`reject-subpay-${p.id}`, { preserveScroll: true }))
 // confirmSubPayment is moved up to use unified modal logic
@@ -10546,9 +10684,13 @@ const submitBillForm = () => {
   })
 }
 
-// ---- Bill Workflow Actions ----
 const submitBill = (bill) => {
-  router.post(`/projects/${props.project.id}/material-bills/${bill.id}/submit`, {}, { preserveScroll: true })
+  router.post(`/projects/${props.project.id}/material-bills/${bill.id}/submit`, { comment: submitComment.value }, {
+    preserveScroll: true,
+    onSuccess: () => {
+      submitComment.value = ''
+    }
+  })
 }
 
 const approveBillManagement = (bill) => {

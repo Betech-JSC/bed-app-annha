@@ -263,6 +263,7 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         Route::post('/{project}/costs/{cost}/approve-accountant', [CrmProjectsController::class, 'approveCostAccountant'])->name('costs.approve.accountant');
         Route::post('/{project}/costs/{cost}/reject', [CrmProjectsController::class, 'rejectCost'])->name('costs.reject');
         Route::post('/{project}/costs/{cost}/revert', [CrmProjectsController::class, 'revertCostToDraft'])->name('costs.revert');
+        Route::post('/{project}/costs/{cost}/cancel', [CrmProjectsController::class, 'cancelCost'])->name('costs.cancel');
         Route::post('/{project}/costs/{cost}/attach-files', [CrmProjectsController::class, 'attachFilesToCost'])->name('costs.attach-files');
 
         // Payments
@@ -355,6 +356,7 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         Route::post('/{project}/subcontractors/{sub}/payments/{payment}/reject', [CrmProjectsController::class, 'rejectSubPayment'])->name('subcontractors.payments.reject');
         Route::post('/{project}/subcontractors/{sub}/payments/{payment}/confirm', [CrmProjectsController::class, 'confirmSubPayment'])->name('subcontractors.payments.confirm');
         Route::post('/{project}/subcontractors/{sub}/payments/{payment}/revert', [CrmProjectsController::class, 'revertSubPaymentToDraft'])->name('subcontractors.payments.revert');
+        Route::post('/{project}/subcontractors/{sub}/payments/{payment}/cancel', [CrmProjectsController::class, 'cancelSubPayment'])->name('subcontractors.payments.cancel');
         Route::delete('/{project}/subcontractors/{sub}/payments/{payment}', [CrmProjectsController::class, 'destroySubPayment'])->name('subcontractors.payments.destroy');
 
         // Additional Costs
@@ -451,6 +453,7 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         Route::post('/{project}/material-bills/{bill}/approve-management', [CrmProjectsController::class, 'approveMaterialBillManagement'])->name('material-bills.approve.management');
         Route::post('/{project}/material-bills/{bill}/approve-accountant', [CrmProjectsController::class, 'approveMaterialBillAccountant'])->name('material-bills.approve.accountant');
         Route::post('/{project}/material-bills/{bill}/revert', [CrmProjectsController::class, 'revertMaterialBillToDraft'])->name('material-bills.revert');
+        Route::post('/{project}/material-bills/{bill}/cancel', [CrmProjectsController::class, 'cancelMaterialBill'])->name('material-bills.cancel');
         Route::post('/{project}/material-bills/{bill}/reject', [CrmProjectsController::class, 'rejectMaterialBill'])->name('material-bills.reject');
         Route::post('/{project}/material-bills/{bill}/attach-files', [CrmProjectsController::class, 'attachFilesToMaterialBill'])->name('material-bills.attach-files');
         Route::post('/{project}/material-bills/sync-costs', [CrmProjectsController::class, 'syncMaterialBillCosts'])->name('material-bills.sync-costs');

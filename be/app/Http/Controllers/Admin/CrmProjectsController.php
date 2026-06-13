@@ -227,6 +227,7 @@ class CrmProjectsController extends Controller
 
         // 4. Shared Global Lists (Optimized without cache)
         $users = User::employees()->select('id', 'name', 'email', 'image as avatar')->orderBy('name')->get();
+        $customers = User::customers()->select('id', 'name', 'email', 'phone')->orderBy('name')->get();
         $costGroups = class_exists(\App\Models\CostGroup::class) ? \App\Models\CostGroup::where('is_active', true)->orderBy('name')->get(['id', 'name', 'code']) : [];
         $personnelRoles = class_exists(\App\Models\PersonnelRole::class) ? \App\Models\PersonnelRole::orderBy('name')->get(['id', 'name']) : [];
         $materials = class_exists(\App\Models\Material::class) ? \App\Models\Material::select('id', 'name', 'code', 'unit', 'unit_price')->orderBy('name')->get() : [];
@@ -239,6 +240,7 @@ class CrmProjectsController extends Controller
             'contract' => $project->contract,
             'permissions' => $permissions,
             'users' => $users,
+            'customers' => $customers,
             'counts' => $counts,
             'costGroups' => $costGroups,
             'personnelRoles' => $personnelRoles,
@@ -516,6 +518,12 @@ class CrmProjectsController extends Controller
         }
 
         try {
+            if ($request->filled('comment')) {
+                $comment = trim($request->input('comment'));
+                $cost->description = ($cost->description ? $cost->description . "\n" : "") . "Hiệu chỉnh: " . $comment;
+                $cost->save();
+            }
+
             // Handle file uploads first if any (Web specific)
             if ($request->hasFile('files')) {
                 $this->attachFilesToEntity($request, $cost, "costs/{$project->id}/{$cost->id}");
@@ -540,23 +548,34 @@ class CrmProjectsController extends Controller
         $canRevert = $isSuperAdmin 
             || $user->can(Permissions::COST_REVERT)
             || ($cost->status === 'pending_management_approval' && $cost->created_by === $user->id)
-            || ($cost->status === 'pending_accountant_approval' && $user->can(Permissions::COST_APPROVE_MANAGEMENT))
-            || ($cost->status === 'approved' && $user->can(Permissions::COST_APPROVE_ACCOUNTANT));
+            || ($cost->status === 'pending_accountant_approval' && $user->can(Permissions::COST_APPROVE_MANAGEMENT));
 
         if (!$canRevert) {
             return back()->with('error', 'Bạn không có quyền hoàn duyệt phiếu chi ở trạng thái này.');
         }
 
         try {
-            $this->financialService->revertCostToDraft($cost, $user);
-            
-            $msg = $cost->status === 'pending_accountant_approval' 
-                ? 'Đã đưa phiếu chi về trạng thái chờ Kế toán xác nhận.' 
-                : 'Đã đưa phiếu chi về trạng thái nháp.';
-                
             return back()->with('success', $msg);
         } catch (\Exception $e) {
             return back()->with('error', 'Lỗi: ' . $e->getMessage());
+        }
+    }
+
+    public function cancelCost(string $projectId, string $costId)
+    {
+        $project = Project::findOrFail($projectId);
+        $cost = Cost::where('project_id', $project->id)->findOrFail($costId);
+
+        if ($cost->status !== 'rejected') {
+            return back()->with('error', 'Chỉ có thể hủy chi phí ở trạng thái từ chối.');
+        }
+
+        try {
+            $cost->status = 'cancelled';
+            $cost->save();
+            return back()->with('success', 'Đã xác nhận từ chối và hủy phiếu chi.');
+        } catch (\Exception $e) {
+            return back()->with('error', $e->getMessage());
         }
     }
 
@@ -819,6 +838,11 @@ class CrmProjectsController extends Controller
         $this->crmRequire($user, Permissions::PAYMENT_CONFIRM, $project);
 
         $payment = ProjectPayment::where('project_id', $project->id)->findOrFail($paymentId);
+
+        if ($payment->status !== 'customer_paid') {
+            return back()->with('error', 'Yêu cầu thanh toán không ở trạng thái khách hàng đã chuyển khoản. Trạng thái hiện tại: ' . ($payment->status ?? 'Nháp'));
+        }
+
         $validated = $request->validate([
             'paid_date' => 'nullable|date',
         ]);
@@ -2041,6 +2065,11 @@ class CrmProjectsController extends Controller
 
         $sub = Subcontractor::where('project_id', $project->id)->findOrFail($subId);
 
+        $isLabor = $sub->category && trim(mb_strtolower($sub->category)) === 'nhân công';
+        if ($isLabor && !$request->hasFile('files')) {
+            return back()->with('error', 'Bắt buộc phải tải lên chứng từ/phiếu chi cho nhà thầu phụ thuộc danh mục Nhân công.');
+        }
+
         $validated = $request->validate([
             'payment_stage' => 'nullable|string|max:255',
             'amount' => 'required|numeric|min:0',
@@ -2084,6 +2113,11 @@ class CrmProjectsController extends Controller
             return back()->with('error', 'Chỉ có thể cập nhật phiếu thanh toán ở trạng thái nháp.');
         }
 
+        $isLabor = $sub->category && trim(mb_strtolower($sub->category)) === 'nhân công';
+        if ($isLabor && !$request->hasFile('files') && $payment->attachments()->count() === 0) {
+            return back()->with('error', 'Bắt buộc phải có ít nhất một chứng từ/phiếu chi cho nhà thầu phụ thuộc danh mục Nhân công.');
+        }
+
         $validated = $request->validate([
             'payment_stage' => 'nullable|string|max:255',
             'amount' => 'required|numeric|min:0',
@@ -2114,12 +2148,17 @@ class CrmProjectsController extends Controller
         }
     }
 
-    public function submitSubPayment(string $projectId, string $subId, string $paymentId)
+    public function submitSubPayment(Request $request, string $projectId, string $subId, string $paymentId)
     {
         $project = Project::findOrFail($projectId);
         $payment = SubcontractorPayment::where('project_id', $project->id)->findOrFail($paymentId);
 
         try {
+            if ($request->filled('comment')) {
+                $comment = trim($request->input('comment'));
+                $payment->description = ($payment->description ? $payment->description . "\n" : "") . "Hiệu chỉnh: " . $comment;
+                $payment->save();
+            }
             $this->financialService->submitSubPayment($payment, auth('admin')->user());
             return back()->with('success', 'Đã gửi phiếu chi để duyệt.');
         } catch (\Exception $e) {
@@ -2174,6 +2213,24 @@ class CrmProjectsController extends Controller
             return back()->with('success', 'Đã đưa phiếu thanh toán về trạng thái nháp.');
         } catch (\Exception $e) {
             return back()->with('error', 'Lỗi: ' . $e->getMessage());
+        }
+    }
+
+    public function cancelSubPayment(string $projectId, string $subId, string $paymentId)
+    {
+        $project = Project::findOrFail($projectId);
+        $payment = SubcontractorPayment::where('project_id', $project->id)->findOrFail($paymentId);
+
+        if ($payment->status !== 'rejected') {
+            return back()->with('error', 'Chỉ có thể hủy thanh toán ở trạng thái từ chối.');
+        }
+
+        try {
+            $payment->status = 'cancelled';
+            $payment->save();
+            return back()->with('success', 'Đã xác nhận từ chối và hủy phiếu thanh toán.');
+        } catch (\Exception $e) {
+            return back()->with('error', $e->getMessage());
         }
     }
 
@@ -3177,6 +3234,10 @@ class CrmProjectsController extends Controller
 
         $rental = \App\Models\EquipmentRental::where('project_id', $project->id)->findOrFail($rentalId);
 
+        if ($rental->status !== 'pending_management') {
+            return back()->with('error', 'Phiếu thuê thiết bị không ở trạng thái chờ Ban điều hành duyệt. Trạng thái hiện tại: ' . ($rental->status ?? 'Nháp'));
+        }
+
         if ($this->equipmentService->approveRentalByManagement($rental, $user)) {
             return back()->with('success', 'BĐH đã duyệt. Chuyển sang Kế toán.');
         }
@@ -3190,6 +3251,10 @@ class CrmProjectsController extends Controller
         $this->crmRequire($user, Permissions::COST_APPROVE_ACCOUNTANT, $project);
 
         $rental = \App\Models\EquipmentRental::where('project_id', $project->id)->findOrFail($rentalId);
+
+        if ($rental->status !== 'pending_accountant') {
+            return back()->with('error', 'Phiếu thuê thiết bị không ở trạng thái chờ Kế toán xác nhận. Trạng thái hiện tại: ' . ($rental->status ?? 'Nháp'));
+        }
 
         try {
             // Mandatorily attach uploaded files to the Equipment Rental
@@ -3376,6 +3441,10 @@ class CrmProjectsController extends Controller
 
         $purchase = \App\Models\EquipmentPurchase::where('project_id', $project->id)->findOrFail($purchaseId);
 
+        if ($purchase->status !== 'pending_management') {
+            return back()->with('error', 'Phiếu mua thiết bị không ở trạng thái chờ Ban điều hành duyệt. Trạng thái hiện tại: ' . ($purchase->status ?? 'Nháp'));
+        }
+
         if ($this->equipmentService->approvePurchaseByManagement($purchase, $user)) {
             return back()->with('success', 'BĐH đã duyệt. Chuyển sang Kế toán.');
         }
@@ -3391,6 +3460,10 @@ class CrmProjectsController extends Controller
         $purchase = \App\Models\EquipmentPurchase::where('project_id', $project->id)
             ->with('items')
             ->findOrFail($purchaseId);
+
+        if ($purchase->status !== 'pending_accountant') {
+            return back()->with('error', 'Phiếu mua thiết bị không ở trạng thái chờ Kế toán xác nhận. Trạng thái hiện tại: ' . ($purchase->status ?? 'Nháp'));
+        }
 
         try {
             // Mandatorily attach uploaded files to the Equipment Purchase
@@ -3545,6 +3618,10 @@ class CrmProjectsController extends Controller
 
         $usage = \App\Models\AssetUsage::where('project_id', $project->id)->findOrFail($usageId);
 
+        if ($usage->status !== 'pending_management') {
+            return back()->with('error', 'Yêu cầu sử dụng tài sản không ở trạng thái chờ Ban điều hành duyệt. Trạng thái hiện tại: ' . ($usage->status ?? 'Nháp'));
+        }
+
         if ($this->equipmentService->approveUsageByManagement($usage, $user)) {
             return back()->with('success', 'BĐH đã duyệt. Chuyển sang Kế toán xác nhận.');
         }
@@ -3559,6 +3636,10 @@ class CrmProjectsController extends Controller
         $this->crmRequire($user, Permissions::COST_APPROVE_ACCOUNTANT, $project);
 
         $usage = \App\Models\AssetUsage::where('project_id', $project->id)->findOrFail($usageId);
+
+        if ($usage->status !== 'pending_accountant') {
+            return back()->with('error', 'Yêu cầu sử dụng tài sản không ở trạng thái chờ Kế toán xác nhận. Trạng thái hiện tại: ' . ($usage->status ?? 'Nháp'));
+        }
 
         try {
             // Mandatorily attach uploaded files to the Asset Usage
@@ -4051,7 +4132,7 @@ class CrmProjectsController extends Controller
         }
     }
 
-    public function submitMaterialBill(string $projectId, string $billId)
+    public function submitMaterialBill(Request $request, string $projectId, string $billId)
     {
         $project = Project::findOrFail($projectId);
         $user = auth('admin')->user();
@@ -4060,6 +4141,11 @@ class CrmProjectsController extends Controller
         $bill = MaterialBill::where('project_id', $project->id)->findOrFail($billId);
 
         try {
+            if ($request->filled('comment')) {
+                $comment = trim($request->input('comment'));
+                $bill->notes = ($bill->notes ? $bill->notes . "\n" : "") . "Hiệu chỉnh: " . $comment;
+                $bill->save();
+            }
             $this->materialBillService->submit($bill, $user);
             return back()->with('success', 'Đã gửi phiếu vật tư để duyệt.');
         } catch (\Exception $e) {
@@ -4074,6 +4160,10 @@ class CrmProjectsController extends Controller
         $this->crmRequire($user, Permissions::COST_APPROVE_MANAGEMENT, $project);
 
         $bill = MaterialBill::where('project_id', $project->id)->findOrFail($billId);
+
+        if ($bill->status !== 'pending_management') {
+            return back()->with('error', 'Phiếu vật tư không ở trạng thái chờ Ban điều hành duyệt. Trạng thái hiện tại: ' . ($bill->status ?? 'Nháp'));
+        }
 
         try {
             $this->materialBillService->approve($bill, $user);
@@ -4090,6 +4180,10 @@ class CrmProjectsController extends Controller
         $this->crmRequire($user, Permissions::COST_APPROVE_ACCOUNTANT, $project);
 
         $bill = MaterialBill::where('project_id', $project->id)->findOrFail($billId);
+
+        if ($bill->status !== 'pending_accountant') {
+            return back()->with('error', 'Phiếu vật tư không ở trạng thái chờ Kế toán xác nhận. Trạng thái hiện tại: ' . ($bill->status ?? 'Nháp'));
+        }
 
         try {
             // Mandatorily attach uploaded files to the material bill
@@ -4112,10 +4206,9 @@ class CrmProjectsController extends Controller
         $bill = MaterialBill::where('project_id', $project->id)->findOrFail($billId);
 
         $canRevert = $isSuperAdmin 
-            || $user->can(Permissions::MATERIAL_REVERT)
+            || $user->can(Permissions::MATERIAL_REVERT) || $user->can(Permissions::COST_REVERT)
             || ($bill->status === 'pending_management' && $bill->created_by === $user->id)
-            || ($bill->status === 'pending_accountant' && $user->can(Permissions::MATERIAL_APPROVE_MANAGEMENT))
-            || ($bill->status === 'approved' && $user->can(Permissions::MATERIAL_APPROVE_ACCOUNTANT));
+            || ($bill->status === 'pending_accountant' && ($user->can(Permissions::MATERIAL_APPROVE_MANAGEMENT) || $user->can(Permissions::COST_APPROVE_MANAGEMENT)));
 
         if (!$canRevert) {
             return back()->with('error', 'Bạn không có quyền hoàn duyệt phiếu vật tư ở trạng thái này.');
@@ -4131,6 +4224,24 @@ class CrmProjectsController extends Controller
             return back()->with('success', $msg);
         } catch (\Exception $e) {
             return back()->with('error', 'Lỗi: ' . $e->getMessage());
+        }
+    }
+
+    public function cancelMaterialBill(string $projectId, string $billId)
+    {
+        $project = Project::findOrFail($projectId);
+        $bill = MaterialBill::where('project_id', $project->id)->findOrFail($billId);
+
+        if ($bill->status !== 'rejected') {
+            return back()->with('error', 'Chỉ có thể hủy phiếu vật tư ở trạng thái từ chối.');
+        }
+
+        try {
+            $bill->status = 'cancelled';
+            $bill->save();
+            return back()->with('success', 'Đã xác nhận từ chối và hủy phiếu vật tư.');
+        } catch (\Exception $e) {
+            return back()->with('error', $e->getMessage());
         }
     }
 

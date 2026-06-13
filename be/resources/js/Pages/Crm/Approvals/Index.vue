@@ -1012,15 +1012,9 @@ const activeItems = computed(() => {
   const APPROVED_STATUSES = ['approved', 'confirmed', 'paid', 'customer_approved', 'in_use', 'returned', 'implemented', 'verified',
     'pending_accountant_approval', 'pending_accountant', 'pending_accountant_confirmation', 'supervisor_approved', 'project_manager_approved', 'customer_paid']
 
-  // "Đã duyệt" and "Từ chối" tabs: use recentItems filtered by role and status
+  // "Đã duyệt" and "Từ chối" tabs: use recentItems filtered by status
   if (activeStatus.value === 'approved' || activeStatus.value === 'rejected') {
     let items = [...(props.recentItems || [])]
-
-    // Filter by role (same visibility as pending tab)
-    const allowedTypes = roleTypeMap[activeRole.value]
-    if (allowedTypes) {
-      items = items.filter(i => allowedTypes.includes(i.type))
-    }
 
     if (activeStatus.value === 'approved') {
       items = items.filter(i => APPROVED_STATUSES.includes(i.status))
