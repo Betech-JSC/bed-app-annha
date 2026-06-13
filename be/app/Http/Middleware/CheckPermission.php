@@ -16,7 +16,7 @@ class CheckPermission
      */
     public function handle(Request $request, Closure $next, string $permission, ?string $projectIdParam = null): Response
     {
-        $user = $request->user('sanctum');
+        $user = $request->user('sanctum') ?? $request->user('admin') ?? $request->user();
 
         if (!$user) {
             return response()->json([
