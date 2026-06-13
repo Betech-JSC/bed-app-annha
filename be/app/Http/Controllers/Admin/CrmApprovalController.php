@@ -120,6 +120,7 @@ class CrmApprovalController extends Controller
                 ->concat($data['change_requests']->map(fn($i) => array_merge($this->formatChangeRequestItem($i), ['_approveType' => 'change_request'])))
                 // construction_logs removed — BUSINESS RULE: Nhật ký không cần duyệt
                 ->concat($data['schedule_adjustments']->map(fn($i) => array_merge($this->formatScheduleAdjustmentItem($i), ['_approveType' => 'schedule_adjustment'])))
+                ->concat($data['additional_costs']->map(fn($i) => array_merge($this->formatAdditionalCostItem($i), ['_approveType' => 'additional_cost'])))
                 ->concat($data['equipment_rentals_return']->map(fn($i) => array_merge($this->formatEquipmentRentalItem($i), ['_approveType' => 'equipment_rental_return'])))
                 ->concat($data['asset_usages_return']->map(fn($i) => array_merge($this->formatAssetUsageItem($i), ['_approveType' => 'asset_usage_return'])))
                 ->concat(($data['equipment_purchases_return'] ?? collect([]))->map(fn($i) => array_merge($this->formatEquipmentPurchaseItem($i), ['_approveType' => 'equipment_purchase_return']))) // In case there is a return flow in the future
@@ -137,6 +138,7 @@ class CrmApprovalController extends Controller
                 ->concat($data['acceptance_customer']->map(fn($i) => array_merge($this->formatAcceptanceItem($i, 'Chờ KH duyệt', 'customer'), ['_approveType' => 'acceptance'])))
                 ->concat($data['contracts']->map(fn($i) => array_merge($this->formatContractItem($i), ['_approveType' => 'contract'])))
                 ->concat($data['payments_pending']->map(fn($i) => array_merge($this->formatPaymentItem($i), ['_approveType' => 'project_payment'])))
+                ->concat($data['additional_costs']->map(fn($i) => array_merge($this->formatAdditionalCostItem($i), ['_approveType' => 'additional_cost'])))
                 ->concat($data['maintenances']->map(fn($i) => array_merge($this->formatMaintenanceItem($i), ['_approveType' => 'maintenance'])))
                 ->concat($data['warranties']->map(fn($i) => array_merge($this->formatWarrantyItem($i), ['_approveType' => 'warranty'])))
                 ->concat($defectsByRole['customer'])

@@ -1012,9 +1012,9 @@ const historyStatusColor = (status) => {
 const roleTypeMap = {
   management: ['project_cost', 'company_cost', 'additional_cost', 'material_bill', 'budget', 'equipment_rental', 'asset_usage', 'equipment_purchase', 'equipment_inventory', 'maintenance', 'warranty'],
   accountant: ['project_cost', 'company_cost', 'sub_payment', 'project_payment', 'material_bill', 'equipment_rental', 'asset_usage', 'equipment_purchase'],
-  project_manager: ['acceptance', 'change_request', 'schedule_adjustment', 'defect', 'equipment_rental', 'asset_usage'],
+  project_manager: ['acceptance', 'change_request', 'additional_cost', 'schedule_adjustment', 'defect', 'equipment_rental', 'asset_usage'],
   supervisor: ['acceptance', 'sub_acceptance', 'supplier_acceptance', 'defect'],
-  customer: ['acceptance', 'contract', 'project_payment', 'maintenance', 'warranty', 'defect'],
+  customer: ['acceptance', 'contract', 'project_payment', 'additional_cost', 'maintenance', 'warranty', 'defect'],
   hr: ['attendance'],
 }
 
@@ -1036,7 +1036,7 @@ const activeItems = computed(() => {
     // Apply category filter
     if (activeCategory.value !== 'all') {
       items = items.filter(i => {
-        if (activeCategory.value === 'finance') return ['project_cost', 'company_cost', 'sub_payment', 'project_payment', 'material_bill', 'budget', 'equipment_rental', 'equipment_inventory'].includes(i.type)
+        if (activeCategory.value === 'finance') return ['project_cost', 'company_cost', 'sub_payment', 'project_payment', 'additional_cost', 'material_bill', 'budget', 'equipment_rental', 'equipment_inventory'].includes(i.type)
         if (activeCategory.value === 'acceptance') return ['acceptance', 'sub_acceptance', 'supplier_acceptance', 'warranty'].includes(i.type)
         if (activeCategory.value === 'technical') return ['change_request', 'additional_cost', 'schedule_adjustment', 'defect', 'asset_usage', 'maintenance'].includes(i.type)
         if (activeCategory.value === 'hr') return ['attendance'].includes(i.type)
@@ -1051,7 +1051,7 @@ const activeItems = computed(() => {
   // Filter by category
   if (activeCategory.value !== 'all') {
     items = items.filter(i => {
-      if (activeCategory.value === 'finance') return ['project_cost', 'sub_payment', 'project_payment', 'material_bill', 'budget', 'equipment_rental', 'equipment_inventory'].includes(i.type)
+      if (activeCategory.value === 'finance') return ['project_cost', 'sub_payment', 'project_payment', 'additional_cost', 'material_bill', 'budget', 'equipment_rental', 'equipment_inventory'].includes(i.type)
       if (activeCategory.value === 'acceptance') return ['acceptance', 'sub_acceptance', 'supplier_acceptance', 'warranty'].includes(i.type)
       if (activeCategory.value === 'technical') return ['change_request', 'additional_cost', 'schedule_adjustment', 'defect', 'asset_usage', 'maintenance'].includes(i.type)
       if (activeCategory.value === 'hr') return ['attendance'].includes(i.type)

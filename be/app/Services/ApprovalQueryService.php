@@ -857,6 +857,22 @@ class ApprovalQueryService
                     ];
                 }
             }
+
+            // Additional Costs for PM
+            if ($type === 'all' || $type === 'project_manager' || $type === 'additional_cost') {
+                foreach ($data['additional_costs'] ?? [] as $ac) {
+                    $items[] = [
+                        'id' => $ac->id, 'type' => 'additional_cost', 'title' => 'Phát sinh: ' . $ac->name,
+                        'subtitle' => $ac->project->name ?? 'Dự án', 'amount' => (float) $ac->amount,
+                        'status' => $ac->status, 'status_label' => $this->getStatusLabel($ac->status),
+                        'created_by' => $ac->proposer->name ?? 'N/A', 'created_at' => $ac->created_at->toISOString(),
+                        'project_id' => $ac->project_id, 'can_approve' => $user->hasPermission(Permissions::ADDITIONAL_COST_APPROVE) || $user->isSuperAdmin(), 
+                        'approval_level' => 'project_manager', 'role_group' => 'project_manager',
+                        'attachments' => $this->formatAttachments($ac),
+                        'attachments_count' => $ac->attachments->count(),
+                    ];
+                }
+            }
         }
 
         // 4. SUPERVISOR BUCKET
@@ -942,6 +958,22 @@ class ApprovalQueryService
                         'approval_level' => 'customer', 'role_group' => 'customer',
                         'attachments' => $this->formatAttachments($contract),
                         'attachments_count' => $contract->attachments->count(),
+                    ];
+                }
+            }
+
+            // Additional Costs for Customer
+            if ($type === 'all' || $type === 'customer' || $type === 'additional_cost') {
+                foreach ($data['additional_costs'] ?? [] as $ac) {
+                    $items[] = [
+                        'id' => $ac->id, 'type' => 'additional_cost', 'title' => 'Phát sinh: ' . $ac->name,
+                        'subtitle' => $ac->project->name ?? 'Dự án', 'amount' => (float) $ac->amount,
+                        'status' => $ac->status, 'status_label' => $this->getStatusLabel($ac->status),
+                        'created_by' => $ac->proposer->name ?? 'N/A', 'created_at' => $ac->created_at->toISOString(),
+                        'project_id' => $ac->project_id, 'can_approve' => $user->hasPermission(Permissions::ADDITIONAL_COST_APPROVE) || $user->isSuperAdmin(), 
+                        'approval_level' => 'customer', 'role_group' => 'customer',
+                        'attachments' => $this->formatAttachments($ac),
+                        'attachments_count' => $ac->attachments->count(),
                     ];
                 }
             }
