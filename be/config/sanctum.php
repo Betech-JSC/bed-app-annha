@@ -15,10 +15,21 @@ return [
     |
     */
 
-    'stateful' => explode(',', env('SANCTUM_STATEFUL_DOMAINS', sprintf(
-        '%s%s',
-        'localhost,localhost:3000,127.0.0.1,127.0.0.1:8000,::1',
-        Sanctum::currentApplicationUrlWithPort()
+    'stateful' => array_unique(array_filter(array_merge(
+        [
+            'localhost',
+            'localhost:3000',
+            '127.0.0.1',
+            '127.0.0.1:8000',
+            '::1',
+            isset($_SERVER['HTTP_HOST']) ? $_SERVER['HTTP_HOST'] : null,
+            isset($_SERVER['HTTP_REFERER']) ? parse_url($_SERVER['HTTP_REFERER'], PHP_URL_HOST) . (parse_url($_SERVER['HTTP_REFERER'], PHP_URL_PORT) ? ':' . parse_url($_SERVER['HTTP_REFERER'], PHP_URL_PORT) : '') : null,
+        ],
+        explode(',', env('SANCTUM_STATEFUL_DOMAINS', sprintf(
+            '%s%s',
+            'localhost,localhost:3000,127.0.0.1,127.0.0.1:8000,::1',
+            Sanctum::currentApplicationUrlWithPort()
+        )))
     ))),
 
     /*
