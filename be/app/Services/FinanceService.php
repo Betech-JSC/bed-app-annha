@@ -110,7 +110,7 @@ class FinanceService
         $project = Project::with(['contract', 'payments', 'costs', 'subcontractors'])->findOrFail($projectId);
 
         // REVENUE (Thu nhập)
-        $contractValue   = (float) ($project->contract->contract_value ?? 0);
+        $contractValue   = (float) ($project->contract?->contract_value ?? 0);
         $additionalValue = $project->additionalCosts()
             ->where('status', 'approved')
             ->sum('amount');
@@ -151,7 +151,7 @@ class FinanceService
         // SUBCONTRACTOR PAYMENTS
         $subPayments = 0;
         foreach ($project->subcontractors as $sub) {
-            $subPayments += $sub->payments()->where('status', 'approved')->sum('amount');
+            $subPayments += $sub->payments()->whereIn('status', ['approved', 'paid'])->sum('amount');
         }
 
         // P/L
@@ -208,7 +208,7 @@ class FinanceService
             $items[] = [
                 'id'                => $item->id,
                 'name'              => $item->name,
-                'cost_group'        => $item->costGroup->name ?? 'Chi phí khác',
+                'cost_group'        => $item->costGroup?->name ?? 'Chi phí khác',
                 'budget_amount'     => $budgetAmt,
                 'actual_amount'     => $actualAmt,
                 'variance'          => $variance,

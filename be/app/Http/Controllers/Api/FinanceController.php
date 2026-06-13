@@ -23,13 +23,17 @@ class FinanceController extends Controller
     {
         $this->apiRequire($request->user(), Permissions::FINANCE_VIEW, $projectId);
 
-        $data = $this->finance->getCashFlow(
-            $projectId,
-            $request->query('from'),
-            $request->query('to')
-        );
-
-        return response()->json(['success' => true, 'data' => $data]);
+        try {
+            $data = $this->finance->getCashFlow(
+                $projectId,
+                $request->query('from'),
+                $request->query('to')
+            );
+            return response()->json(['success' => true, 'data' => $data]);
+        } catch (\Throwable $e) {
+            report($e);
+            return response()->json(['success' => false, 'message' => 'Lỗi tải dòng tiền: ' . $e->getMessage()], 500);
+        }
     }
 
     /**
@@ -66,8 +70,13 @@ class FinanceController extends Controller
     {
         $this->apiRequire($request->user(), Permissions::FINANCE_VIEW, $projectId);
 
-        $data = $this->finance->getProfitLoss($projectId);
-        return response()->json(['success' => true, 'data' => $data]);
+        try {
+            $data = $this->finance->getProfitLoss($projectId);
+            return response()->json(['success' => true, 'data' => $data]);
+        } catch (\Throwable $e) {
+            report($e);
+            return response()->json(['success' => false, 'message' => 'Lỗi tải P/L: ' . $e->getMessage()], 500);
+        }
     }
 
     /**
@@ -77,8 +86,13 @@ class FinanceController extends Controller
     {
         $this->apiRequire($request->user(), Permissions::FINANCE_VIEW, $projectId);
 
-        $data = $this->finance->getBudgetVsActual($projectId);
-        return response()->json(['success' => true, 'data' => $data]);
+        try {
+            $data = $this->finance->getBudgetVsActual($projectId);
+            return response()->json(['success' => true, 'data' => $data]);
+        } catch (\Throwable $e) {
+            report($e);
+            return response()->json(['success' => false, 'message' => 'Lỗi tải NS vs Thực chi: ' . $e->getMessage()], 500);
+        }
     }
 
     /**
@@ -88,8 +102,13 @@ class FinanceController extends Controller
     {
         $this->apiRequire($request->user(), Permissions::FINANCE_VIEW, $projectId);
 
-        $data = $this->finance->getSubcontractorDebt($projectId);
-        return response()->json(['success' => true, 'data' => $data]);
+        try {
+            $data = $this->finance->getSubcontractorDebt($projectId);
+            return response()->json(['success' => true, 'data' => $data]);
+        } catch (\Throwable $e) {
+            report($e);
+            return response()->json(['success' => false, 'message' => 'Lỗi tải công nợ NTP: ' . $e->getMessage()], 500);
+        }
     }
 
     /**
@@ -99,8 +118,13 @@ class FinanceController extends Controller
     {
         $this->apiRequire($request->user(), Permissions::FINANCE_VIEW, $projectId);
 
-        $data = $this->finance->getTaxSummary($projectId);
-        return response()->json(['success' => true, 'data' => $data]);
+        try {
+            $data = $this->finance->getTaxSummary($projectId);
+            return response()->json(['success' => true, 'data' => $data]);
+        } catch (\Throwable $e) {
+            report($e);
+            return response()->json(['success' => false, 'message' => 'Lỗi tải thuế: ' . $e->getMessage()], 500);
+        }
     }
 
     /**
@@ -110,8 +134,13 @@ class FinanceController extends Controller
     {
         $this->apiRequire($request->user(), Permissions::FINANCE_VIEW, $projectId);
 
-        $data = $this->finance->getWarrantyRetentions($projectId);
-        return response()->json(['success' => true, 'data' => $data]);
+        try {
+            $data = $this->finance->getWarrantyRetentions($projectId);
+            return response()->json(['success' => true, 'data' => $data]);
+        } catch (\Throwable $e) {
+            report($e);
+            return response()->json(['success' => false, 'message' => 'Lỗi tải bảo hành: ' . $e->getMessage()], 500);
+        }
     }
 
     /**

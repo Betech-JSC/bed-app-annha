@@ -49,6 +49,7 @@ class SubcontractorPayment extends Model
     protected $appends = [
         'status_label',
         'payment_method_label',
+        'rejected_reason',
     ];
 
     // ==================================================================
@@ -141,6 +142,11 @@ class SubcontractorPayment extends Model
             'other' => 'Khác',
             default => ucfirst($this->payment_method),
         };
+    }
+
+    public function getRejectedReasonAttribute(): ?string
+    {
+        return $this->rejection_reason;
     }
 
     // ==================================================================

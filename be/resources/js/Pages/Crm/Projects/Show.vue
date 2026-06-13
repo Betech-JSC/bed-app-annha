@@ -328,12 +328,12 @@
               <tbody v-if="rootTasks.length">
                 <template v-for="task in rootTasks" :key="task.id">
                   <!-- Parent Row -->
-                  <tr class="border-b hover:bg-blue-50/50 transition-colors cursor-pointer" :class="task.children?.length ? 'bg-blue-50/30 font-semibold' : ''" @click="toggleExpand(task.id)">
+                  <tr class="border-b hover:bg-blue-50/50 transition-colors cursor-pointer bg-blue-50/30 font-semibold" @click="toggleExpand(task.id)">
                     <td class="py-2 px-3">
                       <div class="flex items-center gap-2">
                         <span v-if="task.children?.length" class="text-gray-400 text-xs transition-transform" :class="expandedTasks.has(task.id) ? 'rotate-90' : ''">▶</span>
                         <span v-else class="w-3"></span>
-                        <span :class="task.children?.length ? 'font-bold text-blue-900' : ''">{{ task.name }}</span>
+                        <span class="font-bold text-blue-900">{{ task.name }}</span>
                         <span v-if="task.children?.length" class="text-xs text-blue-400 font-normal">({{ task.children.length }})</span>
                       </div>
                     </td>
@@ -788,7 +788,7 @@
                   <th class="text-center py-2.5 px-2 font-semibold">Thời tiết</th>
                   <th class="text-center py-2.5 px-2 font-semibold">Nhân lực</th>
                   <th class="py-2.5 px-3 font-semibold" style="min-width:120px">Tiến độ</th>
-                  <th class="text-center py-2.5 px-2 font-semibold">Ảnh</th>
+                  <th class="text-center py-2.5 px-2 font-semibold">File</th>
                   <th class="text-center py-2.5 px-2 font-semibold" style="width:90px"></th>
                 </tr>
               </thead>
@@ -840,7 +840,7 @@
                     <!-- Attachments count -->
                     <td class="text-center py-2.5 px-2">
                       <span v-if="log.attachments?.length" class="inline-flex items-center gap-1 text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">
-                        <PictureOutlined class="text-[10px]" /> {{ log.attachments.length }}
+                        <PaperClipOutlined class="text-[10px]" /> {{ log.attachments.length }}
                       </span>
                       <span v-else class="text-gray-300 text-xs">—</span>
                     </td>
@@ -1176,6 +1176,10 @@
             <a-button size="small" :type="financeView === 'warranty' ? 'primary' : 'default'" @click="financeView = 'warranty'">Bảo hành</a-button>
             <a-button size="small" type="primary" ghost @click="loadFinanceData()" :loading="financeLoading"><template #icon><CalendarOutlined /></template>Refresh</a-button>
           </div>
+
+          <!-- Finance Error Alert -->
+          <a-alert v-if="financeError" type="error" show-icon closable class="mb-3"
+                   :message="'Lỗi tải dữ liệu'" :description="financeError" />
 
           <!-- Cash Flow -->
           <div v-if="financeView === 'cashflow'">
@@ -2732,7 +2736,7 @@
       </a-form-item>
       <!-- Inline Attachments (giống Cost/Defect modal) -->
       <div class="border-t pt-3 mt-2">
-        <div class="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-1"><FileOutlined /> Chứng từ / Hình ảnh đính kèm</div>
+        <div class="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-1"><FileOutlined /> Chứng từ / Hình ảnh / Video đính kèm</div>
         <div v-if="editingLog?.attachments?.length" class="flex flex-wrap gap-2 mb-2">
           <div v-for="a in editingLog.attachments" :key="a.id" class="relative group">
             <a href="#" @click.prevent="openFilePreview(a)" 
@@ -2753,8 +2757,9 @@
             </div>
           </div>
         </div>
-        <input type="file" multiple @change="e => modalFiles = [...(e.target.files || [])]" class="block w-full text-xs py-1.5 px-2 border border-dashed border-gray-300 rounded-lg hover:border-blue-400 transition" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" />
+        <input type="file" multiple @change="e => modalFiles = [...(e.target.files || [])]" class="block w-full text-xs py-1.5 px-2 border border-dashed border-gray-300 rounded-lg hover:border-blue-400 transition" accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx" />
         <div v-if="modalFiles.length" class="text-[10px] text-green-600 mt-1">{{ modalFiles.length }} tệp đã chọn — sẽ upload khi lưu</div>
+        <div class="text-[10px] text-gray-400 mt-1">Hỗ trợ: hình ảnh, video (MP4, MOV...), PDF, Word, Excel — tối đa 100MB/file</div>
       </div>
     </a-form>
   </a-modal>
@@ -3338,6 +3343,12 @@
         <div class="text-sm text-red-700">{{ costDetailRecord.rejected_reason }}</div>
       </div>
 
+      <!-- Re-submission Comment -->
+      <div v-if="getResubmitComment(costDetailRecord.description)" class="p-5 bg-blue-50 rounded-2xl border border-blue-100">
+        <div class="text-xs font-bold text-blue-600 uppercase tracking-wider mb-2 flex items-center gap-2"><InfoCircleOutlined /> Ghi chú hiệu chỉnh</div>
+        <div class="text-sm text-blue-700 whitespace-pre-wrap">{{ getResubmitComment(costDetailRecord.description) }}</div>
+      </div>
+
       <!-- Edit comment -->
       <div v-if="costDetailRecord.status === 'draft'" class="p-5 bg-blue-50/50 rounded-2xl border border-blue-100/50">
         <div class="text-xs font-bold text-blue-600 uppercase tracking-wider mb-2">Ghi chú hiệu chỉnh (khi gửi duyệt lại)</div>
@@ -3569,6 +3580,12 @@
       <div v-if="materialDetail.rejected_reason" class="p-5 bg-red-50 rounded-2xl border border-red-100">
         <div class="text-xs font-bold text-red-500 uppercase tracking-wider mb-2 flex items-center gap-2"><CloseCircleOutlined /> Lý do từ chối</div>
         <div class="text-sm text-red-700">{{ materialDetail.rejected_reason }}</div>
+      </div>
+
+      <!-- Re-submission Comment -->
+      <div v-if="getResubmitComment(materialDetail.notes)" class="p-5 bg-blue-50 rounded-2xl border border-blue-100">
+        <div class="text-xs font-bold text-blue-600 uppercase tracking-wider mb-2 flex items-center gap-2"><InfoCircleOutlined /> Ghi chú hiệu chỉnh</div>
+        <div class="text-sm text-blue-700 whitespace-pre-wrap">{{ getResubmitComment(materialDetail.notes) }}</div>
       </div>
 
       <!-- Edit comment -->
@@ -4966,19 +4983,29 @@
       <!-- Attachments -->
       <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
         <div class="flex justify-between items-center mb-4">
-          <div class="text-[10px] text-gray-400 uppercase font-bold tracking-wider flex items-center gap-1.5"><PictureOutlined class="text-blue-500" /> Hình ảnh / Tài liệu ({{ logDetailRecord.attachments?.length || 0 }})</div>
+          <div class="text-[10px] text-gray-400 uppercase font-bold tracking-wider flex items-center gap-1.5"><PictureOutlined class="text-blue-500" /> Hình ảnh / Video / Tài liệu ({{ logDetailRecord.attachments?.length || 0 }})</div>
         </div>
         <div v-if="logDetailRecord.attachments?.length" class="grid grid-cols-3 sm:grid-cols-4 gap-3">
           <a-image-preview-group>
             <template v-for="att in logDetailRecord.attachments" :key="att.id">
-              <div class="aspect-square rounded-xl overflow-hidden border border-gray-200 group/img relative shadow-sm hover:shadow-md transition-all cursor-pointer bg-gray-50">
+              <!-- Video -->
+              <div v-if="att.mime_type?.startsWith('video/')" class="rounded-xl overflow-hidden border border-gray-200 shadow-sm hover:shadow-md transition-all bg-gray-900 col-span-2" style="aspect-ratio: 16/9">
+                <video controls preload="metadata" class="w-full h-full object-contain" :poster="att.thumbnail_url || undefined">
+                  <source :src="att.file_url" :type="att.mime_type" />
+                  Trình duyệt không hỗ trợ phát video.
+                </video>
+              </div>
+              <!-- Image -->
+              <div v-else-if="att.mime_type?.startsWith('image/')" class="aspect-square rounded-xl overflow-hidden border border-gray-200 group/img relative shadow-sm hover:shadow-md transition-all cursor-pointer bg-gray-50">
                 <a-image
-                  v-if="att.mime_type?.startsWith('image/')"
                   :src="att.file_url"
                   :fallback="'/images/fallback-image.png'"
                   class="!w-full !h-full object-cover [&>.ant-image-img]:!w-full [&>.ant-image-img]:!h-full [&>.ant-image-img]:object-cover group-hover/img:scale-110 transition duration-500"
                 />
-                <a v-else :href="att.file_url" target="_blank" class="absolute inset-0 flex flex-col items-center justify-center hover:bg-blue-50 transition text-gray-400 hover:text-blue-500 z-10 p-2">
+              </div>
+              <!-- Other files -->
+              <div v-else class="aspect-square rounded-xl overflow-hidden border border-gray-200 group/img relative shadow-sm hover:shadow-md transition-all cursor-pointer bg-gray-50">
+                <a :href="att.file_url" target="_blank" class="absolute inset-0 flex flex-col items-center justify-center hover:bg-blue-50 transition text-gray-400 hover:text-blue-500 z-10 p-2">
                   <FilePdfOutlined v-if="att.mime_type?.includes('pdf')" class="text-3xl mb-2 text-red-400" />
                   <FileWordOutlined v-else-if="att.mime_type?.includes('word')" class="text-3xl mb-2 text-blue-500" />
                   <FileExcelOutlined v-else-if="att.mime_type?.includes('spreadsheet')" class="text-3xl mb-2 text-green-500" />
@@ -5328,10 +5355,31 @@
         <div class="text-sm text-red-700">{{ subPaymentDetail.rejected_reason }}</div>
       </div>
 
+      <!-- Re-submission Comment -->
+      <div v-if="getResubmitComment(subPaymentDetail.description)" class="mt-6 p-4 bg-blue-50 rounded-xl border border-blue-100">
+        <div class="text-xs font-bold text-blue-600 uppercase mb-2 flex items-center gap-2"><InfoCircleOutlined /> Ghi chú hiệu chỉnh</div>
+        <div class="text-sm text-blue-700 whitespace-pre-wrap">{{ getResubmitComment(subPaymentDetail.description) }}</div>
+      </div>
+
       <!-- Edit comment -->
       <div v-if="subPaymentDetail.status === 'draft'" class="mt-6 bg-blue-50/50 rounded-xl border border-blue-100/50 p-4">
         <div class="text-xs font-bold text-blue-600 uppercase mb-2">Ghi chú hiệu chỉnh (khi gửi duyệt lại)</div>
         <a-textarea v-model:value="submitComment" placeholder="Nhập những nội dung đã hiệu chỉnh so với phiếu cũ bị từ chối..." :rows="2" />
+      </div>
+      <!-- Accountant Upload Prompt (when pending_accountant_confirmation) -->
+      <div v-if="subPaymentDetail.status === 'pending_accountant_confirmation'" class="mt-6 p-4 bg-blue-50 rounded-2xl border border-blue-200">
+        <div class="flex items-start gap-3">
+          <div class="w-10 h-10 rounded-xl bg-blue-500 text-white flex items-center justify-center shrink-0 shadow-lg shadow-blue-200">
+            <UploadOutlined class="text-lg" />
+          </div>
+          <div>
+            <div class="text-xs font-bold text-blue-700 uppercase tracking-wider mb-1">Upload chứng từ thanh toán</div>
+            <div class="text-[11px] text-blue-600 leading-relaxed">
+              Để xác nhận chi, vui lòng nhấn nút <strong>"KT Xác nhận chi"</strong> bên dưới.
+              Hệ thống sẽ yêu cầu bạn đính kèm biên lai chuyển khoản / ủy nhiệm chi trước khi xác nhận.
+            </div>
+          </div>
+        </div>
       </div>
 
     </div>
@@ -7390,10 +7438,15 @@ const flattenTasks = (tasks) => {
 // Sorted tasks for log form: only leaf tasks, by progress ascending, 100% at bottom
 const logTaskOptions = computed(() => {
   const flat = flattenTasks(allTasks.value)
-  // Leaf = tasks that have no children OR whose id doesn't appear as a parent
-  const parentIds = new Set(flat.map(t => t.parent_id).filter(id => id !== null))
+  // Deduplicate by task ID (allTasks may contain both flat + nested children)
+  const uniqueMap = new Map()
+  flat.forEach(t => { if (!uniqueMap.has(t.id)) uniqueMap.set(t.id, t) })
+  const unique = [...uniqueMap.values()]
   
-  return flat
+  // Leaf = tasks that have no children OR whose id doesn't appear as a parent
+  const parentIds = new Set(unique.map(t => t.parent_id).filter(id => id !== null))
+  
+  return unique
     .filter(t => !parentIds.has(t.id)) // Only leaf tasks
     .sort((a, b) => {
       const pA = Number(a.progress_percentage || 0)
@@ -8076,7 +8129,13 @@ const apiGet = async (url) => {
     headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
     credentials: 'same-origin',
   })
-  return res.json()
+  const json = await res.json()
+  if (!res.ok) {
+    const errMsg = json.message || `HTTP ${res.status}`
+    console.error(`[apiGet] ${url} → ${res.status}:`, errMsg)
+    throw new Error(errMsg)
+  }
+  return json
 }
 const apiPost = async (url, body = {}) => {
   const token = document.querySelector('meta[name="csrf-token"]')?.content
@@ -8086,7 +8145,13 @@ const apiPost = async (url, body = {}) => {
     credentials: 'same-origin',
     body: JSON.stringify(body),
   })
-  return res.json()
+  const json = await res.json()
+  if (!res.ok) {
+    const errMsg = json.message || `HTTP ${res.status}`
+    console.error(`[apiPost] ${url} → ${res.status}:`, errMsg)
+    throw new Error(errMsg)
+  }
+  return json
 }
 
 const loadGanttData = async () => {
@@ -8250,6 +8315,7 @@ const pnlData = ref({})
 const bvaData = ref({})
 const debtData = ref({})
 const warrantyData = ref({})
+const financeError = ref('')
 
 const costCatLabels = {
   material: 'Vật tư xây dựng',
@@ -8262,20 +8328,34 @@ const costCatLabels = {
 
 const loadFinanceData = async () => {
   financeLoading.value = true
+  financeError.value = ''
+  const errors = []
   try {
-    const [cf, pl, bva, debt, warranty] = await Promise.all([
+    const results = await Promise.allSettled([
       apiGet(`/projects/${props.project.id}/cash-flow`),
       apiGet(`/projects/${props.project.id}/profit-loss`),
       apiGet(`/projects/${props.project.id}/budget-vs-actual`),
       apiGet(`/projects/${props.project.id}/subcontractor-debt`),
       apiGet(`/projects/${props.project.id}/warranty-retentions`),
     ])
-    cashFlowData.value = cf.data || {}
-    pnlData.value = pl.data || {}
-    bvaData.value = bva.data || {}
-    debtData.value = debt.data || {}
-    warrantyData.value = warranty.data || {}
-  } catch (e) { console.error('Finance load error', e) }
+    const labels = ['Dòng tiền', 'Lãi/Lỗ', 'NS vs Thực chi', 'Công nợ NTP', 'Bảo hành']
+    const refs = [cashFlowData, pnlData, bvaData, debtData, warrantyData]
+    results.forEach((r, i) => {
+      if (r.status === 'fulfilled') {
+        refs[i].value = r.value.data || {}
+      } else {
+        refs[i].value = {}
+        errors.push(`${labels[i]}: ${r.reason?.message || 'Lỗi không xác định'}`)
+        console.error(`Finance [${labels[i]}] error:`, r.reason)
+      }
+    })
+    if (errors.length) {
+      financeError.value = errors.join(' | ')
+    }
+  } catch (e) {
+    console.error('Finance load error', e)
+    financeError.value = e.message || 'Lỗi tải dữ liệu tài chính'
+  }
   financeLoading.value = false
 }
 
@@ -8879,6 +8959,14 @@ const fileExt = (f) => {
   const name = f?.original_name || f?.file_name || f?.mime_type || ''
   const ext = name.split('.').pop()?.toLowerCase() || ''
   return ext
+}
+
+const getResubmitComment = (text) => {
+  if (!text) return null
+  const lines = text.split('\n')
+  const editLines = lines.filter(line => line.trim().startsWith('Hiệu chỉnh:'))
+  if (editLines.length === 0) return null
+  return editLines.map(line => line.replace(/^Hiệu chỉnh:\s*/, '')).join('\n')
 }
 
 const isImageFile = (f) => /\.(jpg|jpeg|png|gif|webp|svg|bmp|ico|tiff)$/i.test(f.original_name || f.file_name || '') || (f.mime_type && f.mime_type.startsWith('image/'))
@@ -10776,12 +10864,6 @@ const approveBillAccountant = (bill) => {
 }
 
 const confirmSubPayment = (sub, p) => {
-  if (!p.attachments?.length && !(p.attachments_count > 0)) {
-    return Modal.warning({
-      title: 'Thiếu chứng từ',
-      content: 'Kế toán chỉ có thể xác nhận khi đã có tệp chứng từ đính kèm để đối chiếu.'
-    })
-  }
   confirmPaymentType.value = 'sub'
   confirmPaymentTarget.value = p
   confirmPaymentSub.value = sub

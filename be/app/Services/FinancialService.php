@@ -87,6 +87,7 @@ class FinancialService
         }
 
         $cost->status = 'pending_management_approval';
+        $cost->rejected_reason = null;
         $saved = $cost->save();
 
         if ($saved) {
@@ -317,6 +318,7 @@ class FinancialService
         }
 
         $payment->status = 'pending_management_approval';
+        $payment->rejection_reason = null;
         $saved = $payment->save();
 
         if ($saved) {

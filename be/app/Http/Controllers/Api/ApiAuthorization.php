@@ -8,7 +8,7 @@ use App\Services\AuthorizationService;
 /**
  * Trait cung cấp permission check cho tất cả API controllers (Mobile).
  * User model: check permission qua AuthorizationService.
- * Owner / SuperAdmin → full access bypass.
+ * Owner / SuperAdmin / Admin role → full access bypass.
  */
 trait ApiAuthorization
 {
@@ -21,8 +21,8 @@ trait ApiAuthorization
             abort(401, 'Unauthorized');
         }
 
-        // Owner / SuperAdmin bypass
-        if ($user->owner || $user->isSuperAdmin()) {
+        // Owner / SuperAdmin / Admin role bypass (consistent with CheckPermission middleware)
+        if ($user->owner || $user->isSuperAdmin() || ($user->role ?? null) === 'admin') {
             return;
         }
 
@@ -37,8 +37,8 @@ trait ApiAuthorization
     {
         if (!$user) return false;
 
-        // Owner / SuperAdmin bypass
-        if ($user->owner || $user->isSuperAdmin()) {
+        // Owner / SuperAdmin / Admin role bypass
+        if ($user->owner || $user->isSuperAdmin() || ($user->role ?? null) === 'admin') {
             return true;
         }
 

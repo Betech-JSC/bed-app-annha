@@ -24,7 +24,7 @@ class AttachmentService
         if ($validate || $request->hasFile($fileKey)) {
             $request->validate([
                 $fileKey => ($validate ? 'required|' : 'nullable|') . 'array' . ($validate ? '|min:1' : ''),
-                "{$fileKey}.*" => 'required|file|max:20480', // max 20MB each
+                "{$fileKey}.*" => 'required|file|max:102400', // max 100MB each (support video uploads)
             ]);
         }
 

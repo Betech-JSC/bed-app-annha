@@ -590,7 +590,7 @@
                      type="primary"
                      class="rounded-xl h-12 px-6 font-bold bg-green-600 hover:bg-green-700 shadow-lg shadow-green-100 border-0 flex-1" 
                      @click="handleApproveDirectly(detailItem)">
-             {{ isAccountantApproveType(detailItem) ? 'KT Xác nhận' : 'Duyệt' }}
+             {{ getApproveButtonLabel() }}
            </a-button>
            <a-button v-if="!canApproveDirectly(detailItem) && getDetailUrl(detailItem)" 
                      type="primary"
@@ -880,6 +880,17 @@ const isAccountantApproveType = (record) => {
   const type = record._approveType || record.approval_level || ''
   return ACCOUNTANT_APPROVE_TYPES.includes(type) || activeRole.value === 'accountant'
 }
+
+// ─── Role-aware approve button label ───
+const roleApproveLabels = {
+  management: 'BĐH Duyệt',
+  accountant: 'KT Xác nhận',
+  customer: 'KH Xác nhận',
+  project_manager: 'PM Duyệt',
+  supervisor: 'GS Xác nhận',
+  hr: 'NS Duyệt',
+}
+const getApproveButtonLabel = () => roleApproveLabels[activeRole.value] || 'Duyệt'
 
 // ─── Role-based items mapping (Simplified from Backend) ───
 const roleItemsMap = computed(() => ({

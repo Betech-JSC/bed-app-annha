@@ -96,7 +96,10 @@ class MaterialBill extends Model
     // Methods
     public function submitForManagementApproval()
     {
-        $this->update(['status' => 'pending_management']);
+        $this->update([
+            'status' => 'pending_management',
+            'rejected_reason' => null,
+        ]);
     }
 
     public function approveByManagement($user)
