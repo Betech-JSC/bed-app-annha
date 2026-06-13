@@ -5361,13 +5361,15 @@
                  <a-button type="primary" class="rounded-lg shadow-sm">Gửi duyệt</a-button>
               </a-popconfirm>
               
-              <a-popconfirm v-if="subPaymentDetail.status === 'pending_management_approval' && can('subcontractor_payment.approve')" title="BĐH duyệt phiếu này?" @confirm="approveSubPayment(subPaymentDetail.subcontractor || subDetail, subPaymentDetail); showSubPaymentDetailDrawer = false" ok-text="Duyệt">
-                 <a-button type="primary" class="rounded-lg !bg-green-500 !border-green-500 shadow-sm shadow-green-500/20"><CheckCircleOutlined /> Duyệt phiếu</a-button>
-              </a-popconfirm>
+              <template v-if="subPaymentDetail.status === 'pending_management_approval' && can('subcontractor_payment.approve')">
+                 <a-button type="primary" class="rounded-lg !bg-green-500 !border-green-500 shadow-sm shadow-green-500/20" @click="approveSubPayment(subPaymentDetail.subcontractor || subDetail, subPaymentDetail)"><CheckCircleOutlined /> Duyệt phiếu</a-button>
+                 <a-button danger ghost class="rounded-lg" @click="openRejectSubPayModal(subPaymentDetail)">Từ chối</a-button>
+              </template>
               
-              <a-popconfirm v-if="subPaymentDetail.status === 'pending_accountant_confirmation' && can('subcontractor_payment.mark_paid')" title="Kế toán xác nhận đã chi?" @confirm="confirmSubPayment(subPaymentDetail.subcontractor || subDetail, subPaymentDetail); showSubPaymentDetailDrawer = false" ok-text="Xác nhận">
-                 <a-button type="primary" class="rounded-lg !bg-blue-600 !border-blue-600 shadow-sm shadow-blue-600/20"><CheckOutlined /> KT Xác nhận chi</a-button>
-              </a-popconfirm>
+              <template v-if="subPaymentDetail.status === 'pending_accountant_confirmation' && can('subcontractor_payment.mark_paid')">
+                 <a-button type="primary" class="rounded-lg !bg-blue-600 !border-blue-600 shadow-sm shadow-blue-600/20" @click="confirmSubPayment(subPaymentDetail.subcontractor || subDetail, subPaymentDetail)"><CheckOutlined /> KT Xác nhận chi</a-button>
+                 <a-button danger ghost class="rounded-lg" @click="openRejectSubPayModal(subPaymentDetail)">Từ chối</a-button>
+              </template>
             </template>
           </div>
        </div>
@@ -5784,6 +5786,19 @@
       </div>
       <a-form-item label="Lý do từ chối" required>
         <a-textarea v-model:value="rejectCostReason" :rows="3" placeholder="Nhập lý do từ chối phiếu chi..." />
+      </a-form-item>
+    </div>
+  </a-modal>
+
+  <!-- Reject Subcontractor Payment Modal -->
+  <a-modal v-model:open="showRejectSubPayModal" title="Từ chối phiếu thanh toán NTP" :width="480" @ok="confirmRejectSubPay" ok-text="Từ chối" cancel-text="Hủy" :ok-button-props="{ danger: true }" centered destroy-on-close class="crm-modal">
+    <div class="mt-4">
+      <div v-if="rejectingSubPay" class="mb-3 p-3 bg-red-50 rounded-lg border border-red-100">
+        <div class="font-medium text-red-800">{{ rejectingSubPay.payment_stage || 'Thanh toán' }}</div>
+        <div class="text-xs text-red-600">{{ fmt(rejectingSubPay.amount) }} — {{ subPayStatusLabels[rejectingSubPay.status] || rejectingSubPay.status }}</div>
+      </div>
+      <a-form-item label="Lý do từ chối" required>
+        <a-textarea v-model:value="rejectSubPayReason" :rows="3" placeholder="Nhập lý do từ chối phiếu thanh toán..." />
       </a-form-item>
     </div>
   </a-modal>
@@ -7710,6 +7725,24 @@ watch(() => props, (newProps) => {
     const updated = newProps.project?.subcontractors?.find(x => x.id === subDetail.value.id)
     if (updated) subDetail.value = updated; else showSubDetailDrawer.value = false;
   }
+  if (showSubPaymentDetailDrawer.value && subPaymentDetail.value) {
+    const subs = newProps.teamData?.subcontractors || newProps.project?.subcontractors || []
+    let found = null
+    for (const sub of subs) {
+      if (sub.payments) {
+        const p = sub.payments.find(x => x.id === subPaymentDetail.value.id)
+        if (p) {
+          found = { ...p, subcontractor_name: sub.name, subcontractor: sub }
+          break
+        }
+      }
+    }
+    if (found) {
+      subPaymentDetail.value = found
+    } else {
+      showSubPaymentDetailDrawer.value = false
+    }
+  }
   if (showMaterialDetailDrawer.value && materialDetail.value) {
     const updated = newProps.materialBills?.find(x => x.id === materialDetail.value.id)
     if (updated) materialDetail.value = updated; else showMaterialDetailDrawer.value = false;
@@ -8699,6 +8732,29 @@ const rejectingCost = ref(null)
 const rejectCostReason = ref('')
 const openRejectCostModal = (c) => { rejectingCost.value = c; rejectCostReason.value = ''; showRejectCostModal.value = true }
 const rejectCost = () => { router.post(`/projects/${props.project.id}/costs/${rejectingCost.value.id}/reject`, { rejected_reason: rejectCostReason.value }, savingOptions({ onSuccess: () => showRejectCostModal.value = false })) }
+
+const showRejectSubPayModal = ref(false)
+const rejectingSubPay = ref(null)
+const rejectSubPayReason = ref('')
+const openRejectSubPayModal = (p) => {
+  rejectingSubPay.value = p
+  rejectSubPayReason.value = ''
+  showRejectSubPayModal.value = true
+}
+const confirmRejectSubPay = () => {
+  if (!rejectingSubPay.value || !rejectSubPayReason.value.trim()) return
+  const subId = rejectingSubPay.value.subcontractor_id || subPaymentDetail.value?.subcontractor_id || subDetail.value?.id
+  router.post(`/projects/${props.project.id}/subcontractors/${subId}/payments/${rejectingSubPay.value.id}/reject`, {
+    rejection_reason: rejectSubPayReason.value
+  }, {
+    preserveScroll: true,
+    onSuccess: () => {
+      showRejectSubPayModal.value = false
+      showSubPaymentDetailDrawer.value = false
+      message.success('Đã từ chối phiếu thanh toán thầu phụ.')
+    }
+  })
+}
 const revertCostAction = (c) => {
   let content = 'Dữ liệu này sẽ được đưa về trạng thái Nháp để bạn có thể chỉnh sửa hoặc xóa. Bạn có chắc chắn muốn thực hiện?';
   if (c.status === 'approved') {

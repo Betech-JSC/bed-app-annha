@@ -2,8 +2,12 @@ graphify-out/
 venv/
 graphify_*.txt
 config.bat
-node_modules
+node_modules/
+# Ignore frontend folder
 fe/
+/fe/
+fe
+**/fe/**
 
 annha.sql
 be/database/mysql_local/
