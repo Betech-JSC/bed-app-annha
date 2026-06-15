@@ -618,6 +618,7 @@ const openCreateModal = () => {
   editing.value = null
   form.reset()
   form.clearErrors()
+  form.transform((data) => data)
   fileList.value = []
   showModal.value = true
 }
