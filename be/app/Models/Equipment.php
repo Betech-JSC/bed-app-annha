@@ -15,6 +15,7 @@ class Equipment extends Model
 
     protected $fillable = [
         'uuid',
+        'global_equipment_id',
         'name',
         'code',
         'type', // owned, rented
@@ -77,6 +78,11 @@ class Equipment extends Model
 
     // --- Relationships ---
     
+    public function globalEquipment(): BelongsTo
+    {
+        return $this->belongsTo(GlobalEquipment::class, 'global_equipment_id');
+    }
+
     public function assignedTo(): BelongsTo
     {
         return $this->belongsTo(User::class, 'assigned_to');

@@ -95,6 +95,7 @@ use App\Http\Controllers\Admin\CrmMaterialsController;
 use App\Http\Controllers\Admin\CrmOperationsController;
 use App\Http\Controllers\Admin\CrmCostGroupsController;
 use App\Http\Controllers\Admin\CrmEquipmentController;
+use App\Http\Controllers\Admin\CrmGlobalEquipmentController;
 use App\Http\Controllers\Admin\CrmSettingsController;
 use App\Http\Controllers\Admin\CrmApprovalController;
 use App\Http\Controllers\Admin\CrmRolesController;
@@ -623,6 +624,12 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         Route::post('/{id}/confirm-accountant', [CrmEquipmentController::class, 'confirmAccountant'])->name('confirm.accountant');
         Route::post('/{id}/reject', [CrmEquipmentController::class, 'reject'])->name('reject');
         Route::post('/{id}/revert', [CrmEquipmentController::class, 'revertToDraft'])->name('revert');
+
+        // Catalog management (Thiết bị mẫu)
+        Route::get('/catalog', [CrmGlobalEquipmentController::class, 'index'])->name('catalog.index');
+        Route::post('/catalog', [CrmGlobalEquipmentController::class, 'store'])->name('catalog.store');
+        Route::put('/catalog/{id}', [CrmGlobalEquipmentController::class, 'update'])->name('catalog.update');
+        Route::delete('/catalog/{id}', [CrmGlobalEquipmentController::class, 'destroy'])->name('catalog.destroy');
     });
 
     // Settings

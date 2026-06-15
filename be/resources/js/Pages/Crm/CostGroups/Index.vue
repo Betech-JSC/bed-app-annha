@@ -77,6 +77,17 @@
           <span v-else class="text-gray-300 italic text-sm">—</span>
         </template>
 
+        <!-- Expense Category (Nhóm cha) -->
+        <template v-else-if="column.key === 'expense_category'">
+          <span v-if="record.expense_category === 'capex'" class="px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-600 text-[11px] font-medium border border-emerald-100">
+            CAPEX
+          </span>
+          <span v-else-if="record.expense_category === 'opex'" class="px-2.5 py-0.5 rounded-full bg-orange-50 text-orange-600 text-[11px] font-medium border border-orange-100">
+            OPEX
+          </span>
+          <span v-else class="text-gray-300 italic text-sm">—</span>
+        </template>
+
         <!-- Costs Count -->
         <template v-else-if="column.key === 'costs_count'">
           <a-tag v-if="record.costs_count > 0" color="blue">{{ record.costs_count }} chi phí</a-tag>
@@ -174,6 +185,12 @@
       <a-form-item label="Mô tả">
         <a-textarea v-model:value="form.description" :rows="3" placeholder="Mô tả chi tiết nhóm chi phí..." :maxlength="1000" show-count />
       </a-form-item>
+      <a-form-item label="Phân loại nhóm cha (Dành cho Chi phí công ty)">
+        <a-select v-model:value="form.expense_category" placeholder="Chọn nhóm cha (CAPEX hoặc OPEX)..." size="large" allow-clear>
+          <a-select-option value="capex">CAPEX — Chi phí đầu tư / Mua sắm tài sản</a-select-option>
+          <a-select-option value="opex">OPEX — Chi phí vận hành (điện, nước, mặt bằng, sửa chữa...)</a-select-option>
+        </a-select>
+      </a-form-item>
       <a-row :gutter="16">
         <a-col :span="12">
           <a-form-item label="Thứ tự sắp xếp">
@@ -222,6 +239,7 @@ const filters = ref({
 const columns = [
   { title: 'Nhóm chi phí', key: 'name', width: 240 },
   { title: 'Mô tả', key: 'description', ellipsis: true },
+  { title: 'Nhóm cha (Công ty)', key: 'expense_category', width: 160, align: 'center' },
   { title: 'Số chi phí', key: 'costs_count', align: 'center', width: 120 },
   { title: 'Thứ tự', key: 'sort_order', align: 'center', width: 80 },
   { title: 'Trạng thái', key: 'is_active', align: 'center', width: 100 },
@@ -268,6 +286,7 @@ const defaultForm = () => ({
   name: '',
   code: '',
   description: '',
+  expense_category: null,
   is_active: true,
   sort_order: 0,
 })
@@ -286,6 +305,7 @@ const openEditModal = (record) => {
     name: record.name || '',
     code: record.code || '',
     description: record.description || '',
+    expense_category: record.expense_category || null,
     is_active: record.is_active ?? true,
     sort_order: record.sort_order ?? 0,
   }

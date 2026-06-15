@@ -49,7 +49,7 @@ class EquipmentService
         return DB::transaction(function () use ($data, $equipment, $id, $user) {
             // Only keep fields that are actual DB columns
             $fillable = collect($data)->only([
-                'name', 'code', 'category', 'type', 'brand', 'model',
+                'global_equipment_id', 'name', 'code', 'category', 'type', 'brand', 'model',
                 'serial_number', 'quantity', 'purchase_price', 'unit', 'notes',
                 'project_id', 'purchase_date', 'useful_life_months',
                 'depreciation_method', 'residual_value', 'rental_rate_per_day',

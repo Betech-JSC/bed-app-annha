@@ -81,6 +81,12 @@
           <span v-else-if="record.expense_category === 'payroll'" class="crm-tag crm-tag--active">Lương</span>
           <span v-else class="text-gray-400 text-xs">—</span>
         </template>
+        <template v-if="column.dataIndex === 'cost_group'">
+          <span v-if="record.cost_group" class="font-medium text-gray-700 text-xs bg-gray-50 border border-gray-100 rounded-lg px-2 py-0.5">
+            {{ record.cost_group.name }}
+          </span>
+          <span v-else class="text-gray-300 italic text-xs">—</span>
+        </template>
         <template v-if="column.dataIndex === 'amount'">
           <span class="font-bold text-sm" style="color: var(--crm-primary);">{{ fmtCurrency(record.amount) }}</span>
         </template>
@@ -314,13 +320,24 @@
           <a-date-picker v-model:value="formDate" style="width: 100%;" size="large" format="DD/MM/YYYY" />
         </div>
       </div>
-      <div class="mb-4">
-        <label class="block text-sm font-medium text-gray-700 mb-1">Phân loại phí <span class="text-red-500">*</span></label>
-        <a-select v-model:value="form.expense_category" style="width: 100%;" size="large" placeholder="Phân loại" allow-clear>
-          <a-select-option value="capex">CAPEX — Mua sắm tài sản</a-select-option>
-          <a-select-option value="opex">OPEX — Vận hành (điện, nước, mặt bằng)</a-select-option>
-          <a-select-option value="payroll">Lương, thưởng, bảo hiểm</a-select-option>
-        </a-select>
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Nhóm chi phí</label>
+          <a-select v-model:value="form.cost_group_id" style="width: 100%;" size="large" placeholder="Chọn nhóm..." show-search option-filter-prop="label" allow-clear @change="handleCostGroupChange">
+            <a-select-option v-for="g in costGroups" :key="g.id" :value="g.id" :label="g.name">
+              {{ g.name }} <span v-if="g.expense_category" class="text-gray-400 text-xs font-normal">({{ g.expense_category.toUpperCase() }})</span>
+            </a-select-option>
+          </a-select>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Phân loại phí <span class="text-red-500">*</span></label>
+          <a-select v-model:value="form.expense_category" style="width: 100%;" size="large" placeholder="Phân loại" allow-clear>
+            <a-select-option value="capex">CAPEX — Mua sắm tài sản</a-select-option>
+            <a-select-option value="opex">OPEX — Vận hành (điện, nước, mặt bằng)</a-select-option>
+            <a-select-option value="payroll">Lương, thưởng, bảo hiểm</a-select-option>
+          </a-select>
+          <div v-if="form.errors?.expense_category" class="text-red-500 text-xs mt-1">{{ form.errors.expense_category }}</div>
+        </div>
       </div>
 
       <div class="grid grid-cols-2 gap-4">
@@ -575,6 +592,7 @@ const statusChartData = computed(() => ({
 // ============================================================
 const columns = [
   { title: 'Tên chi phí', dataIndex: 'name', key: 'name', width: 260 },
+  { title: 'Nhóm chi phí', dataIndex: 'cost_group', key: 'cost_group', width: 160 },
   { title: 'Phân loại', dataIndex: 'expense_category', key: 'expense_category', width: 140 },
   { title: 'Số tiền', dataIndex: 'amount', key: 'amount', width: 140, align: 'right' },
   { title: 'Ngày', dataIndex: 'cost_date', key: 'cost_date', width: 110 },
@@ -691,14 +709,22 @@ const rejectCost = (id) => {
 const form = useForm({
   name: '',
   amount: 0,
+  cost_group_id: null,
   expense_category: null,
   cost_date: '',
   description: '',
   quantity: null,
   unit: '',
-  expense_category: null,
   attachment_ids: [],
 })
+
+const handleCostGroupChange = (val) => {
+  if (!val) return
+  const group = props.costGroups.find(g => g.id === val)
+  if (group && group.expense_category) {
+    form.expense_category = group.expense_category
+  }
+}
 
 const fileList = ref([])
 
@@ -720,9 +746,20 @@ const handleUploadChange = (info) => {
 
 const showCreateModal = () => {
   editingCost.value = null
-  form.reset()
+  // Explicitly clear everything to prevent state retention
+  form.name = ''
+  form.amount = 0
+  form.cost_group_id = null
+  form.expense_category = null
+  form.cost_date = ''
+  form.description = ''
+  form.quantity = null
+  form.unit = ''
+  form.attachment_ids = []
+  
   fileList.value = []
   formDate.value = dayjs()
+  form.clearErrors()
   modalVisible.value = true
 }
 
@@ -730,7 +767,7 @@ const showEditModal = (record) => {
   editingCost.value = record
   form.name = record.name
   form.amount = parseFloat(record.amount)
-  form.expense_category = record.expense_category
+  form.cost_group_id = record.cost_group_id
   form.expense_category = record.expense_category
   form.description = record.description || ''
   form.quantity = record.quantity ? parseFloat(record.quantity) : null

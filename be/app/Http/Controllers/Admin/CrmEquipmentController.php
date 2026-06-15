@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Equipment;
+use App\Models\GlobalEquipment;
 use App\Models\Attachment;
 use App\Constants\Permissions;
 use App\Services\EquipmentService;
@@ -24,28 +25,39 @@ class CrmEquipmentController extends Controller
     }
     public function index(Request $request)
     {
-        $query = Equipment::with(['creator:id,name', 'approver:id,name', 'confirmer:id,name', 'attachments']);
-
-        if ($search = $request->query('search')) {
-            $query->where(function ($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
-                    ->orWhere('code', 'like', "%{$search}%")
-                    ->orWhere('serial_number', 'like', "%{$search}%");
-            });
-        }
-
-        if ($status = $request->query('status')) {
-            $query->where('status', $status);
-        }
-
         $tab = $request->query('tab', 'approvals');
-        if ($tab === 'approvals') {
-            $query->whereIn('status', ['draft', 'pending_management', 'pending_accountant', 'rejected']);
-        } elseif ($tab === 'assets') {
-            $query->whereIn('status', ['available', 'in_use', 'maintenance', 'retired']);
-        }
+        $search = $request->query('search');
 
-        $equipment = $query->orderByDesc('created_at')->paginate(20)->withQueryString();
+        if ($tab === 'catalog') {
+            $query = GlobalEquipment::query();
+            if ($search) {
+                $query->where(function ($q) use ($search) {
+                    $q->where('name', 'like', "%{$search}%")
+                        ->orWhere('code', 'like', "%{$search}%")
+                        ->orWhere('brand', 'like', "%{$search}%")
+                        ->orWhere('model', 'like', "%{$search}%");
+                });
+            }
+            $equipment = $query->orderByDesc('created_at')->paginate(20)->withQueryString();
+        } else {
+            $query = Equipment::with(['creator:id,name', 'approver:id,name', 'confirmer:id,name', 'attachments']);
+            if ($search) {
+                $query->where(function ($q) use ($search) {
+                    $q->where('name', 'like', "%{$search}%")
+                        ->orWhere('code', 'like', "%{$search}%")
+                        ->orWhere('serial_number', 'like', "%{$search}%");
+                });
+            }
+            if ($status = $request->query('status')) {
+                $query->where('status', $status);
+            }
+            if ($tab === 'approvals') {
+                $query->whereIn('status', ['draft', 'pending_management', 'pending_accountant', 'rejected']);
+            } elseif ($tab === 'assets') {
+                $query->whereIn('status', ['available', 'in_use', 'maintenance', 'retired']);
+            }
+            $equipment = $query->orderByDesc('created_at')->paginate(20)->withQueryString();
+        }
 
         $stats = [
             'total'       => Equipment::count(),
@@ -56,9 +68,13 @@ class CrmEquipmentController extends Controller
             'maintenance' => Equipment::where('status', 'maintenance')->count(),
         ];
 
+        // Retrieve all global equipments to show in the dropdown for creating new equipment purchases
+        $globalEquipments = GlobalEquipment::orderBy('name')->get(['id', 'name', 'code', 'category', 'brand', 'model', 'unit', 'unit_price']);
+
         return Inertia::render('Crm/Equipment/Index', [
             'equipment' => $equipment,
             'stats'     => $stats,
+            'globalEquipments' => $globalEquipments,
             'filters'   => $request->only(['search', 'status', 'tab']),
         ]);
     }

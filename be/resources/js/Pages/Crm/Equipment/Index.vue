@@ -3,7 +3,11 @@
 
   <PageHeader title="Kho thiết bị" subtitle="Quản lý mua sắm, tồn kho và theo dõi tình trạng sử dụng">
     <template #actions>
-      <a-button type="primary" size="large" @click="openCreateModal">
+      <a-button v-if="filters.tab === 'catalog'" type="primary" size="large" @click="openCreateCatalogModal">
+        <template #icon><PlusOutlined /></template>
+        Thêm thiết bị mẫu
+      </a-button>
+      <a-button v-else type="primary" size="large" @click="openCreateModal">
         <template #icon><PlusOutlined /></template>
         Tạo tài sản
       </a-button>
@@ -22,11 +26,12 @@
     <a-tabs v-model:activeKey="filters.tab" @change="handleTabChange" class="px-4 pt-2 border-b border-gray-100" :tabBarGutter="32">
       <a-tab-pane key="approvals" tab="Phiếu duyệt mua" />
       <a-tab-pane key="assets" tab="Danh sách tài sản" />
+      <a-tab-pane key="catalog" tab="Danh mục thiết bị" />
     </a-tabs>
 
     <div class="px-4 py-3 border-b border-gray-100 flex items-center gap-4 flex-wrap bg-gray-50/30">
       <a-input-search v-model:value="filters.search" placeholder="Tìm thiết bị..." class="max-w-xs" allow-clear @search="applyFilters" @change="debounceSearch" />
-      <a-select v-model:value="filters.status" placeholder="Tất cả trạng thái" allow-clear style="width: 180px" @change="applyFilters">
+      <a-select v-if="filters.tab !== 'catalog'" v-model:value="filters.status" placeholder="Tất cả trạng thái" allow-clear style="width: 180px" @change="applyFilters">
         <template v-if="filters.tab === 'approvals'">
           <a-select-option value="draft">Nháp</a-select-option>
           <a-select-option value="pending_management">Chờ BĐH</a-select-option>
@@ -42,9 +47,40 @@
       </a-select>
     </div>
 
-    <a-table :columns="columns" :data-source="equipment.data" :pagination="{ current: equipment.current_page, total: equipment.total, pageSize: equipment.per_page, showTotal: (t) => `${t} tài sản` }" :loading="loading" row-key="id" size="small" class="crm-table" @change="handleTableChange">
+    <a-table :columns="columns" :data-source="equipment.data" :pagination="{ current: equipment.current_page, total: equipment.total, pageSize: equipment.per_page, showTotal: (t) => filters.tab === 'catalog' ? `${t} thiết bị mẫu` : `${t} tài sản` }" :loading="loading" row-key="id" size="small" class="crm-table" @change="handleTableChange">
       <template #bodyCell="{ column, record }">
-        <template v-if="column.key === 'name'">
+        <!-- Catalog Columns -->
+        <template v-if="column.key === 'catalog_code'">
+          <span class="font-mono text-xs text-gray-600 font-semibold">{{ record.code || 'NO-CODE' }}</span>
+        </template>
+        <template v-else-if="column.key === 'catalog_name'">
+          <div class="font-bold text-gray-800 hover:text-blue-600 cursor-pointer" @click="openEditCatalogModal(record)">
+            {{ record.name }}
+          </div>
+        </template>
+        <template v-else-if="column.key === 'catalog_category'">
+          <a-tag color="blue" class="rounded-lg border-none bg-blue-50 text-blue-600 font-medium px-2 py-0.5 text-[11px]">{{ categoryLabels[record.category] || record.category || 'Chưa phân loại' }}</a-tag>
+        </template>
+        <template v-else-if="column.key === 'catalog_price'">
+          <div class="text-right font-semibold text-gray-700">
+            {{ formatCurrency(record.unit_price) }}
+          </div>
+        </template>
+        <template v-else-if="column.key === 'catalog_actions'">
+          <div class="flex justify-center gap-2">
+            <a-button type="text" size="small" class="hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded-lg" @click="openEditCatalogModal(record)">
+              <EditOutlined />
+            </a-button>
+            <a-popconfirm title="Xóa thiết bị mẫu này?" @confirm="deleteCatalogItem(record.id)">
+              <a-button type="text" danger size="small" class="hover:bg-red-50 text-gray-400 hover:text-red-600 rounded-lg">
+                <DeleteOutlined />
+              </a-button>
+            </a-popconfirm>
+          </div>
+        </template>
+
+        <!-- Equipment Columns -->
+        <template v-else-if="column.key === 'name'">
           <div class="flex items-center gap-3 cursor-pointer" @click="openDetail(record)">
             <div class="w-10 h-10 rounded-xl flex items-center justify-center text-white text-lg shadow-sm" :style="{ background: categoryGradients[record.category] || '#9CA3AF' }">
               {{ categoryIcons[record.category] || '📦' }}
@@ -96,23 +132,94 @@
   </div>
 
   <!-- CREATE/EDIT MODAL -->
-  <a-modal v-model:open="showModal" :title="editing ? 'Chỉnh sửa tài sản' : 'Tạo tài sản mới'" :width="680" @ok="handleSubmit" @cancel="resetForm" ok-text="Lưu" cancel-text="Hủy" class="crm-modal" centered destroy-on-close>
+  <a-modal v-model:open="showModal" :title="editing ? 'Chỉnh sửa tài sản' : 'Tạo tài sản mới'" :width="680" @ok="handleSubmit" @cancel="resetForm" ok-text="Lưu" cancel-text="Hủy" class="crm-modal" centered destroy-on-close :confirm-loading="form.processing">
     <a-form layout="vertical" class="mt-4">
       <a-row :gutter="16">
-        <a-col :span="16"><a-form-item label="Tên tài sản" required><a-input v-model:value="form.name" size="large" placeholder="VD: Máy xúc Komatsu PC200" /></a-form-item></a-col>
-        <a-col :span="8"><a-form-item label="Mã tài sản"><a-input v-model:value="form.code" size="large" placeholder="VD: TS-001" /></a-form-item></a-col>
+        <a-col :span="12">
+          <a-form-item label="Thiết bị mẫu">
+            <a-select
+              v-model:value="form.global_equipment_id"
+              show-search
+              placeholder="Chọn thiết bị mẫu..."
+              option-filter-prop="label"
+              size="large"
+              allow-clear
+              @change="handleGlobalEquipmentChange"
+            >
+              <a-select-option v-for="ge in props.globalEquipments" :key="ge.id" :value="ge.id" :label="ge.name">
+                {{ ge.name }} <span class="text-gray-400 font-mono text-xs">({{ ge.code }})</span>
+              </a-select-option>
+            </a-select>
+            <span class="text-red-500 text-xs" v-if="form.errors.global_equipment_id">{{ form.errors.global_equipment_id }}</span>
+          </a-form-item>
+        </a-col>
+        <a-col :span="6">
+          <a-form-item label="Mã tài sản">
+            <a-input v-model:value="form.code" size="large" placeholder="Tự sinh nếu trống" />
+            <span class="text-red-500 text-xs" v-if="form.errors.code">{{ form.errors.code }}</span>
+          </a-form-item>
+        </a-col>
+        <a-col :span="6">
+          <a-form-item label="Đơn vị tính">
+            <a-input v-model:value="form.unit" size="large" placeholder="VD: cái, bộ" />
+            <span class="text-red-500 text-xs" v-if="form.errors.unit">{{ form.errors.unit }}</span>
+          </a-form-item>
+        </a-col>
       </a-row>
       <a-row :gutter="16">
-        <a-col :span="8"><a-form-item label="Loại"><a-input v-model:value="form.category" size="large" /></a-form-item></a-col>
-        <a-col :span="8"><a-form-item label="Hãng"><a-input v-model:value="form.brand" size="large" /></a-form-item></a-col>
-        <a-col :span="8"><a-form-item label="Model"><a-input v-model:value="form.model" size="large" /></a-form-item></a-col>
+        <a-col :span="24">
+          <a-form-item label="Tên tài sản" required>
+            <a-input v-model:value="form.name" size="large" placeholder="VD: Máy xúc Komatsu PC200" />
+            <span class="text-red-500 text-xs" v-if="form.errors.name">{{ form.errors.name }}</span>
+          </a-form-item>
+        </a-col>
       </a-row>
       <a-row :gutter="16">
-        <a-col :span="8"><a-form-item label="Số lượng"><a-input-number v-model:value="form.quantity" :min="1" class="w-full" size="large" /></a-form-item></a-col>
-        <a-col :span="8"><a-form-item label="Đơn giá"><a-input-number v-model:value="form.purchase_price" :min="0" class="w-full" size="large" :formatter="(v) => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" /></a-form-item></a-col>
-        <a-col :span="8"><a-form-item label="Thành tiền">
-          <div class="h-10 flex items-center font-bold text-emerald-600 text-lg">{{ formatCurrency((form.quantity || 1) * (form.purchase_price || 0)) }}</div>
-        </a-form-item></a-col>
+        <a-col :span="8">
+          <a-form-item label="Loại">
+            <a-select v-model:value="form.category" style="width: 100%;" size="large" placeholder="Chọn loại...">
+              <a-select-option v-for="(label, val) in categoryLabels" :key="val" :value="val">
+                {{ label }}
+              </a-select-option>
+            </a-select>
+            <span class="text-red-500 text-xs" v-if="form.errors.category">{{ form.errors.category }}</span>
+          </a-form-item>
+        </a-col>
+        <a-col :span="8">
+          <a-form-item label="Hãng">
+            <a-input v-model:value="form.brand" size="large" />
+            <span class="text-red-500 text-xs" v-if="form.errors.brand">{{ form.errors.brand }}</span>
+          </a-form-item>
+        </a-col>
+        <a-col :span="8">
+          <a-form-item label="Model">
+            <a-input v-model:value="form.model" size="large" />
+            <span class="text-red-500 text-xs" v-if="form.errors.model">{{ form.errors.model }}</span>
+          </a-form-item>
+        </a-col>
+      </a-row>
+      <a-row :gutter="16">
+        <a-col :span="8">
+          <a-form-item label="Số lượng">
+            <a-input-number v-model:value="form.quantity" :min="1" class="w-full" size="large" />
+            <span class="text-red-500 text-xs" v-if="form.errors.quantity">{{ form.errors.quantity }}</span>
+          </a-form-item>
+        </a-col>
+        <a-col :span="8">
+          <a-form-item label="Đơn giá (VND)">
+            <a-input-number v-model:value="form.purchase_price" :min="0" class="w-full" size="large"
+              :formatter="(v) => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')"
+              :parser="v => v.replace(/,/g, '')" />
+            <span class="text-red-500 text-xs" v-if="form.errors.purchase_price">{{ form.errors.purchase_price }}</span>
+          </a-form-item>
+        </a-col>
+        <a-col :span="8">
+          <a-form-item label="Thành tiền">
+            <div class="h-10 flex items-center font-bold text-emerald-600 text-lg">
+              {{ formatCurrency((form.quantity || 1) * (form.purchase_price || 0)) }}
+            </div>
+          </a-form-item>
+        </a-col>
       </a-row>
       <a-form-item label="Chứng từ (Hóa đơn, Hợp đồng...)">
         <a-upload
@@ -126,6 +233,62 @@
       </a-form-item>
       <a-form-item label="Ghi chú"><a-textarea v-model:value="form.notes" :rows="2" /></a-form-item>
     </a-form>
+  </a-modal>
+
+  <!-- CATALOG CREATE/EDIT MODAL -->
+  <a-modal v-model:open="showCatalogModal" :title="editingCatalog ? 'Chỉnh sửa thiết bị mẫu' : 'Thêm thiết bị mẫu'" :width="600" @ok="handleCatalogSubmit" @cancel="resetCatalogForm" ok-text="Lưu" cancel-text="Hủy" class="crm-modal" centered :confirm-loading="catalogForm.processing">
+    <div class="space-y-4 mt-4">
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Tên thiết bị mẫu <span class="text-red-500">*</span></label>
+        <a-input v-model:value="catalogForm.name" size="large" placeholder="VD: Máy xúc Komatsu PC200" />
+        <span class="text-red-500 text-xs" v-if="catalogForm.errors.name">{{ catalogForm.errors.name }}</span>
+      </div>
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Mã thiết bị mẫu (Tự sinh nếu trống)</label>
+          <a-input v-model:value="catalogForm.code" size="large" placeholder="VD: TB-0001" />
+          <span class="text-red-500 text-xs" v-if="catalogForm.errors.code">{{ catalogForm.errors.code }}</span>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Loại thiết bị</label>
+          <a-select v-model:value="catalogForm.category" style="width: 100%;" size="large" placeholder="Chọn loại...">
+            <a-select-option v-for="(label, val) in categoryLabels" :key="val" :value="val">
+              {{ label }}
+            </a-select-option>
+          </a-select>
+          <span class="text-red-500 text-xs" v-if="catalogForm.errors.category">{{ catalogForm.errors.category }}</span>
+        </div>
+      </div>
+      <div class="grid grid-cols-3 gap-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Hãng</label>
+          <a-input v-model:value="catalogForm.brand" size="large" placeholder="VD: Komatsu" />
+          <span class="text-red-500 text-xs" v-if="catalogForm.errors.brand">{{ catalogForm.errors.brand }}</span>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Model</label>
+          <a-input v-model:value="catalogForm.model" size="large" placeholder="VD: PC200" />
+          <span class="text-red-500 text-xs" v-if="catalogForm.errors.model">{{ catalogForm.errors.model }}</span>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Đơn vị</label>
+          <a-input v-model:value="catalogForm.unit" size="large" placeholder="VD: cái, bộ" />
+          <span class="text-red-500 text-xs" v-if="catalogForm.errors.unit">{{ catalogForm.errors.unit }}</span>
+        </div>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Đơn giá định biên (VND)</label>
+        <a-input-number v-model:value="catalogForm.unit_price" :min="0" style="width: 100%;" size="large"
+          :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')"
+          :parser="v => v.replace(/,/g, '')" />
+        <span class="text-red-500 text-xs" v-if="catalogForm.errors.unit_price">{{ catalogForm.errors.unit_price }}</span>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Mô tả</label>
+        <a-textarea v-model:value="catalogForm.description" :rows="3" placeholder="Thông tin chi tiết thiết bị mẫu..." />
+        <span class="text-red-500 text-xs" v-if="catalogForm.errors.description">{{ catalogForm.errors.description }}</span>
+      </div>
+    </div>
   </a-modal>
 
   <!-- DETAIL DRAWER -->
@@ -313,7 +476,7 @@
               </a-button>
             </div>
           </div>
-          <div v-else class="text-[10px] text-red-500 pl-1 mt-1 font-medium flex items-center gap-1">
+          <div class="text-[10px] text-red-500 pl-1 mt-1 font-medium flex items-center gap-1" v-else>
             <span class="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span>
             * Vui lòng đính kèm chứng từ chuyển khoản để hoàn tất xác nhận.
           </div>
@@ -333,7 +496,7 @@ import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined, UploadOutlined
 import { message } from 'ant-design-vue'
 
 defineOptions({ layout: CrmLayout })
-const props = defineProps({ equipment: Object, stats: Object, filters: Object })
+const props = defineProps({ equipment: Object, stats: Object, filters: Object, globalEquipments: Array })
 
 onMounted(() => {
   const urlParams = new URLSearchParams(window.location.search)
@@ -372,15 +535,29 @@ const filters = ref({
   tab: props.filters?.tab || 'approvals' 
 })
 
-const columns = [
-  { title: 'Tài sản', key: 'name', width: 260 },
-  { title: 'Loại', dataIndex: 'category', width: 100 },
-  { title: 'SL × Đơn giá', key: 'qty_price', align: 'right', width: 140 },
-  { title: 'Thành tiền', key: 'total', align: 'right', width: 150 },
-  { title: 'Trạng thái', key: 'status', width: 140, align: 'center' },
-  { title: 'Người lập', key: 'creator', width: 130 },
-  { title: '', key: 'actions', width: 60, align: 'center' },
-]
+const columns = computed(() => {
+  if (filters.value.tab === 'catalog') {
+    return [
+      { title: 'Mã thiết bị', key: 'catalog_code', dataIndex: 'code', width: 120 },
+      { title: 'Tên thiết bị', key: 'catalog_name', dataIndex: 'name', width: 220 },
+      { title: 'Loại', key: 'catalog_category', dataIndex: 'category', width: 120 },
+      { title: 'Hãng', dataIndex: 'brand', width: 120 },
+      { title: 'Model', dataIndex: 'model', width: 120 },
+      { title: 'Đơn vị', dataIndex: 'unit', width: 100 },
+      { title: 'Đơn giá định biên', key: 'catalog_price', align: 'right', width: 150 },
+      { title: 'Thao tác', key: 'catalog_actions', width: 100, align: 'center' },
+    ]
+  }
+  return [
+    { title: 'Tài sản', key: 'name', width: 260 },
+    { title: 'Loại', key: 'category', dataIndex: 'category', width: 100 },
+    { title: 'SL × Đơn giá', key: 'qty_price', align: 'right', width: 140 },
+    { title: 'Thành tiền', key: 'total', align: 'right', width: 150 },
+    { title: 'Trạng thái', key: 'status', width: 140, align: 'center' },
+    { title: 'Người lập', key: 'creator', width: 130 },
+    { title: '', key: 'actions', width: 60, align: 'center' },
+  ]
+})
 
 const statusLabels = {
   draft: 'Nháp', pending_management: 'Chờ BĐH', pending_accountant: 'Chờ KT',
@@ -410,13 +587,56 @@ const handleTabChange = () => {
   applyFilters();
 }
 
-// Form
-const form = useForm({ name: '', code: '', category: '', brand: '', model: '', quantity: 1, purchase_price: null, notes: '' })
+// Equipment Form Setup
+const form = useForm({
+  global_equipment_id: null,
+  name: '',
+  code: '',
+  category: undefined,
+  brand: '',
+  model: '',
+  quantity: 1,
+  purchase_price: null,
+  unit: 'cái',
+  notes: ''
+})
 
-const openCreateModal = () => { editing.value = null; form.reset(); fileList.value = []; showModal.value = true }
+const handleGlobalEquipmentChange = (val) => {
+  if (!val) return
+  const selected = props.globalEquipments.find(ge => ge.id === val)
+  if (selected) {
+    form.name = selected.name
+    form.category = selected.category || undefined
+    form.brand = selected.brand || ''
+    form.model = selected.model || ''
+    form.unit = selected.unit || 'cái'
+    form.purchase_price = selected.unit_price
+  }
+}
+
+const openCreateModal = () => {
+  editing.value = null
+  form.reset()
+  form.clearErrors()
+  fileList.value = []
+  showModal.value = true
+}
+
 const openEditModal = (e) => {
-  editing.value = e;
-  Object.assign(form, { name: e.name, code: e.code || '', category: e.category || '', brand: e.brand || '', model: e.model || '', quantity: e.quantity || 1, purchase_price: e.purchase_price, notes: e.notes || '' })
+  editing.value = e
+  form.clearErrors()
+  Object.assign(form, {
+    global_equipment_id: e.global_equipment_id || null,
+    name: e.name,
+    code: e.code || '',
+    category: e.category || undefined,
+    brand: e.brand || '',
+    model: e.model || '',
+    quantity: e.quantity || 1,
+    purchase_price: e.purchase_price,
+    unit: e.unit || 'cái',
+    notes: e.notes || ''
+  })
   fileList.value = []
   showDetailDrawer.value = false
   showModal.value = true
@@ -431,19 +651,126 @@ const handleRemoveFile = (file) => {
 }
 
 const handleSubmit = () => {
-  const formData = new FormData()
-  Object.entries(form.data()).forEach(([k, v]) => { if (v !== null && v !== '') formData.append(k, v) })
-  fileList.value.forEach((f) => formData.append('attachments[]', f))
-
+  form.clearErrors()
   if (editing.value) {
-    formData.append('_method', 'PUT')
-    router.post(`/equipment/${editing.value.id}`, formData, { forceFormData: true, onSuccess: () => { showModal.value = false; resetForm() } })
+    form.transform((data) => ({
+      ...data,
+      _method: 'PUT',
+      attachments: fileList.value
+    })).post(`/equipment/${editing.value.id}`, {
+      forceFormData: true,
+      onSuccess: () => {
+        showModal.value = false
+        resetForm()
+        message.success('Đã cập nhật tài sản.')
+      },
+      onError: () => {
+        message.error('Vui lòng kiểm tra lại thông tin trên Form.')
+      }
+    })
   } else {
-    router.post('/equipment', formData, { forceFormData: true, onSuccess: () => { showModal.value = false; resetForm() } })
+    form.transform((data) => ({
+      ...data,
+      attachments: fileList.value
+    })).post('/equipment', {
+      forceFormData: true,
+      onSuccess: () => {
+        showModal.value = false
+        resetForm()
+        message.success('Đã tạo tài sản nháp.')
+      },
+      onError: () => {
+        message.error('Vui lòng kiểm tra lại thông tin trên Form.')
+      }
+    })
   }
 }
 
-const resetForm = () => { editing.value = null; form.reset(); fileList.value = [] }
+const resetForm = () => { editing.value = null; form.reset(); form.clearErrors(); fileList.value = [] }
+
+// Catalog (Thiết bị mẫu) setup
+const showCatalogModal = ref(false)
+const editingCatalog = ref(null)
+const catalogForm = useForm({
+  name: '',
+  code: '',
+  category: undefined,
+  brand: '',
+  model: '',
+  unit: 'cái',
+  unit_price: null,
+  description: ''
+})
+
+const openCreateCatalogModal = () => {
+  editingCatalog.value = null
+  catalogForm.reset()
+  catalogForm.clearErrors()
+  showCatalogModal.value = true
+}
+
+const openEditCatalogModal = (item) => {
+  editingCatalog.value = item
+  catalogForm.clearErrors()
+  Object.assign(catalogForm, {
+    name: item.name,
+    code: item.code || '',
+    category: item.category || undefined,
+    brand: item.brand || '',
+    model: item.model || '',
+    unit: item.unit || 'cái',
+    unit_price: item.unit_price,
+    description: item.description || ''
+  })
+  showCatalogModal.value = true
+}
+
+const handleCatalogSubmit = () => {
+  catalogForm.clearErrors()
+  if (editingCatalog.value) {
+    catalogForm.transform((data) => ({
+      ...data,
+      _method: 'PUT'
+    })).post(`/equipment/catalog/${editingCatalog.value.id}`, {
+      onSuccess: () => {
+        showCatalogModal.value = false
+        resetCatalogForm()
+        message.success('Đã cập nhật thiết bị mẫu.')
+      },
+      onError: () => {
+        message.error('Vui lòng kiểm tra lại thông tin trên Form.')
+      }
+    })
+  } else {
+    catalogForm.post('/equipment/catalog', {
+      onSuccess: () => {
+        showCatalogModal.value = false
+        resetCatalogForm()
+        message.success('Đã thêm thiết bị mẫu vào danh mục.')
+      },
+      onError: () => {
+        message.error('Vui lòng kiểm tra lại thông tin trên Form.')
+      }
+    })
+  }
+}
+
+const deleteCatalogItem = (id) => {
+  router.delete(`/equipment/catalog/${id}`, {
+    onSuccess: () => {
+      message.success('Đã xóa thiết bị mẫu.')
+    },
+    onError: (err) => {
+      message.error(err.error || 'Không thể xóa thiết bị mẫu đang được sử dụng.')
+    }
+  })
+}
+
+const resetCatalogForm = () => {
+  editingCatalog.value = null
+  catalogForm.reset()
+  catalogForm.clearErrors()
+}
 
 // Detail
 const openDetail = (item) => { selectedItem.value = item; showDetailDrawer.value = true }

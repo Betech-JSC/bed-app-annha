@@ -162,9 +162,13 @@ class CrmFinanceController extends Controller
 
         // Suppliers for form
         $suppliers = Supplier::orderBy('name')->get(['id', 'name']);
+        
+        // Active cost groups for company costs
+        $costGroups = CostGroup::active()->ordered()->get(['id', 'name', 'expense_category']);
 
         return Inertia::render('Crm/Finance/CompanyCosts', [
             'costs' => $costs,
+            'costGroups' => $costGroups,
             'stats' => [
                 'totalAmount' => $totalAmount,
                 'approvedAmount' => $approvedAmount,
@@ -211,6 +215,7 @@ class CrmFinanceController extends Controller
             'name' => 'required|string|max:255',
             'amount' => 'required|numeric|min:0',
             'expense_category' => 'required|in:capex,opex,payroll',
+            'cost_group_id' => 'nullable|exists:cost_groups,id',
             'cost_date' => 'required|date',
             'description' => 'nullable|string',
             'quantity' => 'nullable|numeric|min:0',
@@ -251,6 +256,7 @@ class CrmFinanceController extends Controller
             'name' => 'required|string|max:255',
             'amount' => 'required|numeric|min:0',
             'expense_category' => 'required|in:capex,opex,payroll',
+            'cost_group_id' => 'nullable|exists:cost_groups,id',
             'cost_date' => 'required|date',
             'description' => 'nullable|string',
             'quantity' => 'nullable|numeric|min:0',

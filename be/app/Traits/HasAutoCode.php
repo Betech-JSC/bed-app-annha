@@ -34,6 +34,7 @@ trait HasAutoCode
                     'receipts' => 'receipt',
                     'project_budgets' => 'budget',
                     'construction_logs' => 'construction_log',
+                    'global_equipments' => 'global_equipment',
                 ];
 
                 $sequenceType = $mapping[$type] ?? $type;

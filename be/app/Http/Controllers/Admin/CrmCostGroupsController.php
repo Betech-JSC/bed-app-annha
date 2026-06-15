@@ -59,6 +59,7 @@ class CrmCostGroupsController extends Controller
             'name' => 'required|string|max:255',
             'code' => 'nullable|string|max:50|unique:cost_groups,code',
             'description' => 'nullable|string|max:1000',
+            'expense_category' => 'nullable|string|in:capex,opex',
             'is_active' => 'boolean',
             'sort_order' => 'nullable|integer|min:0',
         ]);
@@ -83,6 +84,7 @@ class CrmCostGroupsController extends Controller
             'name' => 'required|string|max:255',
             'code' => ['nullable', 'string', 'max:50', Rule::unique('cost_groups', 'code')->ignore($costGroup->id)],
             'description' => 'nullable|string|max:1000',
+            'expense_category' => 'nullable|string|in:capex,opex',
             'is_active' => 'boolean',
             'sort_order' => 'nullable|integer|min:0',
         ]);

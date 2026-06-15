@@ -15,6 +15,7 @@ class CostGroup extends Model
         'name',
         'code',
         'description',
+        'expense_category',
         'is_active',
         'sort_order',
         'created_by',
