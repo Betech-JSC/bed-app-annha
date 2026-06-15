@@ -377,6 +377,7 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
 
         // Materials
         Route::get('/{projectId}/materials', [MaterialController::class, 'getByProject']);
+        Route::get('/{projectId}/materials/summary', [MaterialController::class, 'getSummary']);
         Route::post('/{projectId}/materials/transactions', [MaterialController::class, 'createTransaction']);
         Route::post('/{projectId}/materials/batch-transactions', [MaterialController::class, 'batchTransactions']);
 

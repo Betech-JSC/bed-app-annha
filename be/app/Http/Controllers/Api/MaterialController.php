@@ -362,4 +362,72 @@ class MaterialController extends Controller
         }
     }
 
+    /**
+     * Lấy tổng hợp vật tư của dự án (Định mức vs Thực dùng)
+     */
+    public function getSummary(string $projectId)
+    {
+        $user = auth()->user();
+
+        if (!$user->hasPermission(Permissions::MATERIAL_VIEW)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Không có quyền xem tổng hợp vật liệu dự án.'
+            ], 403);
+        }
+
+        $actualItems = \Illuminate\Support\Facades\DB::table('material_bill_items')
+            ->join('material_bills', 'material_bills.id', '=', 'material_bill_items.material_bill_id')
+            ->where('material_bills.project_id', $projectId)
+            ->where('material_bills.status', 'approved')
+            ->select(
+                'material_bill_items.material_id',
+                \Illuminate\Support\Facades\DB::raw('SUM(material_bill_items.quantity) as actual_quantity'),
+                \Illuminate\Support\Facades\DB::raw('SUM(material_bill_items.total_price) as total_amount')
+            )
+            ->groupBy('material_bill_items.material_id')
+            ->get()
+            ->keyBy('material_id');
+
+        $quotas = \Illuminate\Support\Facades\DB::table('material_quotas')
+            ->where('project_id', $projectId)
+            ->select('material_id', \Illuminate\Support\Facades\DB::raw('SUM(planned_quantity) as planned_quantity'))
+            ->groupBy('material_id')
+            ->get()
+            ->keyBy('material_id');
+
+        $materialIds = $actualItems->keys()->merge($quotas->keys())->filter()->unique();
+
+        $materials = Material::whereIn('id', $materialIds)->get(['id', 'name', 'code', 'unit', 'unit_price'])->keyBy('id');
+
+        $summary = $materialIds->map(function ($materialId) use ($actualItems, $quotas, $materials) {
+            $material = $materials->get($materialId);
+            $actual = $actualItems->get($materialId);
+            $quota = $quotas->get($materialId);
+
+            $plannedQty = $quota ? (float) $quota->planned_quantity : 0.0;
+            $actualQty = $actual ? (float) $actual->actual_quantity : 0.0;
+            $totalAmount = $actual ? (float) $actual->total_amount : 0.0;
+            $avgPrice = $actualQty > 0 ? $totalAmount / $actualQty : ($material ? (float) $material->unit_price : 0.0);
+
+            return [
+                'material_id' => $materialId,
+                'material_name' => $material ? $material->name : 'N/A',
+                'material_code' => $material ? $material->code : 'N/A',
+                'unit' => $material ? $material->unit : 'N/A',
+                'planned_quantity' => $plannedQty,
+                'actual_quantity' => $actualQty,
+                'average_unit_price' => $avgPrice,
+                'total_amount' => $totalAmount,
+                'is_exceeded' => $plannedQty > 0 && $actualQty > $plannedQty,
+                'variance_quantity' => $actualQty - $plannedQty,
+                'variance_percentage' => $plannedQty > 0 ? round((($actualQty - $plannedQty) / $plannedQty) * 100, 2) : 0,
+            ];
+        })->values();
+
+        return response()->json([
+            'success' => true,
+            'data' => $summary,
+        ]);
+    }
 }
