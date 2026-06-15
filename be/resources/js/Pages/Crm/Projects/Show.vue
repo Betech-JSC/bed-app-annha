@@ -1775,37 +1775,45 @@
       <a-tab-pane key="materials" v-if="isTabVisible('materials')">
         <template #tab><a-tooltip title="Quản lý chi phí vật liệu theo bill nhập: theo dõi từng phiếu, duyệt thanh toán" placement="bottom">Vật liệu ({{ counts.material_bills || 0 }})</a-tooltip></template>
         <div class="p-4">
-          <!-- Summary Cards -->
-          <div class="grid grid-cols-4 gap-3 mb-4">
-            <div class="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-3 border border-blue-100/60">
-              <div class="flex items-center gap-2 mb-1">
-                <div class="w-7 h-7 rounded-lg bg-blue-500/10 flex items-center justify-center"><span class="text-blue-600 text-xs">📄</span></div>
-                <span class="text-[11px] text-gray-400">Tổng phiếu</span>
-              </div>
-              <div class="text-lg font-bold text-gray-800">{{ materialBills?.length || 0 }}</div>
-            </div>
-            <div class="bg-gradient-to-br from-emerald-50 to-green-50 rounded-xl p-3 border border-emerald-100/60">
-              <div class="flex items-center gap-2 mb-1">
-                <div class="w-7 h-7 rounded-lg bg-emerald-500/10 flex items-center justify-center"><span class="text-emerald-600 text-xs">💰</span></div>
-                <span class="text-[11px] text-gray-400">Tổng chi phí</span>
-              </div>
-              <div class="text-lg font-bold text-emerald-600">{{ fmt(totalBillAmount) }}</div>
-            </div>
-            <div class="bg-gradient-to-br from-green-50 to-teal-50 rounded-xl p-3 border border-green-100/60">
-              <div class="flex items-center gap-2 mb-1">
-                <div class="w-7 h-7 rounded-lg bg-green-500/10 flex items-center justify-center"><CheckCircleOutlined class="text-green-600 text-xs" /></div>
-                <span class="text-[11px] text-gray-400">Đã duyệt</span>
-              </div>
-              <div class="text-lg font-bold text-green-600">{{ (materialBills || []).filter(b => b.status === 'approved').length }}</div>
-            </div>
-            <div class="bg-gradient-to-br from-amber-50 to-yellow-50 rounded-xl p-3 border border-amber-100/60">
-              <div class="flex items-center gap-2 mb-1">
-                <div class="w-7 h-7 rounded-lg bg-amber-500/10 flex items-center justify-center"><ClockCircleOutlined class="text-amber-600 text-xs" /></div>
-                <span class="text-[11px] text-gray-400">Chờ duyệt</span>
-              </div>
-              <div class="text-lg font-bold text-amber-600">{{ (materialBills || []).filter(b => ['pending_management','pending_accountant'].includes(b.status)).length }}</div>
-            </div>
+          <!-- Sub-tab switcher -->
+          <div class="flex items-center gap-2 mb-4">
+            <a-button :type="matSubTab === 'bills' ? 'primary' : 'default'" size="small" @click="switchMatSubTab('bills')">📄 Phiếu nhập ({{ materialBills?.length || 0 }})</a-button>
+            <a-button :type="matSubTab === 'summary' ? 'primary' : 'default'" size="small" @click="switchMatSubTab('summary')">📊 Tổng hợp vật tư</a-button>
           </div>
+
+          <!-- ===== BILLS SUB-TAB ===== -->
+          <div v-if="matSubTab === 'bills'">
+            <!-- Summary Cards -->
+            <div class="grid grid-cols-4 gap-3 mb-4">
+              <div class="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-3 border border-blue-100/60">
+                <div class="flex items-center gap-2 mb-1">
+                  <div class="w-7 h-7 rounded-lg bg-blue-500/10 flex items-center justify-center"><span class="text-blue-600 text-xs">📄</span></div>
+                  <span class="text-[11px] text-gray-400">Tổng phiếu</span>
+                </div>
+                <div class="text-lg font-bold text-gray-800">{{ materialBills?.length || 0 }}</div>
+              </div>
+              <div class="bg-gradient-to-br from-emerald-50 to-green-50 rounded-xl p-3 border border-emerald-100/60">
+                <div class="flex items-center gap-2 mb-1">
+                  <div class="w-7 h-7 rounded-lg bg-emerald-500/10 flex items-center justify-center"><span class="text-emerald-600 text-xs">💰</span></div>
+                  <span class="text-[11px] text-gray-400">Tổng chi phí</span>
+                </div>
+                <div class="text-lg font-bold text-emerald-600">{{ fmt(totalBillAmount) }}</div>
+              </div>
+              <div class="bg-gradient-to-br from-green-50 to-teal-50 rounded-xl p-3 border border-green-100/60">
+                <div class="flex items-center gap-2 mb-1">
+                  <div class="w-7 h-7 rounded-lg bg-green-500/10 flex items-center justify-center"><CheckCircleOutlined class="text-green-600 text-xs" /></div>
+                  <span class="text-[11px] text-gray-400">Đã duyệt</span>
+                </div>
+                <div class="text-lg font-bold text-green-600">{{ (materialBills || []).filter(b => b.status === 'approved').length }}</div>
+              </div>
+              <div class="bg-gradient-to-br from-amber-50 to-yellow-50 rounded-xl p-3 border border-amber-100/60">
+                <div class="flex items-center gap-2 mb-1">
+                  <div class="w-7 h-7 rounded-lg bg-amber-500/10 flex items-center justify-center"><ClockCircleOutlined class="text-amber-600 text-xs" /></div>
+                  <span class="text-[11px] text-gray-400">Chờ duyệt</span>
+                </div>
+                <div class="text-lg font-bold text-amber-600">{{ (materialBills || []).filter(b => ['pending_management','pending_accountant'].includes(b.status)).length }}</div>
+              </div>
+            </div>
 
             <div v-if="can('material.create')" class="flex justify-end mb-3">
               <a-button type="primary" size="small" @click="openBillModal()">
@@ -1813,33 +1821,95 @@
               </a-button>
             </div>
 
-          <!-- Bill Table -->
-          <a-table :columns="billCols" :data-source="materialBills || []" :pagination="{ pageSize: 10 }" row-key="id" size="small" class="crm-table hover-row"
-            :custom-row="(record) => ({ onClick: () => openMaterialDetail(record), style: 'cursor: pointer' })">
-            <template #bodyCell="{ column, record }">
-              <template v-if="column.key === 'bill_number'">
-                <div class="font-semibold text-blue-600">{{ record.bill_number || `#${record.id}` }}</div>
-                <div class="text-[10px] text-gray-400">{{ fmtDate(record.bill_date) }}</div>
+            <!-- Bill Table -->
+            <a-table :columns="billCols" :data-source="materialBills || []" :pagination="{ pageSize: 10 }" row-key="id" size="small" class="crm-table hover-row"
+              :custom-row="(record) => ({ onClick: () => openMaterialDetail(record), style: 'cursor: pointer' })">
+              <template #bodyCell="{ column, record }">
+                <template v-if="column.key === 'bill_number'">
+                  <div class="font-semibold text-blue-600">{{ record.bill_number || `#${record.id}` }}</div>
+                  <div class="text-[10px] text-gray-400">{{ fmtDate(record.bill_date) }}</div>
+                </template>
+                <template v-else-if="column.key === 'supplier'">
+                  <span v-if="record.supplier" class="text-sm">{{ record.supplier.name }}</span>
+                  <span v-else class="text-xs text-gray-400 italic">—</span>
+                </template>
+                <template v-else-if="column.key === 'material_group'">
+                  <span class="text-[11px] text-gray-500 line-clamp-2" :title="getMaterialGroups(record)">{{ getMaterialGroups(record) }}</span>
+                </template>
+                <template v-else-if="column.key === 'items_count'">
+                  <span class="font-medium">{{ record.items?.length || 0 }} <span class="text-gray-400 text-xs">mặt hàng</span></span>
+                </template>
+                <template v-else-if="column.key === 'total'">
+                  <span class="font-bold text-emerald-600">{{ fmt(record.total_amount) }}</span>
+                </template>
+                <template v-else-if="column.key === 'status'">
+                  <a-tag :color="billStatusColor(record.status)" class="rounded-full text-[10px]">{{ billStatusLabel(record.status) }}</a-tag>
+                </template>
               </template>
-              <template v-else-if="column.key === 'supplier'">
-                <span v-if="record.supplier" class="text-sm">{{ record.supplier.name }}</span>
-                <span v-else class="text-xs text-gray-400 italic">—</span>
+            </a-table>
+            <a-empty v-if="!materialBills?.length" description="Chưa có phiếu nhập vật liệu" />
+          </div>
+
+          <!-- ===== SUMMARY SUB-TAB ===== -->
+          <div v-else-if="matSubTab === 'summary'">
+            <div class="flex justify-between items-center mb-3">
+              <span class="text-xs text-gray-400 font-medium italic">
+                * Thực dùng dựa trên các mặt hàng từ phiếu nhập vật tư đã được phê duyệt.
+              </span>
+              <a :href="`/admin/projects/${project.id}/materials/export`" target="_blank">
+                <a-button type="primary" size="small" ghost>
+                  <template #icon><DownloadOutlined /></template>Xuất file Excel
+                </a-button>
+              </a>
+            </div>
+
+            <!-- Table of Materials Summary -->
+            <a-table :columns="matSummaryCols" :data-source="materialSummary || []" :loading="loadingSummary" :pagination="{ pageSize: 15 }" row-key="material_id" size="small" class="crm-table hover-row">
+              <template #bodyCell="{ column, record }">
+                <template v-if="column.key === 'material_code'">
+                  <span class="font-semibold text-gray-600">{{ record.material_code }}</span>
+                </template>
+                <template v-else-if="column.key === 'material_name'">
+                  <span class="font-semibold text-gray-800">{{ record.material_name }}</span>
+                </template>
+                <template v-else-if="column.key === 'unit'">
+                  <span class="text-gray-500">{{ record.unit }}</span>
+                </template>
+                <template v-else-if="column.key === 'planned_quantity'">
+                  <span v-if="record.planned_quantity > 0" class="text-gray-700 font-medium">{{ fmtQty(record.planned_quantity) }}</span>
+                  <span v-else class="text-gray-400 italic">—</span>
+                </template>
+                <template v-else-if="column.key === 'actual_quantity'">
+                  <a-tooltip v-if="record.is_exceeded" title="Vượt định mức dự án" color="red">
+                    <span class="text-red-600 font-bold flex items-center justify-end gap-1">
+                      {{ fmtQty(record.actual_quantity) }}
+                      <WarningOutlined class="text-xs text-red-500 animate-pulse" />
+                    </span>
+                  </a-tooltip>
+                  <span v-else class="text-gray-800 font-bold">{{ fmtQty(record.actual_quantity) }}</span>
+                </template>
+                <template v-else-if="column.key === 'average_unit_price'">
+                  <span class="text-gray-600 font-medium">{{ fmt(record.average_unit_price) }}</span>
+                </template>
+                <template v-else-if="column.key === 'total_amount'">
+                  <span class="text-emerald-600 font-bold">{{ fmt(record.total_amount) }}</span>
+                </template>
+                <template v-else-if="column.key === 'variance_quantity'">
+                  <span v-if="record.variance_quantity > 0 && record.planned_quantity > 0" class="text-red-500 font-semibold">
+                    +{{ fmtQty(record.variance_quantity) }} <span class="text-[10px]">({{ record.variance_percentage }}%)</span>
+                  </span>
+                  <span v-else-if="record.variance_quantity < 0 && record.planned_quantity > 0" class="text-green-600 font-semibold">
+                    {{ fmtQty(record.variance_quantity) }} <span class="text-[10px]">({{ record.variance_percentage }}%)</span>
+                  </span>
+                  <span v-else-if="record.planned_quantity === 0 && record.actual_quantity > 0" class="text-gray-500">
+                    {{ fmtQty(record.actual_quantity) }}
+                  </span>
+                  <span v-else class="text-gray-400 font-medium">—</span>
+                </template>
               </template>
-              <template v-else-if="column.key === 'material_group'">
-                <span class="text-[11px] text-gray-500 line-clamp-2" :title="getMaterialGroups(record)">{{ getMaterialGroups(record) }}</span>
-              </template>
-              <template v-else-if="column.key === 'items_count'">
-                <span class="font-medium">{{ record.items?.length || 0 }} <span class="text-gray-400 text-xs">mặt hàng</span></span>
-              </template>
-              <template v-else-if="column.key === 'total'">
-                <span class="font-bold text-emerald-600">{{ fmt(record.total_amount) }}</span>
-              </template>
-              <template v-else-if="column.key === 'status'">
-                <a-tag :color="billStatusColor(record.status)" class="rounded-full text-[10px]">{{ billStatusLabel(record.status) }}</a-tag>
-              </template>
-            </template>
-          </a-table>
-          <a-empty v-if="!materialBills?.length" description="Chưa có phiếu nhập vật liệu" />
+            </a-table>
+            <a-empty v-if="!materialSummary?.length && !loadingSummary" description="Chưa có dữ liệu tổng hợp vật tư" />
+          </div>
         </div>
       </a-tab-pane>
 
@@ -7486,6 +7556,7 @@ const props = defineProps({
   teamData: Object,
   equipmentData: Object,
   otherData: Object,
+  materialSummary: Array,
 })
 
 // ============ LAZY DATA BRIDGES ============
@@ -11062,6 +11133,36 @@ const usageStatusLabel = (s) => ({ draft: 'Nháp', pending_management: 'Chờ B�
 const usageStatusColor = (s) => ({ draft: 'default', pending_management: 'orange', pending_accountant: 'blue', approved: 'cyan', in_use: 'geekblue', pending_return: 'purple', returned: 'green', rejected: 'red', pending_receive: 'orange' }[s] || 'default')
 
 const eqSubTab = ref('rental')
+const matSubTab = ref('bills')
+const loadingSummary = ref(false)
+
+const switchMatSubTab = (tab) => {
+  matSubTab.value = tab
+  if (tab === 'summary' && !props.materialSummary) {
+    loadingSummary.value = true
+    router.reload({
+      only: ['materialSummary'],
+      onSuccess: () => {
+        loadingSummary.value = false
+      },
+      onError: () => {
+        loadingSummary.value = false
+      }
+    })
+  }
+}
+
+const matSummaryCols = [
+  { title: 'Mã vật tư', key: 'material_code', dataIndex: 'material_code', width: 120 },
+  { title: 'Tên vật tư', key: 'material_name', dataIndex: 'material_name' },
+  { title: 'ĐVT', key: 'unit', dataIndex: 'unit', width: 80, align: 'center' },
+  { title: 'Định mức', key: 'planned_quantity', dataIndex: 'planned_quantity', width: 110, align: 'right' },
+  { title: 'Thực dùng', key: 'actual_quantity', dataIndex: 'actual_quantity', width: 110, align: 'right' },
+  { title: 'Đơn giá TB', key: 'average_unit_price', dataIndex: 'average_unit_price', width: 140, align: 'right' },
+  { title: 'Thành tiền', key: 'total_amount', dataIndex: 'total_amount', width: 160, align: 'right' },
+  { title: 'Chênh lệch', key: 'variance_quantity', dataIndex: 'variance_quantity', width: 120, align: 'right' },
+]
+
 const rejectReason = ref('')
 
 const totalEquipmentCount = computed(() =>

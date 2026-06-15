@@ -306,6 +306,7 @@ class CrmProjectsController extends Controller
                 'maintenances' => $project->maintenances()->with(['attachments', 'creator'])->get(),
                 'attachments' => $project->attachments()->latest()->get(),
             ]),
+            'materialSummary' => \Inertia\Inertia::lazy(fn() => $this->calculateProjectMaterialSummary($id)),
         ]);
     }
 
@@ -4464,6 +4465,80 @@ class CrmProjectsController extends Controller
         MaterialQuota::where('project_id', $project->id)->findOrFail($quotaId)->delete();
 
         return back()->with('success', 'Đã xóa định mức vật tư.');
+    }
+
+    /**
+     * Tính toán tổng hợp vật tư của dự án
+     */
+    private function calculateProjectMaterialSummary(string $projectId): \Illuminate\Support\Collection
+    {
+        $actualItems = \Illuminate\Support\Facades\DB::table('material_bill_items')
+            ->join('material_bills', 'material_bills.id', '=', 'material_bill_items.material_bill_id')
+            ->where('material_bills.project_id', $projectId)
+            ->where('material_bills.status', 'approved')
+            ->select(
+                'material_bill_items.material_id',
+                \Illuminate\Support\Facades\DB::raw('SUM(material_bill_items.quantity) as actual_quantity'),
+                \Illuminate\Support\Facades\DB::raw('SUM(material_bill_items.total_price) as total_amount')
+            )
+            ->groupBy('material_bill_items.material_id')
+            ->get()
+            ->keyBy('material_id');
+
+        $quotas = \Illuminate\Support\Facades\DB::table('material_quotas')
+            ->where('project_id', $projectId)
+            ->select('material_id', \Illuminate\Support\Facades\DB::raw('SUM(planned_quantity) as planned_quantity'))
+            ->groupBy('material_id')
+            ->get()
+            ->keyBy('material_id');
+
+        $materialIds = $actualItems->keys()->merge($quotas->keys())->filter()->unique();
+
+        $materials = \App\Models\Material::whereIn('id', $materialIds)->get(['id', 'name', 'code', 'unit', 'unit_price'])->keyBy('id');
+
+        return $materialIds->map(function ($materialId) use ($actualItems, $quotas, $materials) {
+            $material = $materials->get($materialId);
+            $actual = $actualItems->get($materialId);
+            $quota = $quotas->get($materialId);
+
+            $plannedQty = $quota ? (float) $quota->planned_quantity : 0.0;
+            $actualQty = $actual ? (float) $actual->actual_quantity : 0.0;
+            $totalAmount = $actual ? (float) $actual->total_amount : 0.0;
+            $avgPrice = $actualQty > 0 ? $totalAmount / $actualQty : ($material ? (float) $material->unit_price : 0.0);
+
+            return [
+                'material_id' => $materialId,
+                'material_name' => $material ? $material->name : 'N/A',
+                'material_code' => $material ? $material->code : 'N/A',
+                'unit' => $material ? $material->unit : 'N/A',
+                'planned_quantity' => $plannedQty,
+                'actual_quantity' => $actualQty,
+                'average_unit_price' => $avgPrice,
+                'total_amount' => $totalAmount,
+                'is_exceeded' => $plannedQty > 0 && $actualQty > $plannedQty,
+                'variance_quantity' => $actualQty - $plannedQty,
+                'variance_percentage' => $plannedQty > 0 ? round((($actualQty - $plannedQty) / $plannedQty) * 100, 2) : 0,
+            ];
+        })->values();
+    }
+
+    /**
+     * Xuất Excel báo cáo tổng hợp vật tư của dự án
+     */
+    public function exportMaterialSummary(string $projectId)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $this->crmRequire($user, Permissions::MATERIAL_VIEW, $project);
+
+        $summary = $this->calculateProjectMaterialSummary($projectId);
+
+        $fileName = 'Tong_hop_vat_tu_' . \Illuminate\Support\Str::slug($project->name, '_') . '_' . date('Ymd_His') . '.xlsx';
+
+        return \Maatwebsite\Excel\Facades\Excel::download(
+            new \App\Exports\ProjectMaterialSummaryExport($summary, $project->name),
+            $fileName
+        );
     }
 
     // ===================================================================
