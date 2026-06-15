@@ -534,11 +534,22 @@ const can = (perm) => isSuperAdmin.value || userPerms.value.includes(perm)
 const canAny = (...perms) => isSuperAdmin.value || perms.some(p => userPerms.value.includes(p))
 
 const canShowAiChat = computed(() => {
-  return false; // Tạm ẩn theo yêu cầu
-  // if (isSuperAdmin.value) return true
-  // const userRoles = props.auth?.user?.roles || []
-  // const allowedRoles = ['Ban Dieu Hanh', 'Ban Điều Hành', 'Admin', 'Quản trị viên']
-  // return userRoles.some(role => allowedRoles.includes(role))
+  if (isSuperAdmin.value) return true
+  const userRoles = props.auth?.user?.roles || []
+  const allowedRoles = [
+    'super_admin',
+    'admin',
+    'project_manager',
+    'accountant',
+    'site_supervisor',
+    'Ban Dieu Hanh',
+    'Ban Điều Hành',
+    'Admin',
+    'Quản trị viên',
+    'Quản lý dự án',
+    'Kế toán'
+  ]
+  return userRoles.some(role => allowedRoles.includes(role))
 })
 
 const menuItems = computed(() => {
