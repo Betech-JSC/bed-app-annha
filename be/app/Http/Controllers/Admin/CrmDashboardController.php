@@ -20,6 +20,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
+use App\Models\Supplier;
+use App\Models\GlobalEquipment;
 
 class CrmDashboardController extends Controller
 {
@@ -351,5 +353,116 @@ class CrmDashboardController extends Controller
             'labels' => $top->pluck('name')->map(fn($n) => mb_strlen($n) > 20 ? mb_substr($n, 0, 20) . '...' : $n)->toArray(),
             'data' => $top->pluck('costs_sum_amount')->toArray(),
         ];
+    }
+
+    /**
+     * Global search API for the Spotlight search.
+     */
+    public function searchGlobal(Request $request)
+    {
+        $search = $request->get('q', '');
+        
+        if (strlen(trim($search)) < 2) {
+            return response()->json([
+                'success' => true,
+                'results' => []
+            ]);
+        }
+
+        $results = [];
+
+        // 1. Projects
+        $projects = Project::where('name', 'like', "%{$search}%")
+            ->orWhere('code', 'like', "%{$search}%")
+            ->limit(5)
+            ->get(['id', 'name', 'code', 'status']);
+        
+        foreach ($projects as $project) {
+            $results[] = [
+                'id' => 'project-' . $project->id,
+                'title' => $project->name,
+                'subtitle' => 'Dự án • ' . $project->code,
+                'url' => "/projects/{$project->id}",
+                'type' => 'project',
+                'status' => $project->status,
+            ];
+        }
+
+        // 2. Employees (Users)
+        $users = User::where(function($query) use ($search) {
+                $query->where('first_name', 'like', "%{$search}%")
+                    ->orWhere('last_name', 'like', "%{$search}%")
+                    ->orWhere('email', 'like', "%{$search}%")
+                    ->orWhere('phone', 'like', "%{$search}%");
+            })
+            ->limit(5)
+            ->get(['id', 'first_name', 'last_name', 'email', 'phone']);
+
+        foreach ($users as $user) {
+            $fullName = trim(($user->first_name ?? '') . ' ' . ($user->last_name ?? ''));
+            if (empty($fullName)) {
+                $fullName = $user->email ?? 'N/A';
+            }
+            $results[] = [
+                'id' => 'user-' . $user->id,
+                'title' => $fullName,
+                'subtitle' => 'Nhân viên • ' . ($user->email ?? $user->phone ?? ''),
+                'url' => "/hr/employees/{$user->id}/detail",
+                'type' => 'user',
+            ];
+        }
+
+        // 3. Subcontractors
+        $subcontractors = Subcontractor::where('name', 'like', "%{$search}%")
+            ->orWhere('phone', 'like', "%{$search}%")
+            ->limit(5)
+            ->get(['id', 'name', 'phone']);
+
+        foreach ($subcontractors as $sub) {
+            $results[] = [
+                'id' => 'subcontractor-' . $sub->id,
+                'title' => $sub->name,
+                'subtitle' => 'Nhà thầu phụ' . ($sub->phone ? ' • ' . $sub->phone : ''),
+                'url' => "/subcontractors",
+                'type' => 'subcontractor',
+            ];
+        }
+
+        // 4. Suppliers
+        $suppliers = Supplier::where('name', 'like', "%{$search}%")
+            ->orWhere('phone', 'like', "%{$search}%")
+            ->limit(5)
+            ->get(['id', 'name', 'phone']);
+
+        foreach ($suppliers as $sup) {
+            $results[] = [
+                'id' => 'supplier-' . $sup->id,
+                'title' => $sup->name,
+                'subtitle' => 'Nhà cung cấp' . ($sup->phone ? ' • ' . $sup->phone : ''),
+                'url' => "/suppliers",
+                'type' => 'supplier',
+            ];
+        }
+
+        // 5. Global Equipment
+        $equipments = GlobalEquipment::where('name', 'like', "%{$search}%")
+            ->orWhere('code', 'like', "%{$search}%")
+            ->limit(5)
+            ->get(['id', 'name', 'code']);
+
+        foreach ($equipments as $eq) {
+            $results[] = [
+                'id' => 'equipment-' . $eq->id,
+                'title' => $eq->name,
+                'subtitle' => 'Thiết bị mẫu • ' . $eq->code,
+                'url' => "/equipment?tab=catalog",
+                'type' => 'equipment',
+            ];
+        }
+
+        return response()->json([
+            'success' => true,
+            'results' => $results
+        ]);
     }
 }

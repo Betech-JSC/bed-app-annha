@@ -50,6 +50,16 @@
             <MenuFoldOutlined v-else />
           </a-button>
 
+          <!-- Global Search Trigger -->
+          <div 
+            class="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 transition-all cursor-pointer text-white/50 hover:text-white/80 w-64 mr-2"
+            @click="openSpotlight"
+          >
+            <SearchOutlined style="font-size: 14px;" />
+            <span class="text-xs select-none flex-1 text-left">Tìm kiếm nhanh...</span>
+            <span class="text-[10px] bg-white/15 px-1.5 py-0.5 rounded border border-white/10 font-mono">⌘K</span>
+          </div>
+
           <!-- Breadcrumb -->
           <a-breadcrumb separator-style="color: rgba(255,255,255,0.3)">
             <a-breadcrumb-item>
@@ -236,20 +246,134 @@
 
     <!-- AI Chat Widget (Only for BDH & Admin) -->
     <AiChatWidget v-if="canShowAiChat" />
+
+    <!-- Global Spotlight Search Modal -->
+    <a-modal
+      v-model:open="isSpotlightOpen"
+      :footer="null"
+      :closable="false"
+      :width="600"
+      wrap-class-name="spotlight-modal"
+      destroy-on-close
+      centered
+      @keydown="handleKeyDown"
+    >
+      <div class="relative flex items-center border-b border-gray-100 p-4">
+        <SearchOutlined class="text-gray-400 text-lg mr-3" />
+        <input
+          v-model="searchInput"
+          type="text"
+          placeholder="Tìm dự án, nhân viên, nhà thầu, thiết bị..."
+          class="spotlight-input w-full outline-none text-base text-gray-800 placeholder-gray-400"
+          ref="spotlightInputRef"
+        />
+        <div class="flex items-center gap-2">
+          <LoadingOutlined v-if="searchLoading" class="text-blue-500 text-sm animate-spin" />
+          <span class="text-[10px] text-gray-400 border border-gray-200 px-1.5 py-0.5 rounded bg-gray-50 font-mono">ESC</span>
+        </div>
+      </div>
+
+      <!-- Search Results / States -->
+      <div class="max-h-[360px] overflow-y-auto p-2">
+        <!-- Welcome/Suggestions State -->
+        <div v-if="!searchInput" class="p-3">
+          <div class="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2">Liên kết nhanh</div>
+          <div class="grid grid-cols-2 gap-2">
+            <button @click="selectResult({url: '/projects'})" class="flex items-center gap-2 p-2.5 rounded-xl hover:bg-gray-50 text-left transition-colors group">
+              <ProjectOutlined class="text-blue-500" />
+              <span class="text-xs font-semibold text-gray-700 group-hover:text-blue-600">Dự án công trình</span>
+            </button>
+            <button @click="selectResult({url: '/hr/employees'})" class="flex items-center gap-2 p-2.5 rounded-xl hover:bg-gray-50 text-left transition-colors group">
+              <TeamOutlined class="text-teal-500" />
+              <span class="text-xs font-semibold text-gray-700 group-hover:text-teal-600">Quản lý nhân sự</span>
+            </button>
+            <button @click="selectResult({url: '/subcontractors'})" class="flex items-center gap-2 p-2.5 rounded-xl hover:bg-gray-50 text-left transition-colors group">
+              <ApartmentOutlined class="text-purple-500" />
+              <span class="text-xs font-semibold text-gray-700 group-hover:text-purple-600">Nhà thầu phụ</span>
+            </button>
+            <button @click="selectResult({url: '/suppliers'})" class="flex items-center gap-2 p-2.5 rounded-xl hover:bg-gray-50 text-left transition-colors group">
+              <ShopOutlined class="text-orange-500" />
+              <span class="text-xs font-semibold text-gray-700 group-hover:text-orange-600">Nhà cung cấp</span>
+            </button>
+            <button @click="selectResult({url: '/equipment'})" class="flex items-center gap-2 p-2.5 rounded-xl hover:bg-gray-50 text-left transition-colors group">
+              <CarOutlined class="text-indigo-500" />
+              <span class="text-xs font-semibold text-gray-700 group-hover:text-indigo-600">Thiết bị thi công</span>
+            </button>
+            <button @click="selectResult({url: '/files'})" class="flex items-center gap-2 p-2.5 rounded-xl hover:bg-gray-50 text-left transition-colors group">
+              <FolderOpenOutlined class="text-amber-500" />
+              <span class="text-xs font-semibold text-gray-700 group-hover:text-amber-600">Tài liệu & Files</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- No Results State -->
+        <div v-else-if="searchResults.length === 0 && !searchLoading && searchInput.trim().length >= 2" class="p-8 text-center">
+          <div class="text-gray-300 mb-2">
+            <SearchOutlined style="font-size: 28px;" />
+          </div>
+          <div class="text-xs text-gray-500">Không tìm thấy kết quả phù hợp cho từ khóa "<span class="font-semibold text-gray-700">{{ searchInput }}</span>"</div>
+        </div>
+
+        <!-- Too Short Query State -->
+        <div v-else-if="searchInput && searchInput.trim().length < 2" class="p-4 text-center text-xs text-gray-400">
+          Vui lòng nhập từ khóa có độ dài tối thiểu 2 ký tự...
+        </div>
+
+        <!-- Results List -->
+        <div v-else class="space-y-0.5">
+          <div
+            v-for="(result, idx) in searchResults"
+            :key="result.id"
+            class="flex items-center justify-between p-3 rounded-xl cursor-pointer transition-colors"
+            :class="idx === selectedIndex ? 'bg-blue-50/75 spotlight-item--selected' : 'hover:bg-gray-50'"
+            @mouseenter="selectedIndex = idx"
+            @click="selectResult(result)"
+          >
+            <div class="flex items-center gap-3 min-w-0">
+              <!-- Dynamic Icon based on type -->
+              <div class="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border" :class="idx === selectedIndex ? 'bg-blue-100 border-blue-200' : 'bg-gray-50 border-gray-100'">
+                <ProjectOutlined v-if="result.type === 'project'" class="text-blue-600" />
+                <UserOutlined v-else-if="result.type === 'user'" class="text-teal-600" />
+                <ApartmentOutlined v-else-if="result.type === 'subcontractor'" class="text-purple-600" />
+                <ShopOutlined v-else-if="result.type === 'supplier'" class="text-orange-600" />
+                <CarOutlined v-else-if="result.type === 'equipment'" class="text-indigo-600" />
+                <SearchOutlined v-else class="text-gray-500" />
+              </div>
+
+              <div class="min-w-0">
+                <div class="text-xs font-bold text-gray-800 truncate" :class="idx === selectedIndex ? 'text-blue-900' : ''">{{ result.title }}</div>
+                <div class="text-[10px] text-gray-400 mt-0.5 truncate">{{ result.subtitle }}</div>
+              </div>
+            </div>
+
+            <!-- Arrow navigation prompt -->
+            <div class="flex items-center gap-2 shrink-0">
+              <span v-if="result.status" class="text-[9px] font-bold px-1.5 py-0.5 rounded-full uppercase" :class="result.status === 'completed' ? 'bg-emerald-50 text-emerald-600' : 'bg-blue-50 text-blue-600'">
+                {{ result.status === 'completed' ? 'Đã hoàn thành' : 'Đang chạy' }}
+              </span>
+              <span v-if="idx === selectedIndex" class="text-[10px] text-blue-500 font-medium">Bấm Enter để mở</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </a-modal>
   </a-layout>
 </template>
 
 <script setup>
-import { ref, computed, h, watch } from 'vue'
+import { ref, computed, h, watch, onMounted, onBeforeUnmount } from 'vue'
 import { Link, usePage, router } from '@inertiajs/vue3'
 import AiChatWidget from '@/Components/Crm/AiChatWidget.vue'
 import { message } from 'ant-design-vue'
+import axios from 'axios'
 import {
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   DownOutlined,
   HomeOutlined,
   BellOutlined,
+  SearchOutlined,
+  LoadingOutlined,
   UserOutlined,
   LogoutOutlined,
   DashboardOutlined,
@@ -700,6 +824,114 @@ const handleMenuClick = ({ key }) => {
   }
 }
 
+// ─── Global Spotlight Search ───
+const isSpotlightOpen = ref(false)
+const searchInput = ref('')
+const searchResults = ref([])
+const searchLoading = ref(false)
+const selectedIndex = ref(0)
+const spotlightInputRef = ref(null)
+
+let searchDebounceTimeout = null
+
+const openSpotlight = () => {
+  isSpotlightOpen.value = true
+  searchInput.value = ''
+  searchResults.value = []
+  selectedIndex.value = 0
+  setTimeout(() => {
+    const inputEl = document.querySelector('.spotlight-input')
+    if (inputEl) inputEl.focus()
+  }, 100)
+}
+
+const closeSpotlight = () => {
+  isSpotlightOpen.value = false
+}
+
+watch(searchInput, (val) => {
+  clearTimeout(searchDebounceTimeout)
+  if (!val.trim() || val.trim().length < 2) {
+    searchResults.value = []
+    return
+  }
+  
+  searchLoading.value = true
+  searchDebounceTimeout = setTimeout(async () => {
+    try {
+      const response = await axios.get('/search-global', {
+        params: { q: val.trim() }
+      })
+      if (response.data.success) {
+        searchResults.value = response.data.results
+        selectedIndex.value = 0
+      }
+    } catch (err) {
+      console.error('Search error:', err)
+    } finally {
+      searchLoading.value = false
+    }
+  }, 300)
+})
+
+const handleKeyDown = (e) => {
+  if (!isSpotlightOpen.value) return
+
+  if (e.key === 'ArrowDown') {
+    e.preventDefault()
+    if (searchResults.value.length > 0) {
+      selectedIndex.value = (selectedIndex.value + 1) % searchResults.value.length
+      scrollToSelected()
+    }
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault()
+    if (searchResults.value.length > 0) {
+      selectedIndex.value = (selectedIndex.value - 1 + searchResults.value.length) % searchResults.value.length
+      scrollToSelected()
+    }
+  } else if (e.key === 'Enter') {
+    e.preventDefault()
+    if (searchResults.value.length > 0 && searchResults.value[selectedIndex.value]) {
+      selectResult(searchResults.value[selectedIndex.value])
+    }
+  } else if (e.key === 'Escape') {
+    closeSpotlight()
+  }
+}
+
+const selectResult = (result) => {
+  closeSpotlight()
+  router.visit(result.url)
+}
+
+const scrollToSelected = () => {
+  setTimeout(() => {
+    const selectedEl = document.querySelector('.spotlight-item--selected')
+    if (selectedEl) {
+      selectedEl.scrollIntoView({ block: 'nearest' })
+    }
+  }, 50)
+}
+
+const handleGlobalShortcut = (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+    e.preventDefault()
+    if (isSpotlightOpen.value) {
+      closeSpotlight()
+    } else {
+      openSpotlight()
+    }
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', handleGlobalShortcut)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', handleGlobalShortcut)
+})
+
 const handleLogout = () => {
   router.post('/admin/logout')
 }
@@ -761,5 +993,30 @@ const handleLogout = () => {
 
 :deep(.ant-layout-sider-collapsed) .overflow-hidden {
   display: none;
+}
+
+/* ─── Spotlight Search ─── */
+:deep(.spotlight-modal) .ant-modal-content {
+  padding: 0 !important;
+  border-radius: 16px !important;
+  overflow: hidden !important;
+  box-shadow: 0 24px 48px -12px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(0, 0, 0, 0.05) !important;
+  background: rgba(255, 255, 255, 0.96) !important;
+  backdrop-filter: blur(10px) !important;
+}
+
+:deep(.spotlight-modal) .ant-modal-body {
+  padding: 0 !important;
+}
+
+.spotlight-input {
+  border: none;
+  font-family: inherit;
+  background: transparent;
+}
+
+.spotlight-input::placeholder {
+  color: #a1a1aa;
+  font-weight: 400;
 }
 </style>

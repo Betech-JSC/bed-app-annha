@@ -112,6 +112,9 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
     Route::get('/', [CrmDashboardController::class, 'index'])->name('dashboard');
     Route::get('/dashboard', [CrmDashboardController::class, 'index']);
 
+    // Global Search
+    Route::get('/search-global', [CrmDashboardController::class, 'searchGlobal'])->name('search-global');
+
     // AI Chat
     Route::post('/ai-chat/send', [CrmAiChatController::class, 'send'])->name('ai-chat.send');
 
