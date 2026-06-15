@@ -4541,6 +4541,26 @@ class CrmProjectsController extends Controller
         );
     }
 
+    /**
+     * Xuất Excel báo cáo Lãi/Lỗ của dự án
+     */
+    public function exportPnLSummary(string $projectId)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $this->crmRequire($user, Permissions::FINANCE_VIEW, $project);
+
+        $financeService = app(\App\Services\FinanceService::class);
+        $pnlData = $financeService->getProfitLoss($projectId);
+
+        $fileName = 'Bao_cao_lai_lo_' . \Illuminate\Support\Str::slug($project->name, '_') . '_' . date('Ymd_His') . '.xlsx';
+
+        return \Maatwebsite\Excel\Facades\Excel::download(
+            new \App\Exports\ProjectPnLSummaryExport($project, $pnlData),
+            $fileName
+        );
+    }
+
     // ===================================================================
     // HELPER — CRM Notification dispatch (matching APP NotificationService)
     // ===================================================================

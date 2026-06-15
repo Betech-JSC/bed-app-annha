@@ -467,6 +467,7 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         Route::put('/{project}/material-quotas/{quota}', [CrmProjectsController::class, 'updateMaterialQuota'])->name('material-quotas.update');
         Route::delete('/{project}/material-quotas/{quota}', [CrmProjectsController::class, 'destroyMaterialQuota'])->name('material-quotas.destroy');
         Route::get('/{project}/materials/export', [CrmProjectsController::class, 'exportMaterialSummary'])->name('materials.export');
+        Route::get('/{project}/finance/pnl/export', [CrmProjectsController::class, 'exportPnLSummary'])->name('finance.pnl.export');
 
         // Attendance (CRM proxy for API AttendanceController — auth:admin)
         Route::get('/{project}/attendance/statistics', [CrmProjectsController::class, 'attendanceStatistics'])->name('attendance.statistics');

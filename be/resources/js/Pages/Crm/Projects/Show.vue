@@ -1173,13 +1173,22 @@
       <a-tab-pane key="finance" v-if="isTabVisible('finance')">
         <template #tab><a-tooltip title="Dòng tiền, Lãi/Lỗ, Ngân sách vs Thực chi, Công nợ NTP, Bảo hành" placement="bottom">Tổng hợp TC</a-tooltip></template>
         <div class="p-4 space-y-4">
-          <div class="flex gap-2 flex-wrap">
-            <a-button size="small" :type="financeView === 'cashflow' ? 'primary' : 'default'" @click="financeView = 'cashflow'">Dòng tiền</a-button>
-            <a-button size="small" :type="financeView === 'pnl' ? 'primary' : 'default'" @click="financeView = 'pnl'">Lãi / Lỗ</a-button>
-            <a-button size="small" :type="financeView === 'bva' ? 'primary' : 'default'" @click="financeView = 'bva'">NS vs Thực chi</a-button>
-            <a-button size="small" :type="financeView === 'debt' ? 'primary' : 'default'" @click="financeView = 'debt'">Công nợ NTP</a-button>
-            <a-button size="small" :type="financeView === 'warranty' ? 'primary' : 'default'" @click="financeView = 'warranty'">Bảo hành</a-button>
-            <a-button size="small" type="primary" ghost @click="loadFinanceData()" :loading="financeLoading"><template #icon><CalendarOutlined /></template>Refresh</a-button>
+          <div class="flex justify-between items-center flex-wrap gap-2">
+            <div class="flex gap-2 flex-wrap">
+              <a-button size="small" :type="financeView === 'cashflow' ? 'primary' : 'default'" @click="financeView = 'cashflow'">Dòng tiền</a-button>
+              <a-button size="small" :type="financeView === 'pnl' ? 'primary' : 'default'" @click="financeView = 'pnl'">Lãi / Lỗ</a-button>
+              <a-button size="small" :type="financeView === 'bva' ? 'primary' : 'default'" @click="financeView = 'bva'">NS vs Thực chi</a-button>
+              <a-button size="small" :type="financeView === 'debt' ? 'primary' : 'default'" @click="financeView = 'debt'">Công nợ NTP</a-button>
+              <a-button size="small" :type="financeView === 'warranty' ? 'primary' : 'default'" @click="financeView = 'warranty'">Bảo hành</a-button>
+              <a-button size="small" type="primary" ghost @click="loadFinanceData()" :loading="financeLoading"><template #icon><CalendarOutlined /></template>Refresh</a-button>
+            </div>
+            <div v-if="financeView === 'pnl' && pnlData.revenue" class="flex gap-2">
+              <a :href="`/admin/projects/${project.id}/finance/pnl/export`" target="_blank">
+                <a-button size="small" type="default" class="flex items-center text-emerald-600 border-emerald-200 hover:text-emerald-700 hover:border-emerald-300">
+                  <template #icon><DownloadOutlined /></template>Xuất báo cáo Lãi/Lỗ
+                </a-button>
+              </a>
+            </div>
           </div>
 
           <!-- Finance Error Alert -->

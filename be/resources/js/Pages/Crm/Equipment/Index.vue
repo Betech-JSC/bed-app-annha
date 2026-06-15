@@ -706,6 +706,7 @@ const openCreateCatalogModal = () => {
   editingCatalog.value = null
   catalogForm.reset()
   catalogForm.clearErrors()
+  catalogForm.transform((data) => data)
   showCatalogModal.value = true
 }
 
@@ -742,7 +743,7 @@ const handleCatalogSubmit = () => {
       }
     })
   } else {
-    catalogForm.post('/equipment/catalog', {
+    catalogForm.transform((data) => data).post('/equipment/catalog', {
       onSuccess: () => {
         showCatalogModal.value = false
         resetCatalogForm()
