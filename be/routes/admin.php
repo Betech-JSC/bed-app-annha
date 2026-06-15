@@ -619,6 +619,14 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
     Route::prefix('equipment')->name('equipment.')->group(function () {
         Route::get('/', [CrmEquipmentController::class, 'index'])->name('index');
         Route::post('/', [CrmEquipmentController::class, 'store'])->name('store');
+
+        // Catalog management (Thiết bị mẫu)
+        Route::get('/catalog', [CrmGlobalEquipmentController::class, 'index'])->name('catalog.index');
+        Route::post('/catalog', [CrmGlobalEquipmentController::class, 'store'])->name('catalog.store');
+        Route::put('/catalog/{id}', [CrmGlobalEquipmentController::class, 'update'])->name('catalog.update');
+        Route::delete('/catalog/{id}', [CrmGlobalEquipmentController::class, 'destroy'])->name('catalog.destroy');
+
+        // Wildcard ID routes
         Route::put('/{id}', [CrmEquipmentController::class, 'update'])->name('update');
         Route::delete('/{id}', [CrmEquipmentController::class, 'destroy'])->name('destroy');
         // Approval workflow
@@ -627,12 +635,6 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         Route::post('/{id}/confirm-accountant', [CrmEquipmentController::class, 'confirmAccountant'])->name('confirm.accountant');
         Route::post('/{id}/reject', [CrmEquipmentController::class, 'reject'])->name('reject');
         Route::post('/{id}/revert', [CrmEquipmentController::class, 'revertToDraft'])->name('revert');
-
-        // Catalog management (Thiết bị mẫu)
-        Route::get('/catalog', [CrmGlobalEquipmentController::class, 'index'])->name('catalog.index');
-        Route::post('/catalog', [CrmGlobalEquipmentController::class, 'store'])->name('catalog.store');
-        Route::put('/catalog/{id}', [CrmGlobalEquipmentController::class, 'update'])->name('catalog.update');
-        Route::delete('/catalog/{id}', [CrmGlobalEquipmentController::class, 'destroy'])->name('catalog.destroy');
     });
 
     // Settings
