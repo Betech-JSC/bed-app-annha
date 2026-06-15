@@ -102,12 +102,9 @@ class FinanceService
         ];
     }
 
-    /**
-     * Profit & Loss statement cho dự án
-     */
     public function getProfitLoss(int $projectId): array
     {
-        $project = Project::with(['contract', 'payments', 'costs', 'subcontractors'])->findOrFail($projectId);
+        $project = Project::with(['contract', 'payments', 'costs', 'subcontractors', 'budgets.items.costGroup'])->findOrFail($projectId);
 
         // REVENUE (Thu nhập)
         $contractValue   = (float) ($project->contract?->contract_value ?? 0);
@@ -142,6 +139,23 @@ class FinanceService
 
         $totalCosts = array_sum($costByCategory);
 
+        // BUDGETED COSTS (Dự toán chi phí) — grouped by CostGroup from project latest budget
+        $latestBudget = $project->budgets->sortByDesc('created_at')->first();
+        $budgetByCategory = [];
+        
+        foreach ($costGroups as $group) {
+            $budgetByCategory[$group->name] = 0.0;
+        }
+        $budgetByCategory['Khác'] = 0.0;
+
+        if ($latestBudget) {
+            foreach ($latestBudget->items as $item) {
+                $groupName = $item->costGroup?->name ?? 'Khác';
+                $budgetByCategory[$groupName] = ($budgetByCategory[$groupName] ?? 0.0) + (float) $item->estimated_amount;
+            }
+        }
+        $totalBudget = array_sum($budgetByCategory);
+
         // TAX
         $totalTax = $approvedCosts->sum('tax_amount');
 
@@ -154,11 +168,15 @@ class FinanceService
             $subPayments += $sub->payments()->whereIn('status', ['approved', 'paid'])->sum('amount');
         }
 
-        // P/L
+        // P/L Actual
         $grossProfit  = $totalRevenue - $totalCosts;
         $grossMargin  = $totalRevenue > 0 ? round(($grossProfit / $totalRevenue) * 100, 2) : 0;
         $netProfit    = $grossProfit - $totalTax;
         $netMargin    = $totalRevenue > 0 ? round(($netProfit / $totalRevenue) * 100, 2) : 0;
+
+        // P/L Planned (Kế hoạch / Dự toán)
+        $plannedGrossProfit = $totalRevenue - $totalBudget;
+        $plannedGrossMargin = $totalRevenue > 0 ? round(($plannedGrossProfit / $totalRevenue) * 100, 2) : 0;
 
         return [
             'revenue' => [
@@ -169,17 +187,21 @@ class FinanceService
                 'receivable'        => $totalRevenue - (float) $paymentsReceived,
             ],
             'costs' => [
-                'by_category'  => $costByCategory,
-                'total_costs'  => $totalCosts,
-                'tax'          => (float) $totalTax,
-                'warranty'     => (float) $warrantyCosts,
+                'by_category'        => $costByCategory,
+                'budget_by_category' => $budgetByCategory,
+                'total_costs'        => $totalCosts,
+                'total_budget'       => $totalBudget,
+                'tax'                => (float) $totalTax,
+                'warranty'           => (float) $warrantyCosts,
                 'subcontractor_payments' => $subPayments,
             ],
             'profit_loss' => [
-                'gross_profit'  => $grossProfit,
-                'gross_margin'  => $grossMargin,
-                'net_profit'    => $netProfit,
-                'net_margin'    => $netMargin,
+                'planned_gross_profit' => $plannedGrossProfit,
+                'planned_gross_margin' => $plannedGrossMargin,
+                'gross_profit'         => $grossProfit,
+                'gross_margin'         => $grossMargin,
+                'net_profit'           => $netProfit,
+                'net_margin'           => $netMargin,
             ],
             'project_name' => $project->name,
             'project_code' => $project->code,

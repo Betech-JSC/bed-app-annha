@@ -1232,35 +1232,180 @@
           <div v-else-if="financeView === 'pnl'">
             <div v-if="financeLoading" class="py-8 text-center"><a-spin /></div>
             <div v-else-if="!pnlData.revenue" class="py-8 text-center"><a-empty description="Chưa có dữ liệu P/L" /></div>
-            <div v-else class="space-y-4">
-              <div class="bg-green-50 border border-green-200 rounded-xl p-4">
-                <h4 class="text-sm font-bold text-green-700 mb-3">📈 DOANH THU</h4>
-                <div class="grid grid-cols-2 gap-2 text-sm">
-                  <div><span class="text-xs text-gray-500">Giá trị HĐ:</span><div class="font-bold text-green-700">{{ fmtMoney(pnlData.revenue.contract_value) }}</div></div>
-                  <div><span class="text-xs text-gray-500">Phát sinh:</span><div class="font-bold">{{ fmtMoney(pnlData.revenue.additional_value) }}</div></div>
-                  <div><span class="text-xs text-gray-500">Tổng DT:</span><div class="font-bold text-green-800 text-lg">{{ fmtMoney(pnlData.revenue.total_revenue) }}</div></div>
-                  <div><span class="text-xs text-gray-500">Còn phải thu:</span><div class="font-bold text-amber-600">{{ fmtMoney(pnlData.revenue.receivable) }}</div></div>
+            <div v-else class="space-y-6">
+              <!-- PNL KPI cards -->
+              <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <div class="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
+                  <div class="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-1">Lợi nhuận gộp Kế hoạch</div>
+                  <div class="text-xl font-black text-blue-900 mb-1">{{ fmtMoney(pnlData.profit_loss.planned_gross_profit) }}</div>
+                  <span class="text-xs font-semibold text-blue-500 bg-blue-50 px-2 py-0.5 rounded-full">Biên: {{ pnlData.profit_loss.planned_gross_margin }}%</span>
+                </div>
+                <div class="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
+                  <div class="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-1">Lợi nhuận gộp Thực tế</div>
+                  <div class="text-xl font-black mb-1" :class="pnlData.profit_loss.gross_profit >= 0 ? 'text-emerald-700' : 'text-red-700'">
+                    {{ fmtMoney(pnlData.profit_loss.gross_profit) }}
+                  </div>
+                  <span class="text-xs font-semibold px-2 py-0.5 rounded-full" :class="pnlData.profit_loss.gross_profit >= 0 ? 'text-emerald-600 bg-emerald-50' : 'text-red-600 bg-red-50'">
+                    Biên: {{ pnlData.profit_loss.gross_margin }}%
+                  </span>
+                </div>
+                <div class="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
+                  <div class="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-1">Chênh lệch lợi nhuận</div>
+                  <div class="text-xl font-black mb-1" :class="(pnlData.profit_loss.gross_profit - pnlData.profit_loss.planned_gross_profit) >= 0 ? 'text-emerald-600' : 'text-red-500'">
+                    {{ (pnlData.profit_loss.gross_profit - pnlData.profit_loss.planned_gross_profit) >= 0 ? '+' : '' }}{{ fmtMoney(pnlData.profit_loss.gross_profit - pnlData.profit_loss.planned_gross_profit) }}
+                  </div>
+                  <span class="text-xs font-semibold px-2 py-0.5 rounded-full" :class="(pnlData.profit_loss.gross_profit - pnlData.profit_loss.planned_gross_profit) >= 0 ? 'text-emerald-600 bg-emerald-50' : 'text-red-600 bg-red-50'">
+                    {{ (pnlData.profit_loss.planned_gross_profit > 0 ? ((pnlData.profit_loss.gross_profit - pnlData.profit_loss.planned_gross_profit) / pnlData.profit_loss.planned_gross_profit * 100) : 0).toFixed(1) }}% so với Kế hoạch
+                  </span>
+                </div>
+                <div class="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm relative overflow-hidden">
+                  <div class="absolute right-0 top-0 bg-teal-500 text-white text-[9px] font-bold uppercase px-3 py-1 rounded-bl-xl">Forecast</div>
+                  <div class="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-1">Dự báo lãi khi hoàn thành (EAC)</div>
+                  <div class="text-xl font-black mb-1" :class="(pnlData.revenue.total_revenue - Math.max(pnlData.costs.total_budget, pnlData.costs.total_costs)) >= 0 ? 'text-teal-700' : 'text-red-700'">
+                    {{ fmtMoney(pnlData.revenue.total_revenue - Math.max(pnlData.costs.total_budget, pnlData.costs.total_costs)) }}
+                  </div>
+                  <span class="text-xs font-semibold px-2 py-0.5 rounded-full text-teal-600 bg-teal-50">
+                    Biên EAC: {{ (pnlData.revenue.total_revenue > 0 ? ((pnlData.revenue.total_revenue - Math.max(pnlData.costs.total_budget, pnlData.costs.total_costs)) / pnlData.revenue.total_revenue * 100) : 0).toFixed(1) }}%
+                  </span>
                 </div>
               </div>
-              <div class="bg-red-50 border border-red-200 rounded-xl p-4">
-                <h4 class="text-sm font-bold text-red-700 mb-3">📉 CHI PHÍ</h4>
-                <div class="space-y-1">
-                  <div v-for="(val, cat) in pnlData.costs.by_category" :key="cat" class="flex justify-between text-xs">
-                    <span class="text-gray-600">{{ costCatLabels[cat] || cat }}</span>
-                    <span class="font-medium">{{ fmtMoney(val) }}</span>
-                  </div>
-                  <div class="flex justify-between font-bold text-sm pt-2 border-t border-red-200 mt-2">
-                    <span>Tổng chi phí</span><span class="text-red-700">{{ fmtMoney(pnlData.costs.total_costs) }}</span>
+
+              <!-- Table comparison -->
+              <div class="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm overflow-x-auto">
+                <table class="w-full text-sm border-collapse">
+                  <thead>
+                    <tr class="border-b border-gray-100 text-gray-400 font-bold uppercase text-[11px] tracking-wider text-right">
+                      <th class="text-left py-3 px-3">Khoản mục / Hạng mục</th>
+                      <th class="py-3 px-3">Dự toán (Kế hoạch)</th>
+                      <th class="py-3 px-3">Thực tế đã chi/thu</th>
+                      <th class="py-3 px-3">Chênh lệch</th>
+                      <th class="py-3 px-3 text-center">Tỷ lệ (%)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <!-- I. REVENUE -->
+                    <tr class="bg-gray-50/50 font-bold text-gray-700">
+                      <td colspan="5" class="py-3 px-3 text-left text-[12px] uppercase tracking-wider text-blue-600">I. Doanh thu (Revenue)</td>
+                    </tr>
+                    <tr class="border-b border-gray-50 text-right">
+                      <td class="text-left py-3 px-3 text-gray-600 font-medium">Giá trị hợp đồng gốc</td>
+                      <td class="py-3 px-3 font-semibold text-gray-800">{{ fmtMoney(pnlData.revenue.contract_value) }}</td>
+                      <td class="py-3 px-3 font-semibold text-gray-800">—</td>
+                      <td class="py-3 px-3">—</td>
+                      <td class="py-3 px-3 text-center">—</td>
+                    </tr>
+                    <tr class="border-b border-gray-50 text-right">
+                      <td class="text-left py-3 px-3 text-gray-600 font-medium">Doanh thu phát sinh đã duyệt</td>
+                      <td class="py-3 px-3 font-semibold text-gray-800">{{ fmtMoney(pnlData.revenue.additional_value) }}</td>
+                      <td class="py-3 px-3 font-semibold text-gray-800">—</td>
+                      <td class="py-3 px-3">—</td>
+                      <td class="py-3 px-3 text-center">—</td>
+                    </tr>
+                    <tr class="border-b border-gray-100 text-right bg-blue-50/20 font-bold text-blue-900">
+                      <td class="text-left py-3 px-3 uppercase text-xs">Tổng Doanh Thu</td>
+                      <td class="py-3 px-3">{{ fmtMoney(pnlData.revenue.total_revenue) }}</td>
+                      <td class="py-3 px-3 text-green-700">{{ fmtMoney(pnlData.revenue.payments_received) }} <span class="text-[10px] text-gray-400 font-normal block">đã thu</span></td>
+                      <td class="py-3 px-3 text-amber-600">{{ fmtMoney(pnlData.revenue.receivable) }} <span class="text-[10px] text-gray-400 font-normal block">phải thu</span></td>
+                      <td class="py-3 px-3 text-center text-blue-600">{{ (pnlData.revenue.total_revenue > 0 ? (pnlData.revenue.payments_received / pnlData.revenue.total_revenue * 100) : 0).toFixed(1) }}%</td>
+                    </tr>
+
+                    <!-- II. COSTS -->
+                    <tr class="bg-gray-50/50 font-bold text-gray-700">
+                      <td colspan="5" class="py-3 px-3 text-left text-[12px] uppercase tracking-wider text-red-600">II. Chi phí (Costs)</td>
+                    </tr>
+                    <tr v-for="(val, cat) in pnlData.costs.by_category" :key="cat" class="border-b border-gray-50 text-right">
+                      <td class="text-left py-3 px-3 text-gray-600 font-medium">{{ costCatLabels[cat] || cat }}</td>
+                      <td class="py-3 px-3 font-semibold text-gray-700">{{ fmtMoney(pnlData.costs.budget_by_category?.[cat] || 0) }}</td>
+                      <td class="py-3 px-3 font-semibold text-gray-700">{{ fmtMoney(val) }}</td>
+                      <td class="py-3 px-3" :class="((pnlData.costs.budget_by_category?.[cat] || 0) - val) >= 0 ? 'text-green-600' : 'text-red-500'">
+                        {{ fmtMoney((pnlData.costs.budget_by_category?.[cat] || 0) - val) }}
+                      </td>
+                      <td class="py-3 px-3 text-center">
+                        <a-tag :color="val > (pnlData.costs.budget_by_category?.[cat] || 0) ? 'red' : 'blue'" class="rounded-full text-[10px] border-none font-bold">
+                          {{ (pnlData.costs.budget_by_category?.[cat] ? (val / pnlData.costs.budget_by_category[cat] * 100) : 0).toFixed(1) }}%
+                        </a-tag>
+                      </td>
+                    </tr>
+                    <tr class="border-b border-gray-100 text-right bg-red-50/20 font-bold text-red-900">
+                      <td class="text-left py-3 px-3 uppercase text-xs">Tổng Chi Phí</td>
+                      <td class="py-3 px-3">{{ fmtMoney(pnlData.costs.total_budget) }}</td>
+                      <td class="py-3 px-3 text-red-600">{{ fmtMoney(pnlData.costs.total_costs) }}</td>
+                      <td class="py-3 px-3" :class="(pnlData.costs.total_budget - pnlData.costs.total_costs) >= 0 ? 'text-green-600' : 'text-red-600'">
+                        {{ fmtMoney(pnlData.costs.total_budget - pnlData.costs.total_costs) }}
+                      </td>
+                      <td class="py-3 px-3 text-center text-red-700">
+                        {{ (pnlData.costs.total_budget > 0 ? (pnlData.costs.total_costs / pnlData.costs.total_budget * 100) : 0).toFixed(1) }}%
+                      </td>
+                    </tr>
+
+                    <!-- III. PROFIT -->
+                    <tr class="bg-gray-50/50 font-bold text-gray-700">
+                      <td colspan="5" class="py-3 px-3 text-left text-[12px] uppercase tracking-wider text-emerald-600">III. Lợi nhuận gộp (Profit)</td>
+                    </tr>
+                    <tr class="border-b border-gray-50 text-right bg-emerald-50/10 font-bold text-emerald-900">
+                      <td class="text-left py-3 px-3 text-xs uppercase">Lợi nhuận gộp</td>
+                      <td class="py-3 px-3">{{ fmtMoney(pnlData.profit_loss.planned_gross_profit) }}</td>
+                      <td class="py-3 px-3">{{ fmtMoney(pnlData.profit_loss.gross_profit) }}</td>
+                      <td class="py-3 px-3" :class="(pnlData.profit_loss.gross_profit - pnlData.profit_loss.planned_gross_profit) >= 0 ? 'text-green-600' : 'text-red-500'">
+                        {{ fmtMoney(pnlData.profit_loss.gross_profit - pnlData.profit_loss.planned_gross_profit) }}
+                      </td>
+                      <td class="py-3 px-3 text-center text-emerald-600">
+                        {{ (pnlData.profit_loss.planned_gross_profit > 0 ? (pnlData.profit_loss.gross_profit / pnlData.profit_loss.planned_gross_profit * 100) : 0).toFixed(1) }}%
+                      </td>
+                    </tr>
+                    <tr class="text-right bg-emerald-50/20 font-bold text-emerald-955">
+                      <td class="text-left py-3 px-3 text-xs uppercase">Biên lợi nhuận gộp</td>
+                      <td class="py-3 px-3">{{ pnlData.profit_loss.planned_gross_margin }}%</td>
+                      <td class="py-3 px-3">{{ pnlData.profit_loss.gross_margin }}%</td>
+                      <td class="py-3 px-3" :class="(pnlData.profit_loss.gross_margin - pnlData.profit_loss.planned_gross_margin) >= 0 ? 'text-green-600' : 'text-red-500'">
+                        {{ (pnlData.profit_loss.gross_margin - pnlData.profit_loss.planned_gross_margin).toFixed(2) }}%
+                      </td>
+                      <td class="py-3 px-3 text-center">—</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <!-- Chart comparison -->
+              <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div class="lg:col-span-2 bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">
+                  <h4 class="text-sm font-bold text-gray-800 mb-4 flex items-center gap-2">
+                    <span class="w-1 h-4 bg-orange-500 rounded-full"></span> Biểu đồ so sánh Dự toán vs Thực tế
+                  </h4>
+                  <div class="h-80">
+                    <Bar :data="pnlChartData" :options="pnlChartOptions" />
                   </div>
                 </div>
-              </div>
-              <div class="rounded-xl p-4 border-2" :class="pnlData.profit_loss.net_profit >= 0 ? 'bg-blue-50 border-blue-300' : 'bg-amber-50 border-amber-300'">
-                <h4 class="text-sm font-bold mb-3" :class="pnlData.profit_loss.net_profit >= 0 ? 'text-blue-700' : 'text-amber-700'">{{ pnlData.profit_loss.net_profit >= 0 ? '✅ LÃI' : '⚠️ LỖ' }}</h4>
-                <div class="grid grid-cols-2 gap-3">
-                  <div><span class="text-xs text-gray-500">Lãi gộp:</span><div class="font-bold text-lg">{{ fmtMoney(pnlData.profit_loss.gross_profit) }}</div></div>
-                  <div><span class="text-xs text-gray-500">Biên lãi gộp:</span><div class="font-bold text-lg">{{ pnlData.profit_loss.gross_margin }}%</div></div>
-                  <div><span class="text-xs text-gray-500">Lãi ròng:</span><div class="font-bold text-lg">{{ fmtMoney(pnlData.profit_loss.net_profit) }}</div></div>
-                  <div><span class="text-xs text-gray-500">Biên ròng:</span><div class="font-bold text-lg">{{ pnlData.profit_loss.net_margin }}%</div></div>
+                <div class="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm flex flex-col">
+                  <h4 class="text-sm font-bold text-gray-800 mb-4 flex items-center gap-2">
+                    <span class="w-1 h-4 bg-teal-500 rounded-full"></span> Dự báo hoàn thành (EAC)
+                  </h4>
+                  <div class="space-y-4 flex-1 flex flex-col justify-center">
+                    <div class="p-4 bg-teal-50/50 border border-teal-100 rounded-xl">
+                      <div class="text-xs text-teal-600 font-bold uppercase tracking-wider mb-1">Doanh thu dự kiến</div>
+                      <div class="text-xl font-extrabold text-teal-800">{{ fmtMoney(pnlData.revenue.total_revenue) }}</div>
+                    </div>
+                    <div class="p-4 bg-red-50/50 border border-red-100 rounded-xl">
+                      <div class="text-xs text-red-600 font-bold uppercase tracking-wider mb-1">Chi phí EAC (Dự báo)</div>
+                      <div class="text-xl font-extrabold text-red-800">{{ fmtMoney(Math.max(pnlData.costs.total_budget, pnlData.costs.total_costs)) }}</div>
+                      <div class="text-[10px] text-gray-400 mt-1 leading-normal">
+                        * Tính theo phương pháp bảo thủ: Math.max(Dự toán, Thực chi).
+                      </div>
+                    </div>
+                    <div class="p-4 rounded-xl border border-dashed" :class="(pnlData.revenue.total_revenue - Math.max(pnlData.costs.total_budget, pnlData.costs.total_costs)) >= 0 ? 'bg-emerald-50/50 border-emerald-200' : 'bg-red-50/50 border-red-200'">
+                      <div class="text-xs font-bold uppercase tracking-wider mb-1" :class="(pnlData.revenue.total_revenue - Math.max(pnlData.costs.total_budget, pnlData.costs.total_costs)) >= 0 ? 'text-emerald-600' : 'text-red-600'">
+                        Lợi nhuận EAC (Dự báo)
+                      </div>
+                      <div class="flex items-baseline gap-2">
+                        <span class="text-2xl font-black" :class="(pnlData.revenue.total_revenue - Math.max(pnlData.costs.total_budget, pnlData.costs.total_costs)) >= 0 ? 'text-emerald-700' : 'text-red-700'">
+                          {{ fmtMoney(pnlData.revenue.total_revenue - Math.max(pnlData.costs.total_budget, pnlData.costs.total_costs)) }}
+                        </span>
+                        <span class="text-xs font-bold" :class="(pnlData.revenue.total_revenue - Math.max(pnlData.costs.total_budget, pnlData.costs.total_costs)) >= 0 ? 'text-emerald-500' : 'text-red-500'">
+                          ({{ (pnlData.revenue.total_revenue > 0 ? ((pnlData.revenue.total_revenue - Math.max(pnlData.costs.total_budget, pnlData.costs.total_costs)) / pnlData.revenue.total_revenue * 100) : 0).toFixed(1) }}%)
+                        </span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -7521,6 +7666,12 @@ import { ref, computed, watch, reactive, onMounted, onBeforeUnmount } from 'vue'
 import { Head, router, usePage } from '@inertiajs/vue3'
 import CrmLayout from '@/Layouts/CrmLayout.vue'
 import { message, Modal, notification } from 'ant-design-vue'
+import { Bar } from 'vue-chartjs'
+import {
+  Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend
+} from 'chart.js'
+
+ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend)
 import axios from 'axios'
 axios.defaults.withCredentials = true
 axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest'
@@ -8471,6 +8622,83 @@ const bvaData = ref({})
 const debtData = ref({})
 const warrantyData = ref({})
 const financeError = ref('')
+
+const pnlChartData = computed(() => {
+  const categories = Object.keys(pnlData.value?.costs?.by_category || {})
+  const budgetData = []
+  const actualData = []
+
+  categories.forEach(cat => {
+    budgetData.push(pnlData.value?.costs?.budget_by_category?.[cat] || 0)
+    actualData.push(pnlData.value?.costs?.by_category?.[cat] || 0)
+  })
+
+  const labels = categories.map(cat => costCatLabels[cat] || cat)
+
+  return {
+    labels,
+    datasets: [
+      {
+        label: 'Kế hoạch (Dự toán)',
+        backgroundColor: '#1B4F72',
+        data: budgetData,
+        borderRadius: 6
+      },
+      {
+        label: 'Thực tế (Thực chi)',
+        backgroundColor: '#E67E22',
+        data: actualData,
+        borderRadius: 6
+      }
+    ]
+  }
+})
+
+const pnlChartOptions = computed(() => {
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        position: 'bottom',
+        labels: {
+          usePointStyle: true,
+          font: { family: "'Inter', sans-serif" }
+        }
+      },
+      tooltip: {
+        callbacks: {
+          label: (context) => {
+            let label = context.dataset.label || '';
+            if (label) {
+              label += ': ';
+            }
+            if (context.parsed.y !== null) {
+              label += new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(context.parsed.y);
+            }
+            return label;
+          }
+        }
+      }
+    },
+    scales: {
+      x: {
+        grid: { display: false }
+      },
+      y: {
+        grid: { color: '#F3F5F7' },
+        ticks: {
+          callback: (value) => {
+            if (Math.abs(value) >= 1e9) return (value / 1e9).toFixed(1) + 'T'
+            if (Math.abs(value) >= 1e6) return (value / 1e6).toFixed(1) + 'Tr'
+            if (Math.abs(value) >= 1e3) return (value / 1e3).toFixed(0) + 'K'
+            return value
+          }
+        }
+      }
+    }
+  }
+})
 
 const costCatLabels = {
   material: 'Vật tư xây dựng',
