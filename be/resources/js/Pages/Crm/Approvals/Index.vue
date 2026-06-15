@@ -878,6 +878,9 @@ const ACCOUNTANT_APPROVE_TYPES = [
 const isAccountantApproveType = (record) => {
   if (!record) return false
   const type = record._approveType || record.approval_level || ''
+  if (type === 'material_bill' && record.status === 'pending_management') {
+    return false
+  }
   return ACCOUNTANT_APPROVE_TYPES.includes(type) || activeRole.value === 'accountant'
 }
 
@@ -1312,7 +1315,7 @@ const handleApproveByType = (record) => {
     'material_bill', 'equipment_rental_accountant', 'asset_usage_accountant',
     'equipment_purchase_accountant', 'equipment_inventory_accountant',
   ]
-  const isAccountantStep = accountantApproveTypes.includes(type) || activeRole.value === 'accountant'
+  const isAccountantStep = (accountantApproveTypes.includes(type) || activeRole.value === 'accountant') && !(type === 'material_bill' && record.status === 'pending_management')
   const isExempt = type === 'attendance' || record.category === 'labor'
   
   if (isAccountantStep && !isExempt) {

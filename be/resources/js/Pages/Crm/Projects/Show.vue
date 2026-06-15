@@ -743,6 +743,11 @@
       <a-tab-pane key="subcontractors" v-if="isTabVisible('subcontractors')">
         <template #tab><a-tooltip title="Theo dõi chi phí, thanh toán nhà thầu phụ" placement="bottom">Nhà thầu phụ ({{ allSubcontractorPayments.length || 0 }})</a-tooltip></template>
         <div class="p-4">
+          <div class="flex justify-end mb-3">
+            <a-button v-if="can('subcontractor_payment.create')" type="primary" size="small" @click="openSubPaymentDrawer(null)">
+              <template #icon><PlusOutlined /></template>Tạo thanh toán NTP
+            </a-button>
+          </div>
           <a-table :columns="allSubPayCols" :data-source="allSubcontractorPayments" :pagination="{ pageSize: 10 }" row-key="id" size="small" class="crm-table hover-row" :custom-row="(r) => ({ onClick: () => openSubPaymentDetail(r), style: 'cursor: pointer' })">
             <template #bodyCell="{ column, record }">
               <template v-if="column.key === 'subcontractor_name'">
@@ -5564,10 +5569,19 @@
     </template>
   </a-drawer>
 
-  <a-drawer v-model:open="showSubPayCreateDrawer" title="Tạo phiếu thanh toán NTP" :width="500" @close="showSubPayCreateDrawer = false" destroy-on-close class="crm-drawer">
+  <a-drawer v-model:open="showSubPayCreateDrawer" title="Tạo phiếu thanh toán NTP" :width="500" @close="closeSubPayCreateDrawer" destroy-on-close class="crm-drawer">
     <div class="px-3 py-2">
-      <!-- Info Badge -->
-      <div v-if="subPayTarget" class="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 text-blue-900 px-4 py-3 rounded-xl mb-6 flex items-center shadow-sm">
+      <!-- Subcontractor Selection Dropdown (if not pre-selected) -->
+      <div v-if="!isSubPayTargetPreselected" class="mb-4 bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
+        <a-form-item label="Nhà thầu phụ" required class="mb-0">
+          <a-select v-model:value="selectedSubId" class="w-full rounded-lg" size="large" placeholder="Chọn nhà thầu phụ..." @change="onSubPayTargetChange" show-search option-filter-prop="label">
+            <a-select-option v-for="sub in project.subcontractors || []" :key="sub.id" :value="sub.id" :label="sub.name">{{ sub.name }}</a-select-option>
+          </a-select>
+        </a-form-item>
+      </div>
+
+      <!-- Info Badge (if pre-selected) -->
+      <div v-else-if="subPayTarget" class="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 text-blue-900 px-4 py-3 rounded-xl mb-6 flex items-center shadow-sm">
         <div class="w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-sm mr-3 flex-shrink-0 text-blue-500 font-bold text-lg">
            🏢
         </div>
@@ -9832,7 +9846,7 @@ const openSubModal = (s) => {
     : { name: '', category: '', total_quote: null, bank_name: '', bank_account_number: '', bank_account_name: '', progress_start_date: null, progress_end_date: null, progress_status: 'not_started', global_subcontractor_id: null, create_cost: true, cost_group_id: null, deleted_attachment_ids: [] }
   showSubModal.value = true
 }
-const onGlobalSubSelect = (id) => {
+const onGlobalSubChange = (id) => {
   if (!id) {
     subForm.value.name = '';
     return;
@@ -9891,12 +9905,29 @@ const subPayFiles = ref([])
 const editingSubPayId = ref(null)
 const subPayForm = ref({ payment_stage: '', amount: null, payment_date: null, payment_method: 'bank_transfer', reference_number: '', description: '' })
 const isLaborSub = computed(() => subPayTarget.value?.category?.toLowerCase().trim() === 'nhân công')
+
+const selectedSubId = ref(null)
+const isSubPayTargetPreselected = ref(false)
+
+const onSubPayTargetChange = (id) => {
+  const sub = (props.project?.subcontractors || []).find(s => s.id === id)
+  subPayTarget.value = sub || null
+}
+
+const closeSubPayCreateDrawer = () => {
+  showSubPayCreateDrawer.value = false
+  subPayTarget.value = null
+  selectedSubId.value = null
+  isSubPayTargetPreselected.value = false
+}
 const openSubPaymentHistory = (sub) => {
   subDetail.value = sub
   showSubPayDrawer.value = true
 }
 const openSubPaymentDrawer = (sub) => {
   subPayTarget.value = sub
+  selectedSubId.value = sub ? sub.id : null
+  isSubPayTargetPreselected.value = !!sub
   subPayFiles.value = []
   subPayForm.value = { payment_stage: '', amount: null, payment_date: dayjs().format('YYYY-MM-DD'), payment_method: 'bank_transfer', reference_number: '', description: '' }
   showSubPayCreateDrawer.value = true
@@ -9923,7 +9954,10 @@ const editSubPayment = (sub, p) => {
 }
 const saveSubPayment = (sub) => {
   if (!sub) sub = subPayTarget.value
-  if (!sub) return
+  if (!sub) {
+    message.warning('Vui lòng chọn nhà thầu phụ')
+    return
+  }
 
   const isLabor = sub.category && sub.category.toLowerCase().trim() === 'nhân công'
   if (isLabor) {
@@ -9942,6 +9976,8 @@ const saveSubPayment = (sub) => {
     editingSubPayId.value = null
     subPayFiles.value = []
     subPayForm.value = { payment_stage: '', amount: null, payment_date: dayjs().format('YYYY-MM-DD'), payment_method: 'bank_transfer', reference_number: '', description: '' }
+    selectedSubId.value = null
+    isSubPayTargetPreselected.value = false
   }
 
   const fd = new FormData()
