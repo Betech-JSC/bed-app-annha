@@ -207,7 +207,76 @@ class Subcontractor extends Model
 
         static::creating(function ($subcontractor) {
             if (empty($subcontractor->uuid)) {
-                $subcontractor->uuid = Str::uuid();
+                $subcontractor->uuid = (string) Str::uuid();
+            }
+        });
+
+        static::saving(function ($subcontractor) {
+            // Nếu không có global_subcontractor_id nhưng có name (người dùng nhập tên trực tiếp)
+            if (empty($subcontractor->global_subcontractor_id) && !empty($subcontractor->name)) {
+                $nameTrimmed = trim($subcontractor->name);
+                // Tìm kiếm GlobalSubcontractor có cùng tên
+                $gs = \App\Models\GlobalSubcontractor::where('name', $nameTrimmed)->first();
+                if (!$gs) {
+                    // Tạo mới nếu chưa có
+                    $gs = \App\Models\GlobalSubcontractor::create([
+                        'name' => $nameTrimmed,
+                        'category' => $subcontractor->category,
+                        'bank_name' => $subcontractor->bank_name,
+                        'bank_account_number' => $subcontractor->bank_account_number,
+                        'bank_account_name' => $subcontractor->bank_account_name,
+                    ]);
+                } else {
+                    // Nếu đã có GlobalSubcontractor trùng tên, cập nhật thông tin mới nhất sang GlobalSubcontractor
+                    $updateData = [];
+                    if (!empty($subcontractor->category) && $subcontractor->category !== $gs->category) {
+                        $updateData['category'] = $subcontractor->category;
+                    }
+                    if (!empty($subcontractor->bank_name) && $subcontractor->bank_name !== $gs->bank_name) {
+                        $updateData['bank_name'] = $subcontractor->bank_name;
+                    }
+                    if (!empty($subcontractor->bank_account_number) && $subcontractor->bank_account_number !== $gs->bank_account_number) {
+                        $updateData['bank_account_number'] = $subcontractor->bank_account_number;
+                    }
+                    if (!empty($subcontractor->bank_account_name) && $subcontractor->bank_account_name !== $gs->bank_account_name) {
+                        $updateData['bank_account_name'] = $subcontractor->bank_account_name;
+                    }
+                    
+                    if (!empty($updateData)) {
+                        $gs->update($updateData);
+                    }
+                }
+                // Gán liên kết id cho nhà thầu phụ dự án
+                $subcontractor->global_subcontractor_id = $gs->id;
+            } elseif (!empty($subcontractor->global_subcontractor_id)) {
+                // Nếu có global_subcontractor_id, đảm bảo đồng bộ thông tin 2 chiều
+                $gs = \App\Models\GlobalSubcontractor::find($subcontractor->global_subcontractor_id);
+                if ($gs) {
+                    if (empty($subcontractor->name)) {
+                        $subcontractor->name = $gs->name;
+                    }
+                    
+                    $updateData = [];
+                    if (!empty($subcontractor->name) && trim($subcontractor->name) !== $gs->name) {
+                        $updateData['name'] = trim($subcontractor->name);
+                    }
+                    if (!empty($subcontractor->category) && $subcontractor->category !== $gs->category) {
+                        $updateData['category'] = $subcontractor->category;
+                    }
+                    if (!empty($subcontractor->bank_name) && $subcontractor->bank_name !== $gs->bank_name) {
+                        $updateData['bank_name'] = $subcontractor->bank_name;
+                    }
+                    if (!empty($subcontractor->bank_account_number) && $subcontractor->bank_account_number !== $gs->bank_account_number) {
+                        $updateData['bank_account_number'] = $subcontractor->bank_account_number;
+                    }
+                    if (!empty($subcontractor->bank_account_name) && $subcontractor->bank_account_name !== $gs->bank_account_name) {
+                        $updateData['bank_account_name'] = $subcontractor->bank_account_name;
+                    }
+                    
+                    if (!empty($updateData)) {
+                        $gs->update($updateData);
+                    }
+                }
             }
         });
     }
