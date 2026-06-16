@@ -6938,12 +6938,17 @@
   </a-modal>
 
   <!-- ACCOUNTANT CONFIRM PAYMENT MODAL (Unified for Material, Sub, Rental, Usage, Purchase, Project Payment) -->
-  <a-modal v-model:open="showConfirmPaymentModal" :title="{ material: 'Kế toán xác nhận - Phiếu Vật tư', cost: 'Kế toán xác nhận - Phiếu chi', sub: 'Kế toán xác nhận - Thanh toán thầu phụ', rental: 'Kế toán xác nhận - Thuê thiết bị', usage: 'Kế toán xác nhận - Sử dụng thiết bị', purchase: 'Kế toán xác nhận - Mua thiết bị', project_payment: 'Kế toán xác nhận - Đợt thanh toán từ Khách hàng' }[confirmPaymentType]" @ok="confirmApprovePayment" ok-text="Xác nhận" cancel-text="Hủy" centered class="crm-modal" :ok-button-props="{ disabled: !confirmPaymentFiles.length || confirmPaymentLoading }" :confirm-loading="confirmPaymentLoading">
+  <a-modal v-model:open="showConfirmPaymentModal" :title="{ material: 'Kế toán xác nhận - Phiếu Vật tư', cost: 'Kế toán xác nhận - Phiếu chi', sub: 'Kế toán xác nhận - Thanh toán thầu phụ', rental: 'Kế toán xác nhận - Thuê thiết bị', usage: 'Kế toán xác nhận - Sử dụng thiết bị', purchase: 'Kế toán xác nhận - Mua thiết bị', project_payment: 'Kế toán xác nhận - Đợt thanh toán từ Khách hàng' }[confirmPaymentType]" @ok="confirmApprovePayment" ok-text="Xác nhận" cancel-text="Hủy" centered class="crm-modal" :ok-button-props="{ disabled: (confirmPaymentType !== 'project_payment' && !confirmPaymentFiles.length) || confirmPaymentLoading }" :confirm-loading="confirmPaymentLoading">
     <div class="p-4 space-y-4">
       <div class="bg-blue-50 p-3 rounded-xl border border-blue-100 flex items-center gap-3">
         <div class="w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center shadow-lg"><InfoCircleOutlined /></div>
         <div class="text-[11px] text-blue-700 leading-tight">
-          Xác nhận khoản chi này thuộc hạng mục ngân sách nào để hệ thống tự động trừ định mức của dự án.
+          <template v-if="confirmPaymentType === 'project_payment'">
+            Xác nhận đợt thanh toán này từ khách hàng để ghi nhận doanh thu thực tế cho dự án.
+          </template>
+          <template v-else>
+            Xác nhận khoản chi này thuộc hạng mục ngân sách nào để hệ thống tự động trừ định mức của dự án.
+          </template>
         </div>
       </div>
 
@@ -6951,19 +6956,19 @@
          <div class="flex justify-between">
             <span class="text-gray-400">Tên / Số phiếu:</span>
             <span class="font-bold text-gray-700">
-              {{ confirmPaymentTarget.bill_number || confirmPaymentTarget.payment_number || confirmPaymentTarget.name || confirmPaymentTarget.equipment_name || confirmPaymentTarget.notes || `#${confirmPaymentTarget.id}` }}
+               {{ confirmPaymentTarget.bill_number || confirmPaymentTarget.payment_number || confirmPaymentTarget.name || confirmPaymentTarget.equipment_name || confirmPaymentTarget.notes || `#${confirmPaymentTarget.id}` }}
             </span>
          </div>
          <div v-if="confirmPaymentTarget.total_amount || confirmPaymentTarget.amount || confirmPaymentTarget.total_cost || confirmPaymentTarget.actual_amount" class="flex justify-between mt-1">
             <span class="text-gray-400">Số tiền:</span>
             <span class="font-bold text-red-600">
-              {{ fmt(confirmPaymentTarget.total_amount || confirmPaymentTarget.amount || confirmPaymentTarget.total_cost || confirmPaymentTarget.actual_amount) }}
+               {{ fmt(confirmPaymentTarget.total_amount || confirmPaymentTarget.amount || confirmPaymentTarget.total_cost || confirmPaymentTarget.actual_amount) }}
             </span>
          </div>
          <div v-if="confirmPaymentTarget.quantity" class="flex justify-between mt-1">
             <span class="text-gray-400">Số lượng:</span>
             <span class="font-bold text-gray-700">
-              {{ confirmPaymentTarget.quantity }}
+               {{ confirmPaymentTarget.quantity }}
             </span>
          </div>
          <div v-if="confirmPaymentSub" class="flex justify-between mt-1">
@@ -6991,7 +6996,7 @@
         </div>
       </div>
 
-      <div>
+      <div v-if="confirmPaymentType !== 'project_payment'">
         <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Chọn hạng mục Ngân sách</div>
         <a-select v-model:value="confirmPaymentBudgetItem" class="w-full" placeholder="Chọn hạng mục dự toán..." show-search :filter-option="(input, option) => (option.label || '').toLowerCase().indexOf(input.toLowerCase()) >= 0">
           <a-select-opt-group v-for="budget in (project.budgets || []).filter(b => b.status === 'active')" :key="budget.id">
@@ -7014,10 +7019,13 @@
         <div v-if="!confirmPaymentBudgetItem" class="mt-1 text-[10px] text-amber-500 italic">* Khuyên dùng: Hãy chọn hạng mục để theo dõi thực chi chính xác.</div>
       </div>
 
-      <!-- Accountant payment proof upload (Mandatory) -->
+      <!-- Accountant payment proof upload -->
       <div class="border-t border-dashed pt-4">
         <div class="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1">
-          <UploadOutlined class="text-blue-500" /> Chứng từ thanh toán / Ủy nhiệm chi * <span class="text-red-500">(Bắt buộc)</span>
+          <UploadOutlined class="text-blue-500" /> Chứng từ thanh toán / Ủy nhiệm chi
+          <template v-if="confirmPaymentType !== 'project_payment'">
+            * <span class="text-red-500">(Bắt buộc)</span>
+          </template>
         </div>
         
         <div class="flex flex-col gap-2">
@@ -7050,7 +7058,7 @@
               </a-button>
             </div>
           </div>
-          <div v-else class="text-[10px] text-red-500 pl-1 mt-1 font-medium flex items-center gap-1">
+          <div v-else-if="confirmPaymentType !== 'project_payment'" class="text-[10px] text-red-500 pl-1 mt-1 font-medium flex items-center gap-1">
             <span class="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span>
             * Vui lòng đính kèm chứng từ chuyển khoản để hoàn tất xác nhận.
           </div>
@@ -11294,7 +11302,7 @@ const confirmSubPayment = (sub, p) => {
 }
 
 const confirmApprovePayment = () => {
-  if (!confirmPaymentFiles.value.length) {
+  if (confirmPaymentType.value !== 'project_payment' && !confirmPaymentFiles.value.length) {
     message.warning('Vui lòng chọn ít nhất một chứng từ chuyển khoản.')
     return
   }
