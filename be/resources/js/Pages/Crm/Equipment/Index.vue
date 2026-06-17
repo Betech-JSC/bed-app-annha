@@ -374,6 +374,25 @@
             </a-form-item>
           </a-col>
         </a-row>
+        <a-row :gutter="16" v-if="editing && filters.tab === 'assets'">
+          <a-col :span="12">
+            <a-form-item label="Trạng thái tài sản">
+              <a-select v-model:value="form.status" style="width: 100%;" size="large">
+                <a-select-option value="available">Trong kho</a-select-option>
+                <a-select-option value="in_use">Đang sử dụng</a-select-option>
+                <a-select-option value="maintenance">Bảo trì</a-select-option>
+                <a-select-option value="retired">Thanh lý</a-select-option>
+              </a-select>
+              <span class="text-red-500 text-xs" v-if="form.errors.status">{{ form.errors.status }}</span>
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="Số Serial (S/N)">
+              <a-input v-model:value="form.serial_number" size="large" placeholder="VD: SN123456..." />
+              <span class="text-red-500 text-xs" v-if="form.errors.serial_number">{{ form.errors.serial_number }}</span>
+            </a-form-item>
+          </a-col>
+        </a-row>
       </template>
 
       <!-- Common Fields -->
@@ -601,13 +620,13 @@
       <!-- Fixed action bar -->
       <div class="fixed bottom-0 right-0 w-[560px] p-4 bg-white/80 backdrop-blur-md border-t border-gray-100 flex justify-between items-center z-20">
         <div>
-          <a-popconfirm v-if="selectedItem.status === 'draft'" :title="filters.tab === 'approvals' ? 'Xóa phiếu mua này?' : 'Xóa tài sản này?'" @confirm="deleteItem(selectedItem); showDetailDrawer = false">
+          <a-popconfirm v-if="selectedItem.status === 'draft' || filters.tab === 'assets'" :title="filters.tab === 'approvals' ? 'Xóa phiếu mua này?' : 'Xóa tài sản này?'" @confirm="deleteItem(selectedItem); showDetailDrawer = false">
             <a-button danger size="small"><DeleteOutlined /> Xóa</a-button>
           </a-popconfirm>
         </div>
         <div class="flex gap-2">
           <a-button @click="showDetailDrawer = false">Đóng</a-button>
-          <a-button v-if="selectedItem.status === 'draft'" @click="openEditModal(selectedItem)"><EditOutlined /> Sửa</a-button>
+          <a-button v-if="selectedItem.status === 'draft' || filters.tab === 'assets'" @click="openEditModal(selectedItem)"><EditOutlined /> Sửa</a-button>
           <a-button v-if="selectedItem.status === 'draft'" type="primary" @click="submitItem(selectedItem)"><SendOutlined /> Gửi duyệt</a-button>
           <a-button v-if="selectedItem.status === 'pending_management' && can('equipment.approve')" type="primary" class="!bg-green-500 !border-green-500 hover:!bg-green-600" @click="approveItem(selectedItem)"><CheckCircleOutlined /> BĐH Duyệt</a-button>
           <a-button v-if="selectedItem.status === 'pending_accountant' && can('cost.approve.accountant')" type="primary" @click="confirmItem(selectedItem)"><CheckSquareOutlined /> KT Xác nhận & Nhập kho</a-button>
@@ -863,7 +882,9 @@ const form = useForm({
   project_id: null,
   supplier_id: null,
   purchase_date: new Date().toISOString().split('T')[0],
-  items: [{ name: '', code: '', quantity: 1, unit_price: 0, unit: 'cái', global_equipment_id: null }]
+  items: [{ name: '', code: '', quantity: 1, unit_price: 0, unit: 'cái', global_equipment_id: null }],
+  status: 'available',
+  serial_number: ''
 })
 
 const handleGlobalEquipmentChange = (val) => {
@@ -943,7 +964,9 @@ const openEditModal = (e) => {
       quantity: e.quantity || 1,
       purchase_price: e.purchase_price,
       unit: e.unit || 'cái',
-      notes: e.notes || ''
+      notes: e.notes || '',
+      status: e.status || 'available',
+      serial_number: e.serial_number || ''
     })
   }
   fileList.value = []

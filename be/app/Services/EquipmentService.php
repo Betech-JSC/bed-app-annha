@@ -39,6 +39,7 @@ class EquipmentService
             'purchase_price' => 'nullable|numeric|min:0',
             'unit'           => 'nullable|string|max:50',
             'notes'          => 'nullable|string',
+            'status'         => 'nullable|string|max:50',
         ];
 
         $validator = Validator::make($data, $rules);
@@ -52,7 +53,7 @@ class EquipmentService
                 'global_equipment_id', 'name', 'code', 'category', 'type', 'brand', 'model',
                 'serial_number', 'quantity', 'purchase_price', 'unit', 'notes',
                 'project_id', 'purchase_date', 'useful_life_months',
-                'depreciation_method', 'residual_value', 'rental_rate_per_day',
+                'depreciation_method', 'residual_value', 'rental_rate_per_day', 'status',
             ])->toArray();
 
             if (!$equipment) {
@@ -60,9 +61,9 @@ class EquipmentService
                 $fillable['created_by'] = $user ? $user->id : null;
                 $equipment = Equipment::create($fillable);
             } else {
-                // Block update if not in draft/rejected
-                if (!in_array($equipment->status, ['draft', 'rejected'])) {
-                    throw new \Exception('Chỉ có thể chỉnh sửa thiết bị ở trạng thái Nháp hoặc Từ chối.');
+                // Block update if pending approval
+                if (in_array($equipment->status, ['pending_management', 'pending_accountant'])) {
+                    throw new \Exception('Không thể chỉnh sửa thiết bị đang trong quá trình phê duyệt.');
                 }
                 $equipment->update($fillable);
             }
@@ -88,8 +89,8 @@ class EquipmentService
      */
     public function delete(Equipment $equipment): bool
     {
-        if ($equipment->status !== 'draft') {
-            throw new \Exception('Chỉ có thể xóa thiết bị ở trạng thái Nháp.');
+        if (in_array($equipment->status, ['pending_management', 'pending_accountant'])) {
+            throw new \Exception('Không thể xóa thiết bị đang trong quá trình phê duyệt.');
         }
 
         // Check for active allocations (from ApiController logic)
