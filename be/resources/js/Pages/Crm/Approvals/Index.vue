@@ -1030,6 +1030,9 @@ const activeItems = computed(() => {
   if (activeStatus.value === 'approved' || activeStatus.value === 'rejected') {
     let items = [...(props.recentItems || [])]
 
+    // Filter by active role
+    items = items.filter(i => roleTypeMap[activeRole.value]?.includes(i.type))
+
     if (activeStatus.value === 'approved') {
       items = items.filter(i => APPROVED_STATUSES.includes(i.status))
     } else {

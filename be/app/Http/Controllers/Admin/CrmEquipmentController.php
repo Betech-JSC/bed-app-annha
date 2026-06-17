@@ -6,6 +6,10 @@ use App\Http\Controllers\Controller;
 use App\Models\Equipment;
 use App\Models\GlobalEquipment;
 use App\Models\Attachment;
+use App\Models\Project;
+use App\Models\Supplier;
+use App\Models\EquipmentPurchase;
+use App\Models\EquipmentPurchaseItem;
 use App\Constants\Permissions;
 use App\Services\EquipmentService;
 use Illuminate\Http\Request;
@@ -15,6 +19,8 @@ use Inertia\Inertia;
 
 class CrmEquipmentController extends Controller
 {
+    use CrmAuthorization;
+
     protected $equipmentService;
     protected $attachmentService;
 
@@ -40,29 +46,48 @@ class CrmEquipmentController extends Controller
             }
             $equipment = $query->orderByDesc('created_at')->paginate(20)->withQueryString();
         } else {
-            $query = Equipment::with(['creator:id,name', 'approver:id,name', 'confirmer:id,name', 'attachments']);
-            if ($search) {
-                $query->where(function ($q) use ($search) {
-                    $q->where('name', 'like', "%{$search}%")
-                        ->orWhere('code', 'like', "%{$search}%")
-                        ->orWhere('serial_number', 'like', "%{$search}%");
-                });
-            }
-            if ($status = $request->query('status')) {
-                $query->where('status', $status);
-            }
             if ($tab === 'approvals') {
-                $query->whereIn('status', ['draft', 'pending_management', 'pending_accountant', 'rejected']);
-            } elseif ($tab === 'assets') {
-                $query->whereIn('status', ['available', 'in_use', 'maintenance', 'retired']);
+                $query = EquipmentPurchase::with(['creator:id,name', 'approver:id,name', 'confirmer:id,name', 'project:id,name', 'supplier:id,name', 'items', 'attachments']);
+                if ($search) {
+                    $query->where(function ($q) use ($search) {
+                        $q->where('notes', 'like', "%{$search}%")
+                            ->orWhereHas('project', function ($pq) use ($search) {
+                                $pq->where('name', 'like', "%{$search}%");
+                            })
+                            ->orWhereHas('items', function ($iq) use ($search) {
+                                $iq->where('name', 'like', "%{$search}%")
+                                    ->orWhere('code', 'like', "%{$search}%");
+                            });
+                    });
+                }
+                if ($status = $request->query('status')) {
+                    $query->where('status', $status);
+                } else {
+                    $query->whereIn('status', ['draft', 'pending_management', 'pending_accountant', 'rejected']);
+                }
+                $equipment = $query->orderByDesc('created_at')->paginate(20)->withQueryString();
+            } else { // tab === 'assets'
+                $query = Equipment::with(['creator:id,name', 'approver:id,name', 'confirmer:id,name', 'supplier:id,name', 'attachments']);
+                if ($search) {
+                    $query->where(function ($q) use ($search) {
+                        $q->where('name', 'like', "%{$search}%")
+                            ->orWhere('code', 'like', "%{$search}%")
+                            ->orWhere('serial_number', 'like', "%{$search}%");
+                    });
+                }
+                if ($status = $request->query('status')) {
+                    $query->where('status', $status);
+                } else {
+                    $query->whereIn('status', ['available', 'in_use', 'maintenance', 'retired']);
+                }
+                $equipment = $query->orderByDesc('created_at')->paginate(20)->withQueryString();
             }
-            $equipment = $query->orderByDesc('created_at')->paginate(20)->withQueryString();
         }
 
         $stats = [
-            'total'       => Equipment::count(),
-            'draft'       => Equipment::where('status', 'draft')->count(),
-            'pending'     => Equipment::whereIn('status', ['pending_management', 'pending_accountant'])->count(),
+            'total'       => Equipment::count() + EquipmentPurchase::count(),
+            'draft'       => EquipmentPurchase::where('status', 'draft')->count(),
+            'pending'     => EquipmentPurchase::whereIn('status', ['pending_management', 'pending_accountant'])->count(),
             'available'   => Equipment::where('status', 'available')->count(),
             'in_use'      => Equipment::where('status', 'in_use')->count(),
             'maintenance' => Equipment::where('status', 'maintenance')->count(),
@@ -71,29 +96,46 @@ class CrmEquipmentController extends Controller
         // Retrieve all global equipments to show in the dropdown for creating new equipment purchases
         $globalEquipments = GlobalEquipment::orderBy('name')->get(['id', 'name', 'code', 'category', 'brand', 'model', 'unit', 'unit_price']);
 
+        $projects = Project::orderBy('name')->get(['id', 'name', 'code']);
+        $suppliers = Supplier::orderBy('name')->get(['id', 'name']);
+
         return Inertia::render('Crm/Equipment/Index', [
             'equipment' => $equipment,
             'stats'     => $stats,
             'globalEquipments' => $globalEquipments,
+            'projects'  => $projects,
+            'suppliers' => $suppliers,
             'filters'   => $request->only(['search', 'status', 'tab']),
         ]);
     }
 
     /**
-     * Tạo tài sản mới (draft status)
+     * Tạo phiếu mua thiết bị mới (draft status)
      */
     public function store(Request $request)
     {
         $user = auth('admin')->user();
 
-        try {
-            $equipment = $this->equipmentService->upsert($request->all(), null, $user);
+        $request->validate([
+            'project_id' => 'required|exists:projects,id',
+            'supplier_id' => 'required|exists:suppliers,id',
+            'purchase_date' => 'required|date',
+            'notes' => 'nullable|string',
+            'items' => 'required|array|min:1',
+            'items.*.name' => 'required|string|max:255',
+            'items.*.code' => 'nullable|string|max:50',
+            'items.*.quantity' => 'required|integer|min:1',
+            'items.*.unit_price' => 'required|numeric|min:0',
+        ]);
 
-            // Handle legacy file uploads (standard form) — service handles attachment_ids
+        try {
+            $purchase = $this->equipmentService->upsertPurchase($request->all(), null, $user);
+
+            // Handle file uploads
             if ($request->hasFile('attachments')) {
                 foreach ($request->file('attachments') as $file) {
-                    $path = $file->store('equipment-attachments', 'public');
-                    $equipment->attachments()->create([
+                    $path = $file->store('equipment-purchase-attachments', 'public');
+                    $purchase->attachments()->create([
                         'file_path'     => $path,
                         'file_name'     => $file->getClientOriginalName(),
                         'original_name' => $file->getClientOriginalName(),
@@ -106,7 +148,7 @@ class CrmEquipmentController extends Controller
                 }
             }
 
-            return back()->with('success', 'Đã tạo tài sản (Nháp). Vui lòng gửi duyệt.');
+            return back()->with('success', 'Đã tạo phiếu mua thiết bị (Nháp). Vui lòng gửi duyệt.');
         } catch (\Illuminate\Validation\ValidationException $e) {
             return back()->withErrors($e->errors())->withInput();
         } catch (\Exception $e) {
@@ -116,68 +158,96 @@ class CrmEquipmentController extends Controller
 
     public function update(Request $request, $id)
     {
-        $eq = Equipment::findOrFail($id);
         $user = auth('admin')->user();
+        $tab = $request->query('tab', 'approvals');
 
         try {
-            $this->equipmentService->upsert($request->all(), $eq, $user);
+            if ($tab === 'approvals') {
+                $request->validate([
+                    'project_id' => 'required|exists:projects,id',
+                    'supplier_id' => 'required|exists:suppliers,id',
+                    'purchase_date' => 'required|date',
+                    'notes' => 'nullable|string',
+                    'items' => 'required|array|min:1',
+                    'items.*.name' => 'required|string|max:255',
+                    'items.*.code' => 'nullable|string|max:50',
+                    'items.*.quantity' => 'required|integer|min:1',
+                    'items.*.unit_price' => 'required|numeric|min:0',
+                ]);
 
-            // Handle file uploads (same pattern as store)
-            if ($request->hasFile('attachments')) {
-                foreach ($request->file('attachments') as $file) {
-                    $path = $file->store('equipment-attachments', 'public');
-                    $eq->attachments()->create([
-                        'file_path'     => $path,
-                        'file_name'     => $file->getClientOriginalName(),
-                        'original_name' => $file->getClientOriginalName(),
-                        'file_url'      => '/storage/' . $path,
-                        'mime_type'     => $file->getClientMimeType(),
-                        'file_size'     => $file->getSize(),
-                        'type'          => $file->getClientOriginalExtension(),
-                        'uploaded_by'   => $user->id ?? null,
-                    ]);
+                $purchase = EquipmentPurchase::findOrFail($id);
+                $this->equipmentService->upsertPurchase($request->all(), $purchase, $user);
+
+                // Handle file uploads (append)
+                if ($request->hasFile('attachments')) {
+                    foreach ($request->file('attachments') as $file) {
+                        $path = $file->store('equipment-purchase-attachments', 'public');
+                        $purchase->attachments()->create([
+                            'file_path'     => $path,
+                            'file_name'     => $file->getClientOriginalName(),
+                            'original_name' => $file->getClientOriginalName(),
+                            'file_url'      => '/storage/' . $path,
+                            'mime_type'     => $file->getClientMimeType(),
+                            'file_size'     => $file->getSize(),
+                            'type'          => $file->getClientOriginalExtension(),
+                            'uploaded_by'   => $user->id ?? null,
+                        ]);
+                    }
+                }
+            } else {
+                $eq = Equipment::findOrFail($id);
+                $this->equipmentService->upsert($request->all(), $eq, $user);
+
+                // Handle file uploads
+                if ($request->hasFile('attachments')) {
+                    foreach ($request->file('attachments') as $file) {
+                        $path = $file->store('equipment-attachments', 'public');
+                        $eq->attachments()->create([
+                            'file_path'     => $path,
+                            'file_name'     => $file->getClientOriginalName(),
+                            'original_name' => $file->getClientOriginalName(),
+                            'file_url'      => '/storage/' . $path,
+                            'mime_type'     => $file->getClientMimeType(),
+                            'file_size'     => $file->getSize(),
+                            'type'          => $file->getClientOriginalExtension(),
+                            'uploaded_by'   => $user->id ?? null,
+                        ]);
+                    }
                 }
             }
 
-            if ($request->wantsJson() || $request->is('api/*')) {
-                return response()->json([
-                    'success' => true,
-                    'message' => 'Đã cập nhật thiết bị.',
-                    'data' => $eq->load('attachments')
-                ]);
-            }
-
-            return back()->with('success', 'Đã cập nhật tài sản.');
+            return back()->with('success', 'Đã cập nhật thành công.');
         } catch (\Illuminate\Validation\ValidationException $e) {
-            if ($request->wantsJson() || $request->is('api/*')) {
-                return response()->json(['success' => false, 'errors' => $e->errors()], 422);
-            }
             return back()->withErrors($e->errors())->withInput();
         } catch (\Exception $e) {
-            if ($request->wantsJson() || $request->is('api/*')) {
-                return response()->json(['success' => false, 'message' => $e->getMessage()], 403);
-            }
             return back()->with('error', $e->getMessage());
         }
     }
 
     public function destroy(Request $request, $id)
     {
-        $eq = Equipment::findOrFail($id);
+        $tab = $request->query('tab', 'approvals');
 
         try {
-            $this->equipmentService->delete($eq);
-            return back()->with('success', 'Đã xóa tài sản.');
-        } catch (\Exception $e) {
-            if ($request->wantsJson() || $request->is('api/*')) {
-                return response()->json(['success' => false, 'message' => $e->getMessage()], 403);
+            if ($tab === 'approvals') {
+                $purchase = EquipmentPurchase::findOrFail($id);
+                if ($purchase->status !== 'draft') {
+                    throw new \Exception('Chỉ có thể xóa phiếu mua ở trạng thái Nháp.');
+                }
+                $purchase->items()->delete();
+                $purchase->delete();
+            } else {
+                $eq = Equipment::findOrFail($id);
+                $this->equipmentService->delete($eq);
             }
+            return back()->with('success', 'Đã xóa thành công.');
+        } catch (\Exception $e) {
             return back()->with('error', $e->getMessage());
         }
     }
 
     // ====================================================================
-    // APPROVAL WORKFLOW: draft → pending_management → pending_accountant → available
+    // APPROVAL WORKFLOW: draft → pending_management → pending_accountant → completed
     // ====================================================================
 
     /**
@@ -185,174 +255,112 @@ class CrmEquipmentController extends Controller
      */
     public function submit($id)
     {
-        $eq = Equipment::findOrFail($id);
+        $purchase = EquipmentPurchase::findOrFail($id);
 
-        if (!in_array($eq->status, ['draft', 'rejected'])) {
+        if (!in_array($purchase->status, ['draft', 'rejected'])) {
             $msg = 'Chỉ có thể gửi duyệt khi ở trạng thái Nháp hoặc Từ chối.';
-            return request()->wantsJson() 
-                ? response()->json(['success' => false, 'message' => $msg], 422)
-                : back()->with('error', $msg);
+            return back()->with('error', $msg);
         }
 
-        $eq->update([
+        $purchase->update([
             'status'           => 'pending_management',
             'rejection_reason' => null,
         ]);
 
-        $this->equipmentService->syncCost($eq);
-
-        $msg = 'Đã gửi duyệt. Chờ BĐH xét duyệt.';
-        return request()->wantsJson() 
-            ? response()->json(['success' => true, 'message' => $msg, 'data' => $eq])
-            : back()->with('success', $msg);
+        return back()->with('success', 'Đã gửi duyệt phiếu mua thiết bị.');
     }
 
-    /**
-     * BĐH duyệt (pending_management → pending_accountant)
-     */
     public function approveManagement($id)
     {
-        $user = auth()->user(); // Use default guard (sanctum for API, session for Web)
+        $user = auth('admin')->user();
+        $purchase = EquipmentPurchase::findOrFail($id);
 
-        // Try 'admin' guard if needed for Web context
-        if (!$user && auth('admin')->check()) {
-            $user = auth('admin')->user();
+        $this->crmRequire($user, Permissions::COST_APPROVE_MANAGEMENT, $purchase->project);
+
+        if ($purchase->status !== 'pending_management') {
+            return back()->with('error', 'Phiếu mua thiết bị không ở trạng thái chờ Ban điều hành duyệt.');
         }
 
-        if (!$user || !$user->hasPermission(Permissions::EQUIPMENT_APPROVE)) {
-            $msg = 'Bạn không có quyền duyệt.';
-            return request()->wantsJson() 
-                ? response()->json(['success' => false, 'message' => $msg], 403)
-                : back()->with('error', $msg);
-        }
+        $this->equipmentService->approvePurchaseByManagement($purchase, $user);
 
-        $eq = Equipment::findOrFail($id);
-
-        if ($eq->status !== 'pending_management') {
-            $msg = 'Tài sản không ở trạng thái chờ BĐH duyệt.';
-            return request()->wantsJson() 
-                ? response()->json(['success' => false, 'message' => $msg], 422)
-                : back()->with('error', $msg);
-        }
-
-        $eq->update([
-            'status'      => 'pending_accountant',
-            'approved_by' => $user->id,
-            'approved_at' => now(),
-        ]);
-
-        $this->equipmentService->syncCost($eq);
-
-        $msg = 'BĐH đã duyệt. Chuyển sang Kế toán xác nhận chi và nhập kho.';
-        return request()->wantsJson() 
-            ? response()->json(['success' => true, 'message' => $msg, 'data' => $eq])
-            : back()->with('success', $msg);
+        return back()->with('success', 'Ban điều hành đã duyệt phiếu mua thiết bị.');
     }
 
-    /**
-     * KT xác nhận chi & nhập kho (pending_accountant → available)
-     */
     public function confirmAccountant(Request $request, $id)
     {
-        $user = auth()->user();
-        if (!$user && auth('admin')->check()) {
-            $user = auth('admin')->user();
-        }
+        $user = auth('admin')->user();
+        $purchase = EquipmentPurchase::findOrFail($id);
+        
+        $this->crmRequire($user, Permissions::COST_APPROVE_ACCOUNTANT, $purchase->project);
 
-        if (!$user || !$user->hasPermission(Permissions::COST_APPROVE_ACCOUNTANT)) {
-            $msg = 'Bạn không có quyền xác nhận.';
-            return request()->wantsJson() 
-                ? response()->json(['success' => false, 'message' => $msg], 403)
-                : back()->with('error', $msg);
-        }
-
-        $eq = Equipment::findOrFail($id);
-
-        if ($eq->status !== 'pending_accountant') {
-            $msg = 'Tài sản không ở trạng thái chờ Kế toán.';
-            return request()->wantsJson() 
-                ? response()->json(['success' => false, 'message' => $msg], 422)
-                : back()->with('error', $msg);
+        if ($purchase->status !== 'pending_accountant') {
+            return back()->with('error', 'Phiếu mua thiết bị không ở trạng thái chờ Kế toán xác nhận.');
         }
 
         try {
-            // Mandatorily attach uploaded files to the Equipment Purchase
-            $request->merge(['description' => 'after']);
-            $this->attachmentService->handleCrmUpload($request, $eq, "equipment-attachments/{$eq->id}", true);
-        } catch (\Exception $e) {
-            $msg = 'Lỗi đính kèm chứng từ: ' . $e->getMessage();
-            return request()->wantsJson() 
-                ? response()->json(['success' => false, 'message' => $msg], 422)
-                : back()->with('error', $msg);
-        }
+            // Handle file uploads (must have files)
+            if (!$request->hasFile('files') && $purchase->attachments()->count() === 0) {
+                return back()->with('error', 'Bắt buộc phải có ít nhất một chứng từ trước khi Kế toán duyệt.');
+            }
 
-        $eq->update([
-            'status'       => 'available',
-            'confirmed_by' => $user->id,
-            'confirmed_at' => now(),
-        ]);
+            if ($request->hasFile('files')) {
+                foreach ($request->file('files') as $file) {
+                    $path = $file->store('equipment-purchase-attachments', 'public');
+                    $purchase->attachments()->create([
+                        'file_path'     => $path,
+                        'file_name'     => $file->getClientOriginalName(),
+                        'original_name' => $file->getClientOriginalName(),
+                        'file_url'      => '/storage/' . $path,
+                        'mime_type'     => $file->getClientMimeType(),
+                        'file_size'     => $file->getSize(),
+                        'description'   => 'after', // accountant proof
+                        'type'          => $file->getClientOriginalExtension(),
+                        'uploaded_by'   => $user->id ?? null,
+                    ]);
+                }
+            }
 
-        $this->equipmentService->syncCost($eq);
+            $this->equipmentService->confirmPurchaseByAccountant($purchase, $user);
 
-        $msg = 'Kế toán đã xác nhận chi. Tài sản đã nhập kho.';
-        return request()->wantsJson() 
-            ? response()->json(['success' => true, 'message' => $msg, 'data' => $eq])
-            : back()->with('success', $msg);
-    }
-
-    /**
-     * Từ chối (pending_management/pending_accountant → rejected)
-     */
-    public function reject(Request $request, $id)
-    {
-        $user = auth()->user();
-        if (!$user && auth('admin')->check()) {
-            $user = auth('admin')->user();
-        }
-
-        $eq = Equipment::findOrFail($id);
-
-        if (!in_array($eq->status, ['pending_management', 'pending_accountant'])) {
-            $msg = 'Tài sản không ở trạng thái chờ duyệt.';
-            return request()->wantsJson() 
-                ? response()->json(['success' => false, 'message' => $msg], 422)
-                : back()->with('error', $msg);
-        }
-
-        $validated = $request->validate([
-            'reason' => 'required|string|max:500',
-        ]);
-
-        $eq->update([
-            'status'           => 'rejected',
-            'rejection_reason' => $validated['reason'],
-        ]);
-
-        $this->equipmentService->syncCost($eq);
-
-        $msg = 'Đã từ chối phiếu mua tài sản.';
-        return request()->wantsJson() 
-            ? response()->json(['success' => true, 'message' => $msg, 'data' => $eq])
-            : back()->with('success', $msg);
-    }
-
-    /**
-     * Hoàn duyệt tài sản (confirmed/approved → draft)
-     */
-    public function revertToDraft($id)
-    {
-        $user = auth()->user() ?: auth('admin')->user();
-        if (!$user || !$user->hasPermission(Permissions::EQUIPMENT_REVERT)) {
-            return back()->with('error', 'Bạn không có quyền hoàn duyệt.');
-        }
-
-        $eq = Equipment::findOrFail($id);
-
-        try {
-            $this->equipmentService->revertToDraft($eq, $user);
-            return back()->with('success', 'Đã hoàn duyệt hồ sơ tài sản về trạng thái nháp.');
+            return back()->with('success', 'Kế toán xác nhận và nhập kho thiết bị thành công.');
         } catch (\Exception $e) {
             return back()->with('error', 'Lỗi: ' . $e->getMessage());
         }
+    }
+
+    public function reject(Request $request, $id)
+    {
+        $request->validate([
+            'reason' => 'required|string|max:500',
+        ]);
+
+        $user = auth('admin')->user();
+        $purchase = EquipmentPurchase::findOrFail($id);
+
+        // Can reject if they can approve at current stage
+        if ($purchase->status === 'pending_management') {
+            $this->crmRequire($user, Permissions::COST_APPROVE_MANAGEMENT, $purchase->project);
+        } else {
+            $this->crmRequire($user, Permissions::COST_APPROVE_ACCOUNTANT, $purchase->project);
+        }
+
+        $this->equipmentService->rejectPurchase($purchase, $request->reason, $user);
+
+        return back()->with('success', 'Đã từ chối phiếu mua thiết bị.');
+    }
+
+    public function revertToDraft($id)
+    {
+        $user = auth('admin')->user();
+        $purchase = EquipmentPurchase::findOrFail($id);
+
+        $this->crmRequire($user, Permissions::EQUIPMENT_REVERT, $purchase->project);
+
+        $purchase->update([
+            'status' => 'draft',
+            'rejection_reason' => null,
+        ]);
+
+        return back()->with('success', 'Đã hoàn duyệt phiếu mua thiết bị về Nháp.');
     }
 }

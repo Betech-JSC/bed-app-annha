@@ -7,9 +7,13 @@
         <template #icon><PlusOutlined /></template>
         Thêm thiết bị mẫu
       </a-button>
-      <a-button v-else type="primary" size="large" @click="openCreateModal">
+      <a-button v-else-if="filters.tab === 'approvals'" type="primary" size="large" @click="openCreateModal">
         <template #icon><PlusOutlined /></template>
-        Tạo tài sản
+        Tạo phiếu mua thiết bị
+      </a-button>
+      <a-button v-else type="primary" size="large" @click="switchToApprovalsAndCreate">
+        <template #icon><PlusOutlined /></template>
+        Đăng ký mua thiết bị
       </a-button>
     </template>
   </PageHeader>
@@ -79,6 +83,37 @@
           </div>
         </template>
 
+        <!-- Purchase Columns (approvals tab) -->
+        <template v-if="column.key === 'purchase_code'">
+          <div class="flex flex-col cursor-pointer" @click="openDetail(record)">
+            <span class="font-bold text-blue-600 hover:underline">#EP-{{ record.id }}</span>
+            <span class="text-[10px] text-gray-400 font-mono" v-if="record.purchase_date">{{ fmtDate(record.purchase_date) }}</span>
+          </div>
+        </template>
+        <template v-else-if="column.key === 'project'">
+          <div class="text-xs font-semibold text-gray-700 max-w-[170px] truncate" :title="record.project?.name">
+            {{ record.project?.name || '—' }}
+          </div>
+        </template>
+        <template v-else-if="column.key === 'supplier'">
+          <div class="text-xs text-gray-600 max-w-[170px] truncate" :title="record.supplier?.name">
+            {{ record.supplier?.name || '—' }}
+          </div>
+        </template>
+        <template v-else-if="column.key === 'purchase_items'">
+          <div class="text-[11px] text-gray-600 max-w-[250px] truncate">
+            <div v-for="(item, idx) in record.items" :key="item.id || idx" class="leading-relaxed">
+              • {{ item.name }} <span class="text-gray-400 font-normal">({{ item.quantity }} {{ item.unit || 'cái' }})</span>
+            </div>
+            <span v-if="!record.items?.length" class="text-gray-400 italic">Chưa có thiết bị</span>
+          </div>
+        </template>
+        <template v-else-if="column.key === 'purchase_total'">
+          <div class="text-right">
+            <span class="font-bold text-emerald-600 text-xs">{{ formatCurrency(record.total_amount) }}</span>
+          </div>
+        </template>
+
         <!-- Equipment Columns -->
         <template v-else-if="column.key === 'name'">
           <div class="flex items-center gap-3 cursor-pointer" @click="openDetail(record)">
@@ -132,95 +167,216 @@
   </div>
 
   <!-- CREATE/EDIT MODAL -->
-  <a-modal v-model:open="showModal" :title="editing ? 'Chỉnh sửa tài sản' : 'Tạo tài sản mới'" :width="680" @ok="handleSubmit" @cancel="resetForm" ok-text="Lưu" cancel-text="Hủy" class="crm-modal" centered destroy-on-close :confirm-loading="form.processing">
+  <a-modal v-model:open="showModal" :title="editing ? (filters.tab === 'approvals' ? 'Chỉnh sửa phiếu mua thiết bị' : 'Chỉnh sửa tài sản') : (filters.tab === 'approvals' ? 'Tạo phiếu mua thiết bị mới' : 'Tạo tài sản mới')" :width="680" @ok="handleSubmit" @cancel="resetForm" ok-text="Lưu" cancel-text="Hủy" class="crm-modal" centered destroy-on-close :confirm-loading="form.processing">
     <a-form layout="vertical" class="mt-4">
-      <a-row :gutter="16">
-        <a-col :span="12">
-          <a-form-item label="Thiết bị mẫu">
-            <a-select
-              v-model:value="form.global_equipment_id"
-              show-search
-              placeholder="Chọn thiết bị mẫu..."
-              option-filter-prop="label"
-              size="large"
-              allow-clear
-              @change="handleGlobalEquipmentChange"
-            >
-              <a-select-option v-for="ge in props.globalEquipments" :key="ge.id" :value="ge.id" :label="ge.name">
-                {{ ge.name }} <span class="text-gray-400 font-mono text-xs">({{ ge.code }})</span>
-              </a-select-option>
-            </a-select>
-            <span class="text-red-500 text-xs" v-if="form.errors.global_equipment_id">{{ form.errors.global_equipment_id }}</span>
-          </a-form-item>
-        </a-col>
-        <a-col :span="6">
-          <a-form-item label="Mã tài sản">
-            <a-input v-model:value="form.code" size="large" placeholder="Tự sinh nếu trống" />
-            <span class="text-red-500 text-xs" v-if="form.errors.code">{{ form.errors.code }}</span>
-          </a-form-item>
-        </a-col>
-        <a-col :span="6">
-          <a-form-item label="Đơn vị tính">
-            <a-input v-model:value="form.unit" size="large" placeholder="VD: cái, bộ" />
-            <span class="text-red-500 text-xs" v-if="form.errors.unit">{{ form.errors.unit }}</span>
-          </a-form-item>
-        </a-col>
-      </a-row>
-      <a-row :gutter="16">
-        <a-col :span="24">
-          <a-form-item label="Tên tài sản" required>
-            <a-input v-model:value="form.name" size="large" placeholder="VD: Máy xúc Komatsu PC200" />
-            <span class="text-red-500 text-xs" v-if="form.errors.name">{{ form.errors.name }}</span>
-          </a-form-item>
-        </a-col>
-      </a-row>
-      <a-row :gutter="16">
-        <a-col :span="8">
-          <a-form-item label="Loại">
-            <a-select v-model:value="form.category" style="width: 100%;" size="large" placeholder="Chọn loại...">
-              <a-select-option v-for="(label, val) in categoryLabels" :key="val" :value="val">
-                {{ label }}
-              </a-select-option>
-            </a-select>
-            <span class="text-red-500 text-xs" v-if="form.errors.category">{{ form.errors.category }}</span>
-          </a-form-item>
-        </a-col>
-        <a-col :span="8">
-          <a-form-item label="Hãng">
-            <a-input v-model:value="form.brand" size="large" />
-            <span class="text-red-500 text-xs" v-if="form.errors.brand">{{ form.errors.brand }}</span>
-          </a-form-item>
-        </a-col>
-        <a-col :span="8">
-          <a-form-item label="Model">
-            <a-input v-model:value="form.model" size="large" />
-            <span class="text-red-500 text-xs" v-if="form.errors.model">{{ form.errors.model }}</span>
-          </a-form-item>
-        </a-col>
-      </a-row>
-      <a-row :gutter="16">
-        <a-col :span="8">
-          <a-form-item label="Số lượng">
-            <a-input-number v-model:value="form.quantity" :min="1" class="w-full" size="large" />
-            <span class="text-red-500 text-xs" v-if="form.errors.quantity">{{ form.errors.quantity }}</span>
-          </a-form-item>
-        </a-col>
-        <a-col :span="8">
-          <a-form-item label="Đơn giá (VND)">
-            <a-input-number v-model:value="form.purchase_price" :min="0" class="w-full" size="large"
-              :formatter="(v) => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')"
-              :parser="v => v.replace(/,/g, '')" />
-            <span class="text-red-500 text-xs" v-if="form.errors.purchase_price">{{ form.errors.purchase_price }}</span>
-          </a-form-item>
-        </a-col>
-        <a-col :span="8">
-          <a-form-item label="Thành tiền">
-            <div class="h-10 flex items-center font-bold text-emerald-600 text-lg">
-              {{ formatCurrency((form.quantity || 1) * (form.purchase_price || 0)) }}
+      <template v-if="filters.tab === 'approvals'">
+        <a-row :gutter="16">
+          <a-col :span="12">
+            <a-form-item label="Dự án" required>
+              <a-select v-model:value="form.project_id" placeholder="Chọn dự án..." size="large" show-search option-filter-prop="label">
+                <a-select-option v-for="p in props.projects" :key="p.id" :value="p.id" :label="p.name">
+                  {{ p.name }} <span class="text-gray-400 font-mono text-xs">({{ p.code }})</span>
+                </a-select-option>
+              </a-select>
+              <span class="text-red-500 text-xs" v-if="form.errors.project_id">{{ form.errors.project_id }}</span>
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="Nhà cung cấp" required>
+              <a-select v-model:value="form.supplier_id" placeholder="Chọn nhà cung cấp..." size="large" show-search option-filter-prop="label">
+                <a-select-option v-for="s in props.suppliers" :key="s.id" :value="s.id" :label="s.name">
+                  {{ s.name }}
+                </a-select-option>
+              </a-select>
+              <span class="text-red-500 text-xs" v-if="form.errors.supplier_id">{{ form.errors.supplier_id }}</span>
+            </a-form-item>
+          </a-col>
+        </a-row>
+        <a-row :gutter="16">
+          <a-col :span="12">
+            <a-form-item label="Ngày mua" required>
+              <a-input v-model:value="form.purchase_date" type="date" size="large" />
+              <span class="text-red-500 text-xs" v-if="form.errors.purchase_date">{{ form.errors.purchase_date }}</span>
+            </a-form-item>
+          </a-col>
+        </a-row>
+
+        <div class="border-t border-gray-100 pt-4 mt-2">
+          <div class="flex justify-between items-center mb-3">
+            <span class="text-xs font-bold text-gray-500 uppercase tracking-wider">Danh sách thiết bị mua sắm</span>
+            <a-button type="dashed" size="small" @click="addItem">
+              <template #icon><PlusOutlined /></template> Thêm dòng
+            </a-button>
+          </div>
+
+          <div class="space-y-4 max-h-[300px] overflow-y-auto pr-1">
+            <div v-for="(item, idx) in form.items" :key="idx" class="p-3 bg-gray-50 rounded-xl border border-gray-100 relative group/row">
+              <a-button 
+                type="text" 
+                danger 
+                shape="circle" 
+                size="small" 
+                class="absolute -top-2 -right-2 bg-white shadow-sm border border-gray-100 opacity-0 group-hover/row:opacity-100 transition-opacity z-10 animate-fade-in" 
+                @click="removeItem(idx)"
+              >
+                <template #icon><CloseOutlined /></template>
+              </a-button>
+
+              <a-row :gutter="12">
+                <a-col :span="12">
+                  <a-form-item label="Thiết bị mẫu" class="!mb-2">
+                    <a-select
+                      v-model:value="item.global_equipment_id"
+                      show-search
+                      placeholder="Chọn thiết bị mẫu..."
+                      option-filter-prop="label"
+                      size="small"
+                      allow-clear
+                      @change="(val) => handleRowTemplateChange(idx, val)"
+                    >
+                      <a-select-option v-for="ge in props.globalEquipments" :key="ge.id" :value="ge.id" :label="ge.name">
+                        {{ ge.name }} <span class="text-gray-400 font-mono text-[10px]">({{ ge.code }})</span>
+                      </a-select-option>
+                    </a-select>
+                  </a-form-item>
+                </a-col>
+                <a-col :span="12">
+                  <a-form-item label="Tên thiết bị" required class="!mb-2">
+                    <a-input v-model:value="item.name" size="small" placeholder="Tên thiết bị..." />
+                    <span class="text-red-500 text-[10px]" v-if="form.errors[`items.${idx}.name`]">{{ form.errors[`items.${idx}.name`] }}</span>
+                  </a-form-item>
+                </a-col>
+              </a-row>
+
+              <a-row :gutter="12">
+                <a-col :span="6">
+                  <a-form-item label="Mã thiết bị" class="!mb-0">
+                    <a-input v-model:value="item.code" size="small" placeholder="Tự sinh..." />
+                  </a-form-item>
+                </a-col>
+                <a-col :span="4">
+                  <a-form-item label="SL" required class="!mb-0">
+                    <a-input-number v-model:value="item.quantity" :min="1" size="small" class="w-full" />
+                    <span class="text-red-500 text-[10px]" v-if="form.errors[`items.${idx}.quantity`]">{{ form.errors[`items.${idx}.quantity`] }}</span>
+                  </a-form-item>
+                </a-col>
+                <a-col :span="4">
+                  <a-form-item label="ĐVT" required class="!mb-0">
+                    <a-input v-model:value="item.unit" size="small" placeholder="cái" />
+                  </a-form-item>
+                </a-col>
+                <a-col :span="10">
+                  <a-form-item label="Đơn giá (đ)" required class="!mb-0">
+                    <a-input-number v-model:value="item.unit_price" :min="0" size="small" class="w-full"
+                      :formatter="(v) => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')"
+                      :parser="v => v.replace(/,/g, '')" />
+                    <span class="text-red-500 text-[10px]" v-if="form.errors[`items.${idx}.unit_price`]">{{ form.errors[`items.${idx}.unit_price`] }}</span>
+                  </a-form-item>
+                </a-col>
+              </a-row>
             </div>
-          </a-form-item>
-        </a-col>
-      </a-row>
+          </div>
+
+          <div class="mt-4 flex justify-between items-center bg-emerald-50/50 p-3 rounded-xl border border-emerald-100 animate-pulse-subtle">
+            <span class="text-xs font-bold text-gray-500 uppercase tracking-wider">Tổng giá trị phiếu:</span>
+            <span class="font-extra-bold text-emerald-600 text-lg">
+              {{ formatCurrency(form.items.reduce((sum, item) => sum + (item.quantity || 0) * (item.unit_price || 0), 0)) }}
+            </span>
+          </div>
+        </div>
+      </template>
+
+      <template v-else>
+        <a-row :gutter="16">
+          <a-col :span="12">
+            <a-form-item label="Thiết bị mẫu">
+              <a-select
+                v-model:value="form.global_equipment_id"
+                show-search
+                placeholder="Chọn thiết bị mẫu..."
+                option-filter-prop="label"
+                size="large"
+                allow-clear
+                @change="handleGlobalEquipmentChange"
+              >
+                <a-select-option v-for="ge in props.globalEquipments" :key="ge.id" :value="ge.id" :label="ge.name">
+                  {{ ge.name }} <span class="text-gray-400 font-mono text-xs">({{ ge.code }})</span>
+                </a-select-option>
+              </a-select>
+              <span class="text-red-500 text-xs" v-if="form.errors.global_equipment_id">{{ form.errors.global_equipment_id }}</span>
+            </a-form-item>
+          </a-col>
+          <a-col :span="6">
+            <a-form-item label="Mã tài sản">
+              <a-input v-model:value="form.code" size="large" placeholder="Tự sinh nếu trống" />
+              <span class="text-red-500 text-xs" v-if="form.errors.code">{{ form.errors.code }}</span>
+            </a-form-item>
+          </a-col>
+          <a-col :span="6">
+            <a-form-item label="Đơn vị tính">
+              <a-input v-model:value="form.unit" size="large" placeholder="VD: cái, bộ" />
+              <span class="text-red-500 text-xs" v-if="form.errors.unit">{{ form.errors.unit }}</span>
+            </a-form-item>
+          </a-col>
+        </a-row>
+        <a-row :gutter="16">
+          <a-col :span="24">
+            <a-form-item label="Tên tài sản" required>
+              <a-input v-model:value="form.name" size="large" placeholder="VD: Máy xúc Komatsu PC200" />
+              <span class="text-red-500 text-xs" v-if="form.errors.name">{{ form.errors.name }}</span>
+            </a-form-item>
+          </a-col>
+        </a-row>
+        <a-row :gutter="16">
+          <a-col :span="8">
+            <a-form-item label="Loại">
+              <a-select v-model:value="form.category" style="width: 100%;" size="large" placeholder="Chọn loại...">
+                <a-select-option v-for="(label, val) in categoryLabels" :key="val" :value="val">
+                  {{ label }}
+                </a-select-option>
+              </a-select>
+              <span class="text-red-500 text-xs" v-if="form.errors.category">{{ form.errors.category }}</span>
+            </a-form-item>
+          </a-col>
+          <a-col :span="8">
+            <a-form-item label="Hãng">
+              <a-input v-model:value="form.brand" size="large" />
+              <span class="text-red-500 text-xs" v-if="form.errors.brand">{{ form.errors.brand }}</span>
+            </a-form-item>
+          </a-col>
+          <a-col :span="8">
+            <a-form-item label="Model">
+              <a-input v-model:value="form.model" size="large" />
+              <span class="text-red-500 text-xs" v-if="form.errors.model">{{ form.errors.model }}</span>
+            </a-form-item>
+          </a-col>
+        </a-row>
+        <a-row :gutter="16">
+          <a-col :span="8">
+            <a-form-item label="Số lượng">
+              <a-input-number v-model:value="form.quantity" :min="1" class="w-full" size="large" />
+              <span class="text-red-500 text-xs" v-if="form.errors.quantity">{{ form.errors.quantity }}</span>
+            </a-form-item>
+          </a-col>
+          <a-col :span="8">
+            <a-form-item label="Đơn giá (VND)">
+              <a-input-number v-model:value="form.purchase_price" :min="0" class="w-full" size="large"
+                :formatter="(v) => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')"
+                :parser="v => v.replace(/,/g, '')" />
+              <span class="text-red-500 text-xs" v-if="form.errors.purchase_price">{{ form.errors.purchase_price }}</span>
+            </a-form-item>
+          </a-col>
+          <a-col :span="8">
+            <a-form-item label="Thành tiền">
+              <div class="h-10 flex items-center font-bold text-emerald-600 text-lg">
+                {{ formatCurrency((form.quantity || 1) * (form.purchase_price || 0)) }}
+              </div>
+            </a-form-item>
+          </a-col>
+        </a-row>
+      </template>
+
+      <!-- Common Fields -->
       <a-form-item label="Chứng từ (Hóa đơn, Hợp đồng...)">
         <a-upload
           :file-list="fileList" 
@@ -291,16 +447,23 @@
     </div>
   </a-modal>
 
-  <!-- DETAIL DRAWER -->
-  <a-drawer v-model:open="showDetailDrawer" title="Chi tiết Tài sản" :width="560" @close="selectedItem = null" destroy-on-close class="crm-drawer">
+  <a-drawer v-model:open="showDetailDrawer" :title="filters.tab === 'approvals' ? 'Chi tiết Phiếu mua thiết bị' : 'Chi tiết Tài sản'" :width="560" @close="selectedItem = null" destroy-on-close class="crm-drawer">
     <div v-if="selectedItem" class="space-y-6 pb-24">
       <!-- Header -->
       <div class="bg-gray-50 p-5 rounded-2xl border border-gray-100 flex items-center justify-between">
         <div class="flex items-center gap-3">
-          <div class="w-12 h-12 rounded-xl bg-blue-500 flex items-center justify-center text-white shrink-0 shadow-lg shadow-blue-100">🏗️</div>
+          <div class="w-12 h-12 rounded-xl bg-blue-500 flex items-center justify-center text-white shrink-0 shadow-lg shadow-blue-100">
+            {{ filters.tab === 'approvals' ? '📋' : '🏗️' }}
+          </div>
           <div>
-            <div class="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-0.5">Mã: {{ selectedItem.code || `#${selectedItem.id}` }}</div>
-            <div class="text-lg font-bold text-gray-800">{{ selectedItem.name }}</div>
+            <template v-if="filters.tab === 'approvals'">
+              <div class="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-0.5">Mã phiếu: #EP-{{ selectedItem.id }}</div>
+              <div class="text-lg font-bold text-gray-800">Phiếu mua thiết bị</div>
+            </template>
+            <template v-else>
+              <div class="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-0.5">Mã: {{ selectedItem.code || `#${selectedItem.id}` }}</div>
+              <div class="text-lg font-bold text-gray-800">{{ selectedItem.name }}</div>
+            </template>
           </div>
         </div>
         <a-tag :color="statusColors[selectedItem.status]" class="rounded-full px-4 py-1 text-xs font-semibold">{{ statusLabels[selectedItem.status] || selectedItem.status }}</a-tag>
@@ -312,17 +475,84 @@
         <div class="text-sm text-red-700">{{ selectedItem.rejection_reason }}</div>
       </div>
 
-      <!-- Info -->
-      <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
-        <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2 text-blue-500"><InfoCircleOutlined /> Thông tin tài sản</div>
-        <div class="grid grid-cols-1 gap-1 text-sm">
-          <div class="flex justify-between items-center py-2.5 border-b border-gray-50"><span class="text-gray-400">Loại</span><span class="font-semibold">{{ selectedItem.category || '—' }}</span></div>
-          <div class="flex justify-between items-center py-2.5 border-b border-gray-50"><span class="text-gray-400">Hãng / Model</span><span class="font-semibold">{{ [selectedItem.brand, selectedItem.model].filter(Boolean).join(' / ') || '—' }}</span></div>
-          <div class="flex justify-between items-center py-2.5 border-b border-gray-50"><span class="text-gray-400">Số lượng</span><span class="font-semibold">{{ selectedItem.quantity || 1 }}</span></div>
-          <div class="flex justify-between items-center py-2.5 border-b border-gray-50"><span class="text-gray-400">Đơn giá</span><span class="font-semibold">{{ formatCurrency(selectedItem.purchase_price) }}</span></div>
-          <div class="flex justify-between items-center py-2.5"><span class="text-gray-400">Thành tiền</span><span class="font-bold text-emerald-600 text-lg">{{ formatCurrency((selectedItem.quantity || 1) * (selectedItem.purchase_price || 0)) }}</span></div>
+      <!-- Info for Approvals tab -->
+      <template v-if="filters.tab === 'approvals'">
+        <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm space-y-4">
+          <div class="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2 text-blue-500">
+            <InfoCircleOutlined /> Thông tin phiếu mua
+          </div>
+          <div class="grid grid-cols-1 gap-1 text-sm">
+            <div class="flex justify-between items-center py-2.5 border-b border-gray-50">
+              <span class="text-gray-400">Dự án</span>
+              <span class="font-semibold text-gray-800">{{ selectedItem.project?.name || '—' }}</span>
+            </div>
+            <div class="flex justify-between items-center py-2.5 border-b border-gray-50">
+              <span class="text-gray-400">Nhà cung cấp</span>
+              <span class="font-semibold text-gray-800">{{ selectedItem.supplier?.name || '—' }}</span>
+            </div>
+            <div class="flex justify-between items-center py-2.5 border-b border-gray-50">
+              <span class="text-gray-400">Ngày mua</span>
+              <span class="font-semibold text-gray-800">{{ fmtDate(selectedItem.purchase_date) }}</span>
+            </div>
+            <div class="flex justify-between items-center py-2.5">
+              <span class="text-gray-400">Tổng giá trị</span>
+              <span class="font-bold text-emerald-600 text-lg">{{ formatCurrency(selectedItem.total_amount) }}</span>
+            </div>
+          </div>
         </div>
-      </div>
+
+        <!-- Purchase Items list -->
+        <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm space-y-3">
+          <div class="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2 text-indigo-500">
+            📦 Danh sách thiết bị mua sắm ({{ selectedItem.items?.length || 0 }})
+          </div>
+          <div class="divide-y divide-gray-50">
+            <div v-for="(item, idx) in selectedItem.items" :key="item.id || idx" class="py-3 flex justify-between items-start">
+              <div class="min-w-0 pr-4">
+                <div class="font-semibold text-gray-800 truncate">{{ item.name }}</div>
+                <div class="text-[10px] text-gray-400 font-mono mt-0.5 uppercase">
+                  Mã: {{ item.code || 'Tự sinh' }} • ĐVT: {{ item.unit || 'cái' }}
+                </div>
+              </div>
+              <div class="text-right shrink-0">
+                <div class="font-bold text-gray-700">{{ item.quantity }} × {{ formatCurrency(item.unit_price) }}</div>
+                <div class="text-xs font-bold text-emerald-600 mt-0.5">{{ formatCurrency(item.quantity * item.unit_price) }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </template>
+
+      <!-- Info for other tabs -->
+      <template v-else>
+        <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
+          <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2 text-blue-500">
+            <InfoCircleOutlined /> Thông tin tài sản
+          </div>
+          <div class="grid grid-cols-1 gap-1 text-sm">
+            <div class="flex justify-between items-center py-2.5 border-b border-gray-50">
+              <span class="text-gray-400">Loại</span>
+              <span class="font-semibold">{{ categoryLabels[selectedItem.category] || selectedItem.category || '—' }}</span>
+            </div>
+            <div class="flex justify-between items-center py-2.5 border-b border-gray-50">
+              <span class="text-gray-400">Hãng / Model</span>
+              <span class="font-semibold">{{ [selectedItem.brand, selectedItem.model].filter(Boolean).join(' / ') || '—' }}</span>
+            </div>
+            <div class="flex justify-between items-center py-2.5 border-b border-gray-50">
+              <span class="text-gray-400">Số lượng</span>
+              <span class="font-semibold">{{ selectedItem.quantity || 1 }} {{ selectedItem.unit || 'cái' }}</span>
+            </div>
+            <div class="flex justify-between items-center py-2.5 border-b border-gray-50">
+              <span class="text-gray-400">Đơn giá</span>
+              <span class="font-semibold">{{ formatCurrency(selectedItem.purchase_price) }}</span>
+            </div>
+            <div class="flex justify-between items-center py-2.5">
+              <span class="text-gray-400">Thành tiền</span>
+              <span class="font-bold text-emerald-600 text-lg">{{ formatCurrency((selectedItem.quantity || 1) * (selectedItem.purchase_price || 0)) }}</span>
+            </div>
+          </div>
+        </div>
+      </template>
 
       <!-- Approval stepper -->
       <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
@@ -371,7 +601,7 @@
       <!-- Fixed action bar -->
       <div class="fixed bottom-0 right-0 w-[560px] p-4 bg-white/80 backdrop-blur-md border-t border-gray-100 flex justify-between items-center z-20">
         <div>
-          <a-popconfirm v-if="selectedItem.status === 'draft'" title="Xóa tài sản này?" @confirm="deleteItem(selectedItem); showDetailDrawer = false">
+          <a-popconfirm v-if="selectedItem.status === 'draft'" :title="filters.tab === 'approvals' ? 'Xóa phiếu mua này?' : 'Xóa tài sản này?'" @confirm="deleteItem(selectedItem); showDetailDrawer = false">
             <a-button danger size="small"><DeleteOutlined /> Xóa</a-button>
           </a-popconfirm>
         </div>
@@ -381,7 +611,7 @@
           <a-button v-if="selectedItem.status === 'draft'" type="primary" @click="submitItem(selectedItem)"><SendOutlined /> Gửi duyệt</a-button>
           <a-button v-if="selectedItem.status === 'pending_management' && can('equipment.approve')" type="primary" class="!bg-green-500 !border-green-500 hover:!bg-green-600" @click="approveItem(selectedItem)"><CheckCircleOutlined /> BĐH Duyệt</a-button>
           <a-button v-if="selectedItem.status === 'pending_accountant' && can('cost.approve.accountant')" type="primary" @click="confirmItem(selectedItem)"><CheckSquareOutlined /> KT Xác nhận & Nhập kho</a-button>
-          <a-popconfirm v-if="['pending_management','pending_accountant'].includes(selectedItem.status)" title="Từ chối tài sản này?" @confirm="rejectItem(selectedItem)">
+          <a-popconfirm v-if="['pending_management','pending_accountant'].includes(selectedItem.status)" :title="filters.tab === 'approvals' ? 'Từ chối phiếu mua này?' : 'Từ chối tài sản này?'" @confirm="rejectItem(selectedItem)">
             <template #description>
               <a-input v-model:value="rejectReason" placeholder="Nhập lý do từ chối..." class="mt-2" />
             </template>
@@ -404,22 +634,37 @@
       </div>
 
       <div v-if="confirmEquipmentTarget" class="bg-gray-50 p-3 rounded-lg border border-gray-100 text-xs">
-         <div class="flex justify-between">
-            <span class="text-gray-400">Thiết bị:</span>
-            <span class="font-bold text-gray-700">{{ confirmEquipmentTarget.name }}</span>
-         </div>
-         <div class="flex justify-between mt-1">
-            <span class="text-gray-400">Mã tài sản:</span>
-            <span class="font-medium text-gray-700">{{ confirmEquipmentTarget.code || 'NO-CODE' }}</span>
-         </div>
-         <div class="flex justify-between mt-1">
-            <span class="text-gray-400">Số lượng:</span>
-            <span class="font-bold text-gray-700">{{ confirmEquipmentTarget.quantity || 1 }} {{ confirmEquipmentTarget.unit || 'cái' }}</span>
-         </div>
-         <div class="flex justify-between mt-1">
-            <span class="text-gray-400">Thành tiền:</span>
-            <span class="font-bold text-red-600">{{ formatCurrency((confirmEquipmentTarget.quantity || 1) * (confirmEquipmentTarget.purchase_price || 0)) }}</span>
-         </div>
+         <template v-if="filters.tab === 'approvals'">
+            <div class="font-bold text-gray-700 mb-2">Thông tin phiếu mua #EP-{{ confirmEquipmentTarget.id }}</div>
+            <div class="space-y-1.5 max-h-[120px] overflow-y-auto pr-1">
+               <div v-for="item in confirmEquipmentTarget.items" :key="item.id" class="flex justify-between py-1 border-b border-gray-100 last:border-0">
+                  <span class="text-gray-600 font-medium">{{ item.name }} (x{{ item.quantity }})</span>
+                  <span class="font-bold text-gray-700">{{ formatCurrency(item.quantity * item.unit_price) }}</span>
+               </div>
+            </div>
+            <div class="flex justify-between mt-2 pt-2 border-t border-gray-200">
+               <span class="text-gray-500 font-bold">Tổng thanh toán:</span>
+               <span class="font-bold text-red-600 text-sm">{{ formatCurrency(confirmEquipmentTarget.total_amount) }}</span>
+            </div>
+         </template>
+         <template v-else>
+            <div class="flex justify-between">
+               <span class="text-gray-400">Thiết bị:</span>
+               <span class="font-bold text-gray-700">{{ confirmEquipmentTarget.name }}</span>
+            </div>
+            <div class="flex justify-between mt-1">
+               <span class="text-gray-400">Mã tài sản:</span>
+               <span class="font-medium text-gray-700">{{ confirmEquipmentTarget.code || 'NO-CODE' }}</span>
+            </div>
+            <div class="flex justify-between mt-1">
+               <span class="text-gray-400">Số lượng:</span>
+               <span class="font-bold text-gray-700">{{ confirmEquipmentTarget.quantity || 1 }} {{ confirmEquipmentTarget.unit || 'cái' }}</span>
+            </div>
+            <div class="flex justify-between mt-1">
+               <span class="text-gray-400">Thành tiền:</span>
+               <span class="font-bold text-red-600">{{ formatCurrency((confirmEquipmentTarget.quantity || 1) * (confirmEquipmentTarget.purchase_price || 0)) }}</span>
+            </div>
+         </template>
       </div>
 
       <!-- Existing attachments uploaded by creator -->
@@ -496,7 +741,7 @@ import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined, UploadOutlined
 import { message } from 'ant-design-vue'
 
 defineOptions({ layout: CrmLayout })
-const props = defineProps({ equipment: Object, stats: Object, filters: Object, globalEquipments: Array })
+const props = defineProps({ equipment: Object, stats: Object, filters: Object, globalEquipments: Array, projects: Array, suppliers: Array })
 
 onMounted(() => {
   const urlParams = new URLSearchParams(window.location.search)
@@ -506,6 +751,10 @@ onMounted(() => {
     if (item) {
       openDetail(item)
     }
+  }
+  const create = urlParams.get('create')
+  if (create === 'true') {
+    openCreateModal()
   }
 })
 
@@ -548,6 +797,18 @@ const columns = computed(() => {
       { title: 'Thao tác', key: 'catalog_actions', width: 100, align: 'center' },
     ]
   }
+  if (filters.value.tab === 'approvals') {
+    return [
+      { title: 'Phiếu mua', key: 'purchase_code', width: 140 },
+      { title: 'Dự án', key: 'project', width: 180 },
+      { title: 'Nhà cung cấp', key: 'supplier', width: 180 },
+      { title: 'Nội dung mua sắm', key: 'purchase_items', width: 260 },
+      { title: 'Tổng tiền', key: 'purchase_total', align: 'right', width: 140 },
+      { title: 'Trạng thái', key: 'status', width: 140, align: 'center' },
+      { title: 'Người lập', key: 'creator', width: 130 },
+      { title: '', key: 'actions', width: 60, align: 'center' },
+    ]
+  }
   return [
     { title: 'Tài sản', key: 'name', width: 260 },
     { title: 'Loại', key: 'category', dataIndex: 'category', width: 100 },
@@ -561,20 +822,20 @@ const columns = computed(() => {
 
 const statusLabels = {
   draft: 'Nháp', pending_management: 'Chờ BĐH', pending_accountant: 'Chờ KT',
-  available: 'Trong kho', in_use: 'Đang dùng', maintenance: 'Bảo trì',
-  retired: 'Thanh lý', rejected: 'Từ chối',
+  completed: 'Hoàn tất', available: 'Trong kho', in_use: 'Đang dùng',
+  maintenance: 'Bảo trì', retired: 'Thanh lý', rejected: 'Từ chối',
 }
 const statusColors = {
   draft: 'default', pending_management: 'orange', pending_accountant: 'blue',
-  available: 'green', in_use: 'geekblue', maintenance: 'volcano',
-  retired: 'default', rejected: 'red',
+  completed: 'green', available: 'green', in_use: 'geekblue',
+  maintenance: 'volcano', retired: 'default', rejected: 'red',
 }
 const categoryLabels = { computer: 'Máy tính / CNTT', machinery: 'Máy móc thi công', vehicle: 'Xe công ty', furniture: 'Nội thất VP', other: 'Khác' }
 const categoryIcons = { computer: '💻', machinery: '🏗️', vehicle: '🚗', furniture: '🪑', other: '📦' }
 const categoryGradients = { computer: 'linear-gradient(135deg, #2E86C1, #1B4F72)', machinery: 'linear-gradient(135deg, #E67E22, #D68910)', vehicle: 'linear-gradient(135deg, #1D8348, #27AE60)', furniture: 'linear-gradient(135deg, #8E44AD, #6C3483)', other: 'linear-gradient(135deg, #9CA3AF, #6B7280)' }
 
 const stepperCurrent = (item) => {
-  const map = { draft: 0, rejected: 0, pending_management: 1, pending_accountant: 2, available: 3, in_use: 3 }
+  const map = { draft: 0, rejected: 0, pending_management: 1, pending_accountant: 2, completed: 3, available: 3, in_use: 3 }
   return map[item.status] ?? 0
 }
 
@@ -598,7 +859,11 @@ const form = useForm({
   quantity: 1,
   purchase_price: null,
   unit: 'cái',
-  notes: ''
+  notes: '',
+  project_id: null,
+  supplier_id: null,
+  purchase_date: new Date().toISOString().split('T')[0],
+  items: [{ name: '', code: '', quantity: 1, unit_price: 0, unit: 'cái', global_equipment_id: null }]
 })
 
 const handleGlobalEquipmentChange = (val) => {
@@ -614,11 +879,36 @@ const handleGlobalEquipmentChange = (val) => {
   }
 }
 
+const handleRowTemplateChange = (idx, val) => {
+  if (!val) return
+  const selected = props.globalEquipments.find(ge => ge.id === val)
+  if (selected) {
+    form.items[idx].name = selected.name
+    form.items[idx].code = selected.code || ''
+    form.items[idx].unit = selected.unit || 'cái'
+    form.items[idx].unit_price = selected.unit_price
+  }
+}
+
+const addItem = () => {
+  form.items.push({ name: '', code: '', quantity: 1, unit_price: 0, unit: 'cái', global_equipment_id: null })
+}
+
+const removeItem = (idx) => {
+  if (form.items.length > 1) {
+    form.items.splice(idx, 1)
+  } else {
+    message.warning('Phải có ít nhất 1 dòng thiết bị.')
+  }
+}
+
 const openCreateModal = () => {
   editing.value = null
   form.reset()
   form.clearErrors()
   form.transform((data) => data)
+  form.items = [{ name: '', code: '', quantity: 1, unit_price: 0, unit: 'cái', global_equipment_id: null }]
+  form.purchase_date = new Date().toISOString().split('T')[0]
   fileList.value = []
   showModal.value = true
 }
@@ -626,21 +916,48 @@ const openCreateModal = () => {
 const openEditModal = (e) => {
   editing.value = e
   form.clearErrors()
-  Object.assign(form, {
-    global_equipment_id: e.global_equipment_id || null,
-    name: e.name,
-    code: e.code || '',
-    category: e.category || undefined,
-    brand: e.brand || '',
-    model: e.model || '',
-    quantity: e.quantity || 1,
-    purchase_price: e.purchase_price,
-    unit: e.unit || 'cái',
-    notes: e.notes || ''
-  })
+  if (filters.value.tab === 'approvals') {
+    Object.assign(form, {
+      project_id: e.project_id || null,
+      supplier_id: e.supplier_id || null,
+      purchase_date: e.purchase_date || new Date().toISOString().split('T')[0],
+      notes: e.notes || '',
+      items: e.items ? e.items.map(item => ({
+        id: item.id,
+        global_equipment_id: item.global_equipment_id || null,
+        name: item.name || '',
+        code: item.code || '',
+        quantity: item.quantity || 1,
+        unit_price: item.unit_price || 0,
+        unit: item.unit || 'cái'
+      })) : [{ name: '', code: '', quantity: 1, unit_price: 0, unit: 'cái', global_equipment_id: null }]
+    })
+  } else {
+    Object.assign(form, {
+      global_equipment_id: e.global_equipment_id || null,
+      name: e.name,
+      code: e.code || '',
+      category: e.category || undefined,
+      brand: e.brand || '',
+      model: e.model || '',
+      quantity: e.quantity || 1,
+      purchase_price: e.purchase_price,
+      unit: e.unit || 'cái',
+      notes: e.notes || ''
+    })
+  }
   fileList.value = []
   showDetailDrawer.value = false
   showModal.value = true
+}
+
+const switchToApprovalsAndCreate = () => {
+  loading.value = true
+  router.get('/equipment', { tab: 'approvals', create: 'true' }, {
+    onFinish: () => {
+      loading.value = false
+    }
+  })
 }
 
 const beforeUpload = (file) => {
@@ -653,17 +970,18 @@ const handleRemoveFile = (file) => {
 
 const handleSubmit = () => {
   form.clearErrors()
+  const urlSuffix = `?tab=${filters.value.tab === 'assets' ? 'approvals' : filters.value.tab}`
   if (editing.value) {
     form.transform((data) => ({
       ...data,
       _method: 'PUT',
       attachments: fileList.value
-    })).post(`/equipment/${editing.value.id}`, {
+    })).post(`/equipment/${editing.value.id}${urlSuffix}`, {
       forceFormData: true,
       onSuccess: () => {
         showModal.value = false
         resetForm()
-        message.success('Đã cập nhật tài sản.')
+        message.success('Đã cập nhật thành công.')
       },
       onError: () => {
         message.error('Vui lòng kiểm tra lại thông tin trên Form.')
@@ -673,12 +991,12 @@ const handleSubmit = () => {
     form.transform((data) => ({
       ...data,
       attachments: fileList.value
-    })).post('/equipment', {
+    })).post(`/equipment${urlSuffix}`, {
       forceFormData: true,
       onSuccess: () => {
         showModal.value = false
         resetForm()
-        message.success('Đã tạo tài sản nháp.')
+        message.success('Đã tạo thành công.')
       },
       onError: () => {
         message.error('Vui lòng kiểm tra lại thông tin trên Form.')
@@ -687,7 +1005,13 @@ const handleSubmit = () => {
   }
 }
 
-const resetForm = () => { editing.value = null; form.reset(); form.clearErrors(); fileList.value = [] }
+const resetForm = () => { 
+  editing.value = null
+  form.reset()
+  form.clearErrors()
+  form.items = [{ name: '', code: '', quantity: 1, unit_price: 0, unit: 'cái', global_equipment_id: null }]
+  fileList.value = [] 
+}
 
 // Catalog (Thiết bị mẫu) setup
 const showCatalogModal = ref(false)
@@ -812,7 +1136,7 @@ const confirmApproveEquipment = () => {
 }
 const rejectItem = (e) => router.post(`/equipment/${e.id}/reject`, { reason: rejectReason.value }, { preserveScroll: true, onSuccess: () => { rejectReason.value = ''; showDetailDrawer.value = false } })
 const revertItem = (e) => router.post(`/equipment/${e.id}/revert`, {}, { preserveScroll: true, onSuccess: () => { showDetailDrawer.value = false } })
-const deleteItem = (e) => router.delete(`/equipment/${e.id}`)
+const deleteItem = (e) => router.delete(`/equipment/${e.id}?tab=${filters.value.tab}`)
 
 const formatCurrency = (v) => v ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(v) : '—'
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('vi-VN') : ''

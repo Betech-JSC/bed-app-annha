@@ -39,6 +39,7 @@ class Equipment extends Model
         'status', // draft, pending_management, pending_accountant, available, in_use, maintenance, retired
         'assigned_to',
         'project_id',
+        'supplier_id',
         'location',
         'notes',
         'created_by',
@@ -91,6 +92,11 @@ class Equipment extends Model
     public function project(): BelongsTo
     {
         return $this->belongsTo(Project::class, 'project_id');
+    }
+
+    public function supplier(): BelongsTo
+    {
+        return $this->belongsTo(Supplier::class, 'supplier_id');
     }
 
     public function creator(): BelongsTo

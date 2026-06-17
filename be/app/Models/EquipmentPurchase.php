@@ -13,19 +13,21 @@ class EquipmentPurchase extends Model
     use \App\Traits\Approvable, \App\Traits\NotifiesUsers;
 
     protected $fillable = [
-        'uuid', 'project_id', 'total_amount', 'status', 'rejection_reason',
+        'uuid', 'project_id', 'supplier_id', 'purchase_date', 'total_amount', 'status', 'rejection_reason',
         'notes', 'created_by', 'approved_by', 'approved_at',
         'confirmed_by', 'confirmed_at',
     ];
 
     protected $casts = [
         'total_amount' => 'decimal:2',
+        'purchase_date'=> 'date',
         'approved_at'  => 'datetime',
         'confirmed_at' => 'datetime',
     ];
 
     // ─── Relationships ───
     public function project(): BelongsTo { return $this->belongsTo(Project::class); }
+    public function supplier(): BelongsTo { return $this->belongsTo(Supplier::class); }
     public function items(): HasMany { return $this->hasMany(EquipmentPurchaseItem::class, 'purchase_id'); }
     public function creator(): BelongsTo { return $this->belongsTo(User::class, 'created_by'); }
     public function approver(): BelongsTo { return $this->belongsTo(User::class, 'approved_by'); }

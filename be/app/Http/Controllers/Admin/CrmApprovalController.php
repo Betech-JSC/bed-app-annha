@@ -81,6 +81,9 @@ class CrmApprovalController extends Controller
         // 2. Pre-process defects by role
         $defectsByRole = ['supervisor' => collect([]), 'project_manager' => collect([]), 'customer' => collect([])];
         foreach ($data['defects'] as $defect) {
+            if (!$this->crmCan($user, Permissions::DEFECT_VERIFY, $defect->project)) {
+                continue;
+            }
             $formatted = array_merge($this->formatDefectItem($defect), ['_approveType' => 'defect_verify']);
             $targetRole = 'supervisor';
             if ($defect->acceptanceStage) {
@@ -93,58 +96,58 @@ class CrmApprovalController extends Controller
         // 3. Populate role groups dynamically
         $roleGroups = [
             'management' => $userPermissions['can_management'] ? collect([])
-                ->concat($data['costs_management']->map(fn($i) => array_merge($this->formatItem($i), ['_approveType' => 'management'])))
-                ->concat($data['additional_costs']->map(fn($i) => array_merge($this->formatAdditionalCostItem($i), ['_approveType' => 'additional_cost'])))
-                ->concat($data['sub_payments_management']->map(fn($i) => array_merge($this->formatSubPaymentItem($i), ['_approveType' => 'sub_payment'])))
-                ->concat($data['material_bills_management']->map(fn($i) => array_merge($this->formatMaterialBillItem($i), ['_approveType' => 'material_bill'])))
-                ->concat($data['budgets']->map(fn($i) => array_merge($this->formatBudget($i), ['_approveType' => 'budget'])))
-                ->concat($data['equipment_rentals_management']->map(fn($i) => array_merge($this->formatEquipmentRentalItem($i), ['_approveType' => 'equipment_rental_management'])))
-                ->concat($data['asset_usages_management']->map(fn($i) => array_merge($this->formatAssetUsageItem($i), ['_approveType' => 'asset_usage_management'])))
-                ->concat(($data['equipment_purchases_management'] ?? collect([]))->map(fn($i) => array_merge($this->formatEquipmentPurchaseItem($i), ['_approveType' => 'equipment_purchase_management'])))
-                ->concat(($data['equipment_inventory_management'] ?? collect([]))->map(fn($i) => array_merge($this->formatEquipmentInventoryItem($i), ['_approveType' => 'equipment_inventory_management'])))
+                ->concat($data['costs_management']->filter(fn($i) => $this->crmCan($user, $i->project_id ? Permissions::COST_APPROVE_MANAGEMENT : Permissions::COMPANY_COST_APPROVE_MANAGEMENT, $i->project))->map(fn($i) => array_merge($this->formatItem($i), ['_approveType' => 'management'])))
+                ->concat($data['additional_costs']->filter(fn($i) => $this->crmCan($user, Permissions::ADDITIONAL_COST_APPROVE, $i->project))->map(fn($i) => array_merge($this->formatAdditionalCostItem($i), ['_approveType' => 'additional_cost'])))
+                ->concat($data['sub_payments_management']->filter(fn($i) => $this->crmCan($user, Permissions::SUBCONTRACTOR_PAYMENT_APPROVE, $i->project))->map(fn($i) => array_merge($this->formatSubPaymentItem($i), ['_approveType' => 'sub_payment'])))
+                ->concat($data['material_bills_management']->filter(fn($i) => $this->crmCan($user, Permissions::MATERIAL_APPROVE_MANAGEMENT, $i->project))->map(fn($i) => array_merge($this->formatMaterialBillItem($i), ['_approveType' => 'material_bill'])))
+                ->concat($data['budgets']->filter(fn($i) => $this->crmCan($user, Permissions::BUDGET_APPROVE, $i->project))->map(fn($i) => array_merge($this->formatBudget($i), ['_approveType' => 'budget'])))
+                ->concat($data['equipment_rentals_management']->filter(fn($i) => $this->crmCan($user, Permissions::COST_APPROVE_MANAGEMENT, $i->project))->map(fn($i) => array_merge($this->formatEquipmentRentalItem($i), ['_approveType' => 'equipment_rental_management'])))
+                ->concat($data['asset_usages_management']->filter(fn($i) => $this->crmCan($user, Permissions::COST_APPROVE_MANAGEMENT, $i->project))->map(fn($i) => array_merge($this->formatAssetUsageItem($i), ['_approveType' => 'asset_usage_management'])))
+                ->concat(($data['equipment_purchases_management'] ?? collect([]))->filter(fn($i) => $this->crmCan($user, Permissions::COST_APPROVE_MANAGEMENT, $i->project))->map(fn($i) => array_merge($this->formatEquipmentPurchaseItem($i), ['_approveType' => 'equipment_purchase_management'])))
+                ->concat(($data['equipment_inventory_management'] ?? collect([]))->filter(fn($i) => $this->crmCan($user, Permissions::COST_APPROVE_MANAGEMENT, $i->project))->map(fn($i) => array_merge($this->formatEquipmentInventoryItem($i), ['_approveType' => 'equipment_inventory_management'])))
                 ->unique(fn($item) => ($item['type'] ?? '') . '_' . $item['id'])->values() : collect([]),
 
             'accountant' => $userPermissions['can_accountant'] ? collect([])
-                ->concat($data['costs_accountant']->map(fn($i) => array_merge($this->formatItem($i), ['_approveType' => 'accountant'])))
-                ->concat($data['sub_payments_accountant']->map(fn($i) => array_merge($this->formatSubPaymentItem($i), ['_approveType' => 'sub_payment_confirm'])))
-                ->concat($data['payments_paid']->map(fn($i) => array_merge($this->formatPaymentItem($i), ['_approveType' => 'project_payment_confirm'])))
-                ->concat($data['material_bills_accountant']->map(fn($i) => array_merge($this->formatMaterialBillItem($i), ['_approveType' => 'material_bill'])))
-                ->concat($data['equipment_rentals_accountant']->map(fn($i) => array_merge($this->formatEquipmentRentalItem($i), ['_approveType' => 'equipment_rental_accountant'])))
-                ->concat($data['asset_usages_accountant']->map(fn($i) => array_merge($this->formatAssetUsageItem($i), ['_approveType' => 'asset_usage_accountant'])))
-                ->concat(($data['equipment_purchases_accountant'] ?? collect([]))->map(fn($i) => array_merge($this->formatEquipmentPurchaseItem($i), ['_approveType' => 'equipment_purchase_accountant'])))
-                ->concat(($data['equipment_inventory_accountant'] ?? collect([]))->map(fn($i) => array_merge($this->formatEquipmentInventoryItem($i), ['_approveType' => 'equipment_inventory_accountant'])))
+                ->concat($data['costs_accountant']->filter(fn($i) => $this->crmCan($user, $i->project_id ? Permissions::COST_APPROVE_ACCOUNTANT : Permissions::COMPANY_COST_APPROVE_ACCOUNTANT, $i->project))->map(fn($i) => array_merge($this->formatItem($i), ['_approveType' => 'accountant'])))
+                ->concat($data['sub_payments_accountant']->filter(fn($i) => $this->crmCan($user, Permissions::SUBCONTRACTOR_PAYMENT_MARK_PAID, $i->project))->map(fn($i) => array_merge($this->formatSubPaymentItem($i), ['_approveType' => 'sub_payment_confirm'])))
+                ->concat($data['payments_paid']->filter(fn($i) => $this->crmCan($user, Permissions::PAYMENT_CONFIRM, $i->project))->map(fn($i) => array_merge($this->formatPaymentItem($i), ['_approveType' => 'project_payment_confirm'])))
+                ->concat($data['material_bills_accountant']->filter(fn($i) => $this->crmCan($user, Permissions::MATERIAL_APPROVE_ACCOUNTANT, $i->project))->map(fn($i) => array_merge($this->formatMaterialBillItem($i), ['_approveType' => 'material_bill'])))
+                ->concat($data['equipment_rentals_accountant']->filter(fn($i) => $this->crmCan($user, Permissions::COST_APPROVE_ACCOUNTANT, $i->project))->map(fn($i) => array_merge($this->formatEquipmentRentalItem($i), ['_approveType' => 'equipment_rental_accountant'])))
+                ->concat($data['asset_usages_accountant']->filter(fn($i) => $this->crmCan($user, Permissions::COST_APPROVE_ACCOUNTANT, $i->project))->map(fn($i) => array_merge($this->formatAssetUsageItem($i), ['_approveType' => 'asset_usage_accountant'])))
+                ->concat(($data['equipment_purchases_accountant'] ?? collect([]))->filter(fn($i) => $this->crmCan($user, Permissions::COST_APPROVE_ACCOUNTANT, $i->project))->map(fn($i) => array_merge($this->formatEquipmentPurchaseItem($i), ['_approveType' => 'equipment_purchase_accountant'])))
+                ->concat(($data['equipment_inventory_accountant'] ?? collect([]))->filter(fn($i) => $this->crmCan($user, Permissions::COST_APPROVE_ACCOUNTANT, $i->project))->map(fn($i) => array_merge($this->formatEquipmentInventoryItem($i), ['_approveType' => 'equipment_inventory_accountant'])))
                 ->unique(fn($item) => ($item['type'] ?? '') . '_' . $item['id'])->values() : collect([]),
 
             'project_manager' => $userPermissions['can_pm'] ? collect([])
-                ->concat($data['acceptance_pm']->map(fn($i) => array_merge($this->formatAcceptanceItem($i, 'Chờ QLDA duyệt', 'project_manager'), ['_approveType' => 'acceptance_pm'])))
-                ->concat($data['change_requests']->map(fn($i) => array_merge($this->formatChangeRequestItem($i), ['_approveType' => 'change_request'])))
+                ->concat($data['acceptance_pm']->filter(fn($i) => $this->crmCan($user, Permissions::ACCEPTANCE_APPROVE_LEVEL_2, $i->project))->map(fn($i) => array_merge($this->formatAcceptanceItem($i, 'Chờ QLDA duyệt', 'project_manager'), ['_approveType' => 'acceptance_pm'])))
+                ->concat($data['change_requests']->filter(fn($i) => $this->crmCan($user, Permissions::CHANGE_REQUEST_APPROVE, $i->project))->map(fn($i) => array_merge($this->formatChangeRequestItem($i), ['_approveType' => 'change_request'])))
                 // construction_logs removed — BUSINESS RULE: Nhật ký không cần duyệt
-                ->concat($data['schedule_adjustments']->map(fn($i) => array_merge($this->formatScheduleAdjustmentItem($i), ['_approveType' => 'schedule_adjustment'])))
-                ->concat($data['additional_costs']->map(fn($i) => array_merge($this->formatAdditionalCostItem($i), ['_approveType' => 'additional_cost'])))
-                ->concat($data['equipment_rentals_return']->map(fn($i) => array_merge($this->formatEquipmentRentalItem($i), ['_approveType' => 'equipment_rental_return'])))
-                ->concat($data['asset_usages_return']->map(fn($i) => array_merge($this->formatAssetUsageItem($i), ['_approveType' => 'asset_usage_return'])))
-                ->concat(($data['equipment_purchases_return'] ?? collect([]))->map(fn($i) => array_merge($this->formatEquipmentPurchaseItem($i), ['_approveType' => 'equipment_purchase_return']))) // In case there is a return flow in the future
+                ->concat($data['schedule_adjustments']->filter(fn($i) => $this->crmCan($user, Permissions::GANTT_UPDATE, $i->project))->map(fn($i) => array_merge($this->formatScheduleAdjustmentItem($i), ['_approveType' => 'schedule_adjustment'])))
+                ->concat($data['additional_costs']->filter(fn($i) => $this->crmCan($user, Permissions::ADDITIONAL_COST_APPROVE, $i->project))->map(fn($i) => array_merge($this->formatAdditionalCostItem($i), ['_approveType' => 'additional_cost'])))
+                ->concat($data['equipment_rentals_return']->filter(fn($i) => $this->crmCan($user, Permissions::COST_APPROVE_MANAGEMENT, $i->project))->map(fn($i) => array_merge($this->formatEquipmentRentalItem($i), ['_approveType' => 'equipment_rental_return'])))
+                ->concat($data['asset_usages_return']->filter(fn($i) => $this->crmCan($user, Permissions::COST_APPROVE_MANAGEMENT, $i->project))->map(fn($i) => array_merge($this->formatAssetUsageItem($i), ['_approveType' => 'asset_usage_return'])))
+                ->concat(($data['equipment_purchases_return'] ?? collect([]))->filter(fn($i) => $this->crmCan($user, Permissions::COST_APPROVE_MANAGEMENT, $i->project))->map(fn($i) => array_merge($this->formatEquipmentPurchaseItem($i), ['_approveType' => 'equipment_purchase_return']))) // In case there is a return flow in the future
                 ->concat($defectsByRole['project_manager'])
                 ->unique(fn($item) => ($item['type'] ?? '') . '_' . $item['id'])->values() : collect([]),
 
             'supervisor' => $userPermissions['can_supervisor'] ? collect([])
-                ->concat($data['acceptance_supervisor']->map(fn($i) => array_merge($this->formatAcceptanceItem($i, 'Chờ GS duyệt', 'supervisor'), ['_approveType' => 'acceptance_supervisor'])))
-                ->concat($data['sub_acceptances']->map(fn($i) => array_merge($this->formatSubAcceptanceItem($i), ['_approveType' => 'sub_acceptance'])))
-                ->concat($data['supplier_acceptances']->map(fn($i) => array_merge($this->formatSupplierAcceptanceItem($i), ['_approveType' => 'supplier_acceptance'])))
+                ->concat($data['acceptance_supervisor']->filter(fn($i) => $this->crmCan($user, Permissions::ACCEPTANCE_APPROVE_LEVEL_1, $i->project))->map(fn($i) => array_merge($this->formatAcceptanceItem($i, 'Chờ GS duyệt', 'supervisor'), ['_approveType' => 'acceptance_supervisor'])))
+                ->concat($data['sub_acceptances']->filter(fn($i) => $this->crmCan($user, Permissions::SUBCONTRACTOR_APPROVE, $i->project))->map(fn($i) => array_merge($this->formatSubAcceptanceItem($i), ['_approveType' => 'sub_acceptance'])))
+                ->concat($data['supplier_acceptances']->filter(fn($i) => $this->crmCan($user, Permissions::SUPPLIER_CONTRACT_APPROVE, $i->project))->map(fn($i) => array_merge($this->formatSupplierAcceptanceItem($i), ['_approveType' => 'supplier_acceptance'])))
                 ->concat($defectsByRole['supervisor'])
                 ->unique(fn($item) => ($item['type'] ?? '') . '_' . $item['id'])->values() : collect([]),
 
             'customer' => $userPermissions['can_customer'] ? collect([])
-                ->concat($data['acceptance_customer']->map(fn($i) => array_merge($this->formatAcceptanceItem($i, 'Chờ KH duyệt', 'customer'), ['_approveType' => 'acceptance'])))
-                ->concat($data['contracts']->map(fn($i) => array_merge($this->formatContractItem($i), ['_approveType' => 'contract'])))
-                ->concat($data['payments_pending']->map(fn($i) => array_merge($this->formatPaymentItem($i), ['_approveType' => 'project_payment'])))
-                ->concat($data['additional_costs']->map(fn($i) => array_merge($this->formatAdditionalCostItem($i), ['_approveType' => 'additional_cost'])))
-                ->concat($data['maintenances']->map(fn($i) => array_merge($this->formatMaintenanceItem($i), ['_approveType' => 'maintenance'])))
-                ->concat($data['warranties']->map(fn($i) => array_merge($this->formatWarrantyItem($i), ['_approveType' => 'warranty'])))
+                ->concat($data['acceptance_customer']->filter(fn($i) => $this->crmCan($user, Permissions::ACCEPTANCE_APPROVE_LEVEL_3, $i->project))->map(fn($i) => array_merge($this->formatAcceptanceItem($i, 'Chờ KH duyệt', 'customer'), ['_approveType' => 'acceptance'])))
+                ->concat($data['contracts']->filter(fn($i) => $this->crmCan($user, Permissions::CONTRACT_VIEW, $i->project))->map(fn($i) => array_merge($this->formatContractItem($i), ['_approveType' => 'contract'])))
+                ->concat($data['payments_pending']->filter(fn($i) => $this->crmCan($user, Permissions::PAYMENT_APPROVE, $i->project))->map(fn($i) => array_merge($this->formatPaymentItem($i), ['_approveType' => 'project_payment'])))
+                ->concat($data['additional_costs']->filter(fn($i) => $this->crmCan($user, Permissions::ADDITIONAL_COST_APPROVE, $i->project))->map(fn($i) => array_merge($this->formatAdditionalCostItem($i), ['_approveType' => 'additional_cost'])))
+                ->concat($data['maintenances']->filter(fn($i) => $this->crmCan($user, Permissions::WARRANTY_APPROVE, $i->project))->map(fn($i) => array_merge($this->formatMaintenanceItem($i), ['_approveType' => 'maintenance'])))
+                ->concat($data['warranties']->filter(fn($i) => $this->crmCan($user, Permissions::WARRANTY_APPROVE, $i->project))->map(fn($i) => array_merge($this->formatWarrantyItem($i), ['_approveType' => 'warranty'])))
                 ->concat($defectsByRole['customer'])
                 ->unique(fn($item) => ($item['type'] ?? '') . '_' . $item['id'])->values() : collect([]),
 
-            'hr' => $userPermissions['can_hr'] ? ($data['attendances_pending'] ?? collect([]))->map(fn($i) => array_merge($this->formatAttendanceItem($i), ['_approveType' => 'attendance']))->values() : collect([]),
+            'hr' => $userPermissions['can_hr'] ? ($data['attendances_pending'] ?? collect([]))->filter(fn($i) => $this->crmCan($user, Permissions::ATTENDANCE_APPROVE))->map(fn($i) => array_merge($this->formatAttendanceItem($i), ['_approveType' => 'attendance']))->values() : collect([]),
         ];
 
         return Inertia::render('Crm/Approvals/Index', [
