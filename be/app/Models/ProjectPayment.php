@@ -143,6 +143,25 @@ class ProjectPayment extends Model
             return false;
         }
 
+        // Copy customer's original files as confirmation receipt files ('after' files)
+        $originalAttachments = $this->attachments()
+            ->where(function($query) {
+                $query->where('description', '!=', 'after')
+                      ->orWhereNull('description');
+            })->get();
+
+        foreach ($originalAttachments as $att) {
+            $exists = $this->attachments()
+                ->where('description', 'after')
+                ->where('file_path', $att->file_path)
+                ->exists();
+            if (!$exists) {
+                $newAtt = $att->replicate();
+                $newAtt->description = 'after';
+                $newAtt->save();
+            }
+        }
+
         $this->status = 'paid';
         if ($user) {
             $this->confirmed_by = $user->id;

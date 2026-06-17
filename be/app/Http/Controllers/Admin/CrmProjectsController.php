@@ -617,6 +617,11 @@ class CrmProjectsController extends Controller
                 $cost->update(['budget_item_id' => $request->budget_item_id]);
             }
 
+            if ($request->filled('notes')) {
+                $cost->description = ($cost->description ? $cost->description . "\n" : '') . "Kế toán: " . $request->notes;
+                $cost->save();
+            }
+
             $this->financialService->approveCostByAccountant($cost, [], $admin);
             return back()->with('success', 'Đã xác nhận phiếu chi (Kế toán).');
         } catch (\Exception $e) {
@@ -857,23 +862,9 @@ class CrmProjectsController extends Controller
             $request->merge(['description' => 'after']);
             $this->attachFilesToEntity($request, $payment, "project-payments/{$project->id}/{$payment->id}", false);
 
-            // Copy customer's original files as confirmation receipt files ('after' files)
-            $originalAttachments = $payment->attachments()
-                ->where(function($query) {
-                    $query->where('description', '!=', 'after')
-                          ->orWhereNull('description');
-                })->get();
-
-            foreach ($originalAttachments as $att) {
-                $exists = $payment->attachments()
-                    ->where('description', 'after')
-                    ->where('file_path', $att->file_path)
-                    ->exists();
-                if (!$exists) {
-                    $newAtt = $att->replicate();
-                    $newAtt->description = 'after';
-                    $newAtt->save();
-                }
+            if ($request->filled('notes')) {
+                $payment->notes = ($payment->notes ? $payment->notes . "\n" : '') . "Kế toán: " . $request->notes;
+                $payment->save();
             }
 
             $this->financialService->confirmProjectPayment($payment, $user);
@@ -2274,6 +2265,11 @@ class CrmProjectsController extends Controller
             $request->merge(['description' => 'after']);
             $this->attachFilesToEntity($request, $payment, "sub-payments/{$project->id}/{$payment->id}", true);
 
+            if ($request->filled('notes')) {
+                $payment->notes = ($payment->notes ? $payment->notes . "\n" : '') . "Kế toán: " . $request->notes;
+                $payment->save();
+            }
+
             $this->financialService->processSubPayment($payment, $request->all(), $admin);
             return back()->with('success', 'Đã xác nhận thanh toán thầu phụ.');
         } catch (\Exception $e) {
@@ -3289,6 +3285,11 @@ class CrmProjectsController extends Controller
             $request->merge(['description' => 'after']);
             $this->attachFilesToEntity($request, $rental, "equipment-rentals/{$project->id}/{$rental->id}", true);
 
+            if ($request->filled('notes')) {
+                $rental->notes = ($rental->notes ? $rental->notes . "\n" : '') . "Kế toán: " . $request->notes;
+                $rental->save();
+            }
+
             if ($this->equipmentService->confirmRentalByAccountant($rental, $user)) {
                 return back()->with('success', 'Kế toán đã xác nhận. Thiết bị chuyển sang Đang sử dụng.');
             }
@@ -3673,6 +3674,11 @@ class CrmProjectsController extends Controller
             // Mandatorily attach uploaded files to the Asset Usage
             $request->merge(['description' => 'after']);
             $this->attachFilesToEntity($request, $usage, "asset-usages/{$project->id}/{$usage->id}", true);
+
+            if ($request->filled('notes')) {
+                $usage->notes = ($usage->notes ? $usage->notes . "\n" : '') . "Kế toán: " . $request->notes;
+                $usage->save();
+            }
 
             if ($this->equipmentService->confirmUsageByAccountant($usage, $user)) {
                 return back()->with('success', 'KT đã xác nhận. Thiết bị chuyển sang Đang sử dụng.');
@@ -4217,6 +4223,11 @@ class CrmProjectsController extends Controller
             // Mandatorily attach uploaded files to the material bill
             $request->merge(['description' => 'after']);
             $this->attachFilesToEntity($request, $bill, "material-bills/{$project->id}/{$bill->id}", true);
+
+            if ($request->filled('notes')) {
+                $bill->notes = ($bill->notes ? $bill->notes . "\n" : '') . "Kế toán: " . $request->notes;
+                $bill->save();
+            }
 
             $this->materialBillService->approve($bill, $user, $request->only('budget_item_id'));
             return back()->with('success', 'Đã xác nhận phiếu vật tư. Dữ liệu đã đẩy qua Chi phí dự án.');

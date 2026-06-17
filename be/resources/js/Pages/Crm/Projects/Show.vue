@@ -7064,6 +7064,14 @@
           </div>
         </div>
       </div>
+
+      <!-- Accountant Notes (Optional) -->
+      <div class="border-t border-dashed pt-4">
+        <div class="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1">
+          <EditOutlined class="text-blue-500" /> Ghi chú xác nhận (Nếu có)
+        </div>
+        <a-textarea v-model:value="confirmPaymentNotes" :rows="2" placeholder="Nhập ghi chú hoặc lưu ý khi xác nhận..." class="!rounded-xl border-gray-100 py-2 text-xs" />
+      </div>
     </div>
   </a-modal>
 
@@ -11276,7 +11284,14 @@ const confirmPaymentTarget = ref(null)
 const confirmPaymentSub = ref(null) // Only for sub
 const confirmPaymentBudgetItem = ref(null)
 const confirmPaymentFiles = ref([])
+const confirmPaymentNotes = ref('')
 const confirmPaymentLoading = ref(false)
+
+watch(showConfirmPaymentModal, (val) => {
+  if (!val) {
+    confirmPaymentNotes.value = ''
+  }
+})
 
 const approveBillAccountant = (bill) => {
   if (!bill.attachments?.length && !(bill.attachments_count > 0)) {
@@ -11311,6 +11326,9 @@ const confirmApprovePayment = () => {
   const fd = new FormData()
   if (confirmPaymentBudgetItem.value) {
     fd.append('budget_item_id', confirmPaymentBudgetItem.value)
+  }
+  if (confirmPaymentNotes.value) {
+    fd.append('notes', confirmPaymentNotes.value)
   }
   confirmPaymentFiles.value.forEach(f => fd.append('files[]', f))
 

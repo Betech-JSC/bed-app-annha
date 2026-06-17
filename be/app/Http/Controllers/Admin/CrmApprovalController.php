@@ -566,23 +566,9 @@ class CrmApprovalController extends Controller
             $request->merge(['description' => 'after']);
             $this->attachFilesToEntity($request, $payment, "project-payments/{$payment->project_id}/{$payment->id}", false);
 
-            // Copy customer's original files as confirmation receipt files ('after' files)
-            $originalAttachments = $payment->attachments()
-                ->where(function($query) {
-                    $query->where('description', '!=', 'after')
-                          ->orWhereNull('description');
-                })->get();
-
-            foreach ($originalAttachments as $att) {
-                $exists = $payment->attachments()
-                    ->where('description', 'after')
-                    ->where('file_path', $att->file_path)
-                    ->exists();
-                if (!$exists) {
-                    $newAtt = $att->replicate();
-                    $newAtt->description = 'after';
-                    $newAtt->save();
-                }
+            if ($request->filled('notes')) {
+                $payment->notes = ($payment->notes ? $payment->notes . "\n" : '') . "Kế toán: " . $request->notes;
+                $payment->save();
             }
 
             return $this->delegateApprove($user, 'project_payment_confirm', $id);

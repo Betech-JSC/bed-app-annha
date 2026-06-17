@@ -89,6 +89,10 @@ class ApprovalActionService
 
                 case 'accountant':
                     $cost = Cost::findOrFail($id);
+                    if (request()->filled('notes')) {
+                        $cost->description = ($cost->description ? $cost->description . "\n" : '') . "Kế toán: " . request('notes');
+                        $cost->save();
+                    }
                     $this->financialService->approveCostByAccountant($cost, [], $user);
                     $result = true;
                     $message = "Đã xác nhận chi phí \"{$cost->name}\" (Kế toán)";
@@ -130,6 +134,10 @@ class ApprovalActionService
 
                 case 'sub_payment_confirm':
                     $p = SubcontractorPayment::findOrFail($id);
+                    if (request()->filled('notes')) {
+                        $p->notes = ($p->notes ? $p->notes . "\n" : '') . "Kế toán: " . request('notes');
+                        $p->save();
+                    }
                     $this->financialService->processSubPayment($p, $params, $user);
                     $result = true;
                     $message = "KT đã xác nhận thanh toán NTP";
@@ -155,12 +163,20 @@ class ApprovalActionService
 
                 case 'project_payment_confirm':
                     $p = ProjectPayment::findOrFail($id);
+                    if (request()->filled('notes')) {
+                        $p->notes = ($p->notes ? $p->notes . "\n" : '') . "Kế toán: " . request('notes');
+                        $p->save();
+                    }
                     $result = $p->markAsPaid($user);
                     $message = "KT đã xác nhận thanh toán";
                     break;
 
                 case 'material_bill':
                     $b = MaterialBill::findOrFail($id);
+                    if ($b->status === 'pending_accountant' && request()->filled('notes')) {
+                        $b->notes = ($b->notes ? $b->notes . "\n" : '') . "Kế toán: " . request('notes');
+                        $b->save();
+                    }
                     $this->materialBillService->approve($b, $user, $params);
                     $result = true;
                     $message = "Đã duyệt phiếu vật tư \"{$b->bill_number}\"";
@@ -212,6 +228,10 @@ class ApprovalActionService
 
                 case 'equipment_rental_accountant':
                     $r = EquipmentRental::findOrFail($id);
+                    if (request()->filled('notes')) {
+                        $r->notes = ($r->notes ? $r->notes . "\n" : '') . "Kế toán: " . request('notes');
+                        $r->save();
+                    }
                     $result = $this->equipmentService->confirmRentalByAccountant($r, $user);
                     $message = "KT xác nhận thuê thiết bị";
                     break;
@@ -230,6 +250,10 @@ class ApprovalActionService
 
                 case 'asset_usage_accountant':
                     $u = AssetUsage::findOrFail($id);
+                    if (request()->filled('notes')) {
+                        $u->notes = ($u->notes ? $u->notes . "\n" : '') . "Kế toán: " . request('notes');
+                        $u->save();
+                    }
                     $result = $this->equipmentService->confirmUsageByAccountant($u, $user);
                     $message = "KT xác nhận sử dụng thiết bị";
                     break;
@@ -248,6 +272,10 @@ class ApprovalActionService
 
                 case 'equipment_purchase_accountant':
                     $p = \App\Models\EquipmentPurchase::findOrFail($id);
+                    if (request()->filled('notes')) {
+                        $p->notes = ($p->notes ? $p->notes . "\n" : '') . "Kế toán: " . request('notes');
+                        $p->save();
+                    }
                     $result = $this->equipmentService->confirmPurchaseByAccountant($p, $user);
                     $message = "KT xác nhận thanh toán mua thiết bị";
                     break;
