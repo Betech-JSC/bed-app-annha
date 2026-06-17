@@ -31,6 +31,9 @@ class CrmEquipmentController extends Controller
     }
     public function index(Request $request)
     {
+        $user = auth('admin')->user();
+        $this->crmRequire($user, Permissions::EQUIPMENT_VIEW);
+
         $tab = $request->query('tab', 'approvals');
         $search = $request->query('search');
 
@@ -128,6 +131,9 @@ class CrmEquipmentController extends Controller
             'items.*.unit_price' => 'required|numeric|min:0',
         ]);
 
+        $project = Project::findOrFail($request->project_id);
+        $this->crmRequire($user, Permissions::EQUIPMENT_CREATE, $project);
+
         try {
             $purchase = $this->equipmentService->upsertPurchase($request->all(), null, $user);
 
@@ -176,6 +182,7 @@ class CrmEquipmentController extends Controller
                 ]);
 
                 $purchase = EquipmentPurchase::findOrFail($id);
+                $this->crmRequire($user, Permissions::EQUIPMENT_UPDATE, $purchase->project);
                 $this->equipmentService->upsertPurchase($request->all(), $purchase, $user);
 
                 // Handle file uploads (append)
@@ -196,6 +203,7 @@ class CrmEquipmentController extends Controller
                 }
             } else {
                 $eq = Equipment::findOrFail($id);
+                $this->crmRequire($user, Permissions::EQUIPMENT_UPDATE, $eq->project);
                 $this->equipmentService->upsert($request->all(), $eq, $user);
 
                 // Handle file uploads
@@ -226,11 +234,13 @@ class CrmEquipmentController extends Controller
 
     public function destroy(Request $request, $id)
     {
+        $user = auth('admin')->user();
         $tab = $request->query('tab', 'approvals');
 
         try {
             if ($tab === 'approvals') {
                 $purchase = EquipmentPurchase::findOrFail($id);
+                $this->crmRequire($user, Permissions::EQUIPMENT_DELETE, $purchase->project);
                 if ($purchase->status !== 'draft') {
                     throw new \Exception('Chỉ có thể xóa phiếu mua ở trạng thái Nháp.');
                 }
@@ -238,6 +248,7 @@ class CrmEquipmentController extends Controller
                 $purchase->delete();
             } else {
                 $eq = Equipment::findOrFail($id);
+                $this->crmRequire($user, Permissions::EQUIPMENT_DELETE, $eq->project);
                 $this->equipmentService->delete($eq);
             }
             return back()->with('success', 'Đã xóa thành công.');
@@ -255,7 +266,9 @@ class CrmEquipmentController extends Controller
      */
     public function submit($id)
     {
+        $user = auth('admin')->user();
         $purchase = EquipmentPurchase::findOrFail($id);
+        $this->crmRequire($user, Permissions::EQUIPMENT_CREATE, $purchase->project);
 
         if (!in_array($purchase->status, ['draft', 'rejected'])) {
             $msg = 'Chỉ có thể gửi duyệt khi ở trạng thái Nháp hoặc Từ chối.';
