@@ -21,6 +21,7 @@ use App\Models\MaterialBill;
 use App\Models\Attendance;
 use App\Models\ProjectMaintenance;
 use App\Models\ProjectWarranty;
+use App\Models\Payroll;
 use App\Models\User;
 use App\Models\Approval;
 use App\Constants\Permissions;
@@ -309,6 +310,11 @@ class ApprovalQueryService
         $data['material_bills_management'] = $allMaterialBills->filter(fn($b) => str_contains($b->status ?? '', 'management'));
         $data['material_bills_accountant'] = $allMaterialBills->filter(fn($b) => str_contains($b->status ?? '', 'accountant'));
 
+        // Payrolls — split by approval level
+        $allPayrolls = $pluckModels(Payroll::class);
+        $data['payrolls_management'] = $allPayrolls->filter(fn($p) => str_contains($p->status ?? '', 'management'));
+        $data['payrolls_accountant'] = $allPayrolls->filter(fn($p) => str_contains($p->status ?? '', 'accountant'));
+
         // Payments — split by payment status
         $allPayments = $pluckModels(ProjectPayment::class);
         $data['payments_pending'] = $allPayments->filter(fn($p) => ($p->status ?? '') !== 'customer_paid');
@@ -425,6 +431,7 @@ class ApprovalQueryService
             'attendances' => $recentApprovals->filter(fn($a) => $a->approvable_type === Attendance::class)->pluck('approvable')->filter(),
             'maintenances' => $recentApprovals->filter(fn($a) => $a->approvable_type === ProjectMaintenance::class)->pluck('approvable')->filter(),
             'warranties' => $recentApprovals->filter(fn($a) => $a->approvable_type === ProjectWarranty::class)->pluck('approvable')->filter(),
+            'payrolls' => $recentApprovals->filter(fn($a) => $a->approvable_type === Payroll::class)->pluck('approvable')->filter(),
             'acceptance_items' => collect(), // Deprecated
         ];
     }
@@ -445,6 +452,7 @@ class ApprovalQueryService
             return (
                 ($type === Cost::class && in_array($status, ['pending', 'pending_management_approval'])) ||
                 ($type === MaterialBill::class && in_array($status, ['pending', 'pending_management'])) ||
+                ($type === Payroll::class && $status === 'pending_management') ||
                 ($type === AdditionalCost::class) ||
                 ($type === SubcontractorPayment::class && $status === 'pending_management_approval') ||
                 ($type === EquipmentRental::class && $status === 'pending_management') ||
@@ -460,6 +468,7 @@ class ApprovalQueryService
             return (
                 ($type === Cost::class && $status === 'pending_accountant_approval') ||
                 ($type === MaterialBill::class && $status === 'pending_accountant') ||
+                ($type === Payroll::class && $status === 'pending_accountant') ||
                 ($type === ProjectPayment::class && $status === 'customer_paid') ||
                 ($type === SubcontractorPayment::class && $status === 'pending_accountant_confirmation') ||
                 ($type === EquipmentRental::class && in_array($status, ['pending_accountant', 'pending_return'])) ||
@@ -484,7 +493,7 @@ class ApprovalQueryService
 
         // Amount calculation
         $totalPendingAmount = $allApprovals->sum(function($a) {
-            return (float) ($a->metadata['amount'] ?? $a->metadata['total_amount'] ?? $a->metadata['total_cost'] ?? 0);
+            return (float) ($a->metadata['amount'] ?? $a->metadata['total_amount'] ?? $a->metadata['total_cost'] ?? $a->metadata['net_salary'] ?? 0);
         });
 
         $isSuperAdmin = $user->isSuperAdmin();
@@ -575,6 +584,21 @@ class ApprovalQueryService
                         'approval_level' => 'management', 'role_group' => 'management',
                         'attachments' => $this->formatAttachments($b),
                         'attachments_count' => $b->attachments->count(),
+                    ];
+                }
+            }
+            if ($type === 'all' || $type === 'management' || $type === 'payroll') {
+                foreach ($data['payrolls_management'] ?? [] as $p) {
+                    $items[] = [
+                        'id' => $p->id, 'type' => 'payroll', 'title' => 'Phiếu lương: ' . ($p->payroll_number ?? "#{$p->id}"),
+                        'subtitle' => ($p->user->name ?? 'Nhân viên') . ($p->project ? ' - ' . $p->project->name : ''),
+                        'amount' => (float) ($p->net_salary ?? 0),
+                        'status' => $p->status, 'status_label' => $this->getStatusLabel($p->status),
+                        'created_by' => 'Nhân sự', 'created_at' => $p->created_at->toISOString(),
+                        'project_id' => $p->project_id, 'can_approve' => $user->hasPermission(Permissions::HR_SALARY_MANAGE) || $user->hasPermission(Permissions::COST_APPROVE_MANAGEMENT) || $user->isSuperAdmin(),
+                        'approval_level' => 'management', 'role_group' => 'management',
+                        'attachments' => $this->formatAttachments($p),
+                        'attachments_count' => $p->attachments->count(),
                     ];
                 }
             }
@@ -729,6 +753,21 @@ class ApprovalQueryService
                         'approval_level' => 'accountant', 'role_group' => 'accountant',
                         'attachments' => $this->formatAttachments($b),
                         'attachments_count' => $b->attachments->count(),
+                    ];
+                }
+            }
+            if ($type === 'all' || $type === 'accountant' || $type === 'payroll') {
+                foreach ($data['payrolls_accountant'] ?? [] as $p) {
+                    $items[] = [
+                        'id' => $p->id, 'type' => 'payroll', 'title' => 'Phiếu lương: ' . ($p->payroll_number ?? "#{$p->id}"),
+                        'subtitle' => ($p->user->name ?? 'Nhân viên') . ($p->project ? ' - ' . $p->project->name : ''),
+                        'amount' => (float) ($p->net_salary ?? 0),
+                        'status' => $p->status, 'status_label' => $this->getStatusLabel($p->status),
+                        'created_by' => 'Nhân sự', 'created_at' => $p->created_at->toISOString(),
+                        'project_id' => $p->project_id, 'can_approve' => $canApproveAccountant,
+                        'approval_level' => 'accountant', 'role_group' => 'accountant',
+                        'attachments' => $this->formatAttachments($p),
+                        'attachments_count' => $p->attachments->count(),
                     ];
                 }
             }
@@ -1063,6 +1102,9 @@ class ApprovalQueryService
             }
             foreach ($recent['material_bills'] ?? [] as $item) {
                 $recentActions->push(['id' => $item->id, 'type' => 'material_bill', 'title' => 'Vật tư: ' . ($item->bill_number ?? "#{$item->id}"), 'subtitle' => $item->project->name ?? 'Dự án', 'amount' => (float) ($item->total_amount ?? 0), 'status' => $item->status, 'status_label' => $this->getStatusLabel($item->status), 'created_at' => $item->updated_at->toISOString(), 'approval_level' => 'history']);
+            }
+            foreach ($recent['payrolls'] ?? [] as $item) {
+                $recentActions->push(['id' => $item->id, 'type' => 'payroll', 'title' => 'Phiếu lương: ' . ($item->payroll_number ?? "#{$item->id}"), 'subtitle' => $item->user->name ?? 'Nhân viên', 'amount' => (float) ($item->net_salary ?? 0), 'status' => $item->status, 'status_label' => $this->getStatusLabel($item->status), 'created_at' => $item->updated_at->toISOString(), 'approval_level' => 'history']);
             }
             foreach ($recent['sub_payments'] ?? [] as $item) {
                 $recentActions->push(['id' => $item->id, 'type' => 'sub_payment', 'title' => 'TT NTP: ' . ($item->subcontractor->name ?? "#{$item->id}"), 'subtitle' => $item->project->name ?? 'Dự án', 'amount' => (float) ($item->amount ?? 0), 'status' => $item->status, 'status_label' => $this->getStatusLabel($item->status), 'created_at' => $item->updated_at->toISOString(), 'approval_level' => 'history']);

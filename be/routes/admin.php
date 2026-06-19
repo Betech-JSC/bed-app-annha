@@ -90,6 +90,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
 use App\Http\Controllers\Admin\CrmDashboardController;
 use App\Http\Controllers\Admin\CrmProjectsController;
 use App\Http\Controllers\Admin\CrmHrController;
+use App\Http\Controllers\Admin\CrmPayrollController;
 use App\Http\Controllers\Admin\CrmFinanceController;
 use App\Http\Controllers\Admin\CrmMaterialsController;
 use App\Http\Controllers\Admin\CrmOperationsController;
@@ -203,6 +204,10 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         // Warranty
         Route::post('/warranty/{id}/approve', [CrmApprovalController::class, 'approveWarranty'])->name('warranty.approve');
         Route::post('/warranty/{id}/reject', [CrmApprovalController::class, 'rejectWarranty'])->name('warranty.reject');
+
+        // Payroll
+        Route::post('/payroll/{id}/approve', [CrmApprovalController::class, 'approvePayroll'])->name('payroll.approve');
+        Route::post('/payroll/{id}/reject', [CrmApprovalController::class, 'rejectPayroll'])->name('payroll.reject');
     });
 
 
@@ -549,6 +554,14 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         Route::post('/attendance/{id}/reject', [CrmHrController::class, 'rejectAttendanceHr'])->name('attendance.reject');
         Route::post('/attendance/{id}/revert', [CrmHrController::class, 'revertAttendanceHr'])->name('attendance.revert');
         Route::post('/attendance/generate-labor-costs', [CrmHrController::class, 'generateLaborCostsHr'])->name('attendance.generate-costs');
+
+        // Payroll
+        Route::get('/payrolls', [CrmPayrollController::class, 'index'])->name('payrolls');
+        Route::post('/payrolls', [CrmPayrollController::class, 'store'])->name('payrolls.store');
+        Route::put('/payrolls/{id}', [CrmPayrollController::class, 'update'])->name('payrolls.update');
+        Route::delete('/payrolls/{id}', [CrmPayrollController::class, 'destroy'])->name('payrolls.destroy');
+        Route::post('/payrolls/{id}/submit', [CrmPayrollController::class, 'submit'])->name('payrolls.submit');
+        Route::post('/payrolls/{id}/revert', [CrmPayrollController::class, 'revert'])->name('payrolls.revert');
 
         // KPI
         Route::get('/kpi', [CrmKpiController::class, 'index'])->name('kpi');

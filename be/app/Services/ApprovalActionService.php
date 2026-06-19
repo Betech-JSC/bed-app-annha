@@ -21,6 +21,8 @@ use App\Models\MaterialBill;
 use App\Models\Attendance;
 use App\Models\ProjectMaintenance;
 use App\Models\ProjectWarranty;
+use App\Models\Payroll;
+use App\Services\PayrollService;
 use App\Models\Approval;
 use App\Models\ApprovalLog;
 use App\Models\User;
@@ -46,6 +48,7 @@ class ApprovalActionService
     protected ProjectBudgetService $budgetService;
     protected AttendanceService $attendanceService;
     protected NotificationService $notificationService;
+    protected PayrollService $payrollService;
 
     public function __construct(
         MaterialBillService $materialBillService,
@@ -55,7 +58,8 @@ class ApprovalActionService
         ConstructionLogService $logService,
         ProjectBudgetService $budgetService,
         AttendanceService $attendanceService,
-        NotificationService $notificationService
+        NotificationService $notificationService,
+        PayrollService $payrollService
     ) {
         $this->materialBillService = $materialBillService;
         $this->acceptanceService = $acceptanceService;
@@ -65,6 +69,7 @@ class ApprovalActionService
         $this->budgetService = $budgetService;
         $this->attendanceService = $attendanceService;
         $this->notificationService = $notificationService;
+        $this->payrollService = $payrollService;
     }
     /**
      * Unified Approval Method
@@ -180,6 +185,17 @@ class ApprovalActionService
                     $this->materialBillService->approve($b, $user, $params);
                     $result = true;
                     $message = "Đã duyệt phiếu vật tư \"{$b->bill_number}\"";
+                    break;
+
+                case 'payroll':
+                    $p = Payroll::findOrFail($id);
+                    if ($p->status === 'pending_accountant' && request()->filled('notes')) {
+                        $p->notes = ($p->notes ? $p->notes . "\n" : '') . "Kế toán: " . request('notes');
+                        $p->save();
+                    }
+                    $this->payrollService->approve($p, $user, $params);
+                    $result = true;
+                    $message = "Đã duyệt phiếu lương \"" . ($p->payroll_number ?? $p->id) . "\"";
                     break;
 
                 case 'sub_acceptance':
@@ -387,6 +403,7 @@ class ApprovalActionService
                     return ['success' => true, 'message' => 'Đã từ chối chấm công của ' . ($att->user->name ?? 'nhân viên')];
                 case 'maintenance': $model = ProjectMaintenance::findOrFail($id); break;
                 case 'warranty': $model = ProjectWarranty::findOrFail($id); break;
+                case 'payroll': $model = Payroll::findOrFail($id); break;
                 default:
                     throw new Exception("Loại cần từ chối không hợp lệ: {$type}");
             }
@@ -394,6 +411,9 @@ class ApprovalActionService
             // Perform rejection — handle different model signatures
             if ($model instanceof Cost) {
                 $this->financialService->rejectCost($model, $reason, $user);
+                $result = true;
+            } elseif ($model instanceof Payroll) {
+                $this->payrollService->reject($model, $user, $reason);
                 $result = true;
             } elseif ($model instanceof SubcontractorPayment) {
                 $this->financialService->rejectSubPayment($model, $reason, $user);
@@ -563,6 +583,13 @@ class ApprovalActionService
                     $m->status = ProjectMaintenance::STATUS_DRAFT;
                     $result = $m->save();
                     $message = "Đã hoàn duyệt bảo trì về nháp";
+                    break;
+
+                case 'payroll':
+                    $p = Payroll::findOrFail($id);
+                    $this->payrollService->revertToDraft($p, $user);
+                    $result = true;
+                    $message = "Đã hoàn duyệt phiếu lương \"" . ($p->payroll_number ?? $p->id) . "\"";
                     break;
 
                 case 'warranty':
@@ -742,6 +769,7 @@ class ApprovalActionService
                 'attendance' => Attendance::class,
                 'maintenance' => ProjectMaintenance::class,
                 'warranty' => ProjectWarranty::class,
+                'payroll' => Payroll::class,
                 default => null,
             };
 

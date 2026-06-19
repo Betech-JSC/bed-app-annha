@@ -737,7 +737,7 @@ const menuItems = computed(() => {
       children: [
         { key: 'employees', label: 'Nhân viên', perm: 'hr.employee.view' },
         { key: 'customers', label: 'Khách hàng', perm: 'hr.employee.view' },
-        { key: 'payrolls', label: 'Cấu hình lương', perm: 'hr.salary.manage' },
+        { key: 'payrolls', label: 'Bảng lương / Phiếu lương', perm: 'hr.salary.view' },
         { key: 'my-payroll', label: 'Phiếu lương của tôi', icon: () => h(FileTextOutlined), show: !can('hr.salary.manage') },
         { key: 'departments', label: 'Phòng ban', perm: 'hr.employee.view' },
         { key: 'org-chart', label: 'Sơ đồ tổ chức', icon: () => h(ApartmentOutlined), perm: 'hr.employee.view' },
@@ -799,7 +799,7 @@ const handleMenuClick = ({ key }) => {
     equipment: '/equipment',
     employees: '/hr/employees?type=employee',
     customers: '/hr/employees?type=customer',
-    payrolls: '/hr/employees?mode=salary',
+    payrolls: '/hr/payrolls',
     departments: '/hr/departments',
     kpi: '/hr/kpi',
     'kpi-assigned': '/hr/kpi',

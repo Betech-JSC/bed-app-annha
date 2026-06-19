@@ -69,6 +69,7 @@ class CodeGeneratorService
             'budget' => ['prefix' => 'NS-{YYYY}-', 'length' => 3],
             'construction_log' => ['prefix' => 'NK-{YY}{MM}{DD}-', 'length' => 2],
             'global_equipment' => ['prefix' => 'TB-', 'length' => 4],
+            'payroll' => ['prefix' => 'PL-{YY}{MM}-', 'length' => 3],
         ];
 
         $config = $defaults[$type] ?? ['prefix' => strtoupper($type) . '-', 'length' => 4];

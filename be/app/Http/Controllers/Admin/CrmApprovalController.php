@@ -21,6 +21,7 @@ use App\Models\EquipmentRental;
 use App\Models\AssetUsage;
 use App\Models\MaterialBill;
 use App\Models\Attendance;
+use App\Models\Payroll;
 use App\Services\AttendanceService;
 use App\Services\AttachmentService;
 use App\Models\User;
@@ -105,8 +106,9 @@ class CrmApprovalController extends Controller
                 ->concat($data['asset_usages_management']->filter(fn($i) => $this->crmCan($user, Permissions::COST_APPROVE_MANAGEMENT, $i->project))->map(fn($i) => array_merge($this->formatAssetUsageItem($i), ['_approveType' => 'asset_usage_management'])))
                 ->concat(($data['equipment_purchases_management'] ?? collect([]))->filter(fn($i) => $this->crmCan($user, Permissions::COST_APPROVE_MANAGEMENT, $i->project))->map(fn($i) => array_merge($this->formatEquipmentPurchaseItem($i), ['_approveType' => 'equipment_purchase_management'])))
                 ->concat(($data['equipment_inventory_management'] ?? collect([]))->filter(fn($i) => $this->crmCan($user, Permissions::COST_APPROVE_MANAGEMENT, $i->project))->map(fn($i) => array_merge($this->formatEquipmentInventoryItem($i), ['_approveType' => 'equipment_inventory_management'])))
+                ->concat(($data['payrolls_management'] ?? collect([]))->filter(fn($i) => $this->crmCan($user, Permissions::COST_APPROVE_MANAGEMENT) || $this->crmCan($user, Permissions::HR_SALARY_MANAGE))->map(fn($i) => array_merge($this->formatPayrollItem($i), ['_approveType' => 'payroll'])))
                 ->unique(fn($item) => ($item['type'] ?? '') . '_' . $item['id'])->values() : collect([]),
-
+ 
             'accountant' => $userPermissions['can_accountant'] ? collect([])
                 ->concat($data['costs_accountant']->filter(fn($i) => $this->crmCan($user, $i->project_id ? Permissions::COST_APPROVE_ACCOUNTANT : Permissions::COMPANY_COST_APPROVE_ACCOUNTANT, $i->project))->map(fn($i) => array_merge($this->formatItem($i), ['_approveType' => 'accountant'])))
                 ->concat($data['sub_payments_accountant']->filter(fn($i) => $this->crmCan($user, Permissions::SUBCONTRACTOR_PAYMENT_MARK_PAID, $i->project))->map(fn($i) => array_merge($this->formatSubPaymentItem($i), ['_approveType' => 'sub_payment_confirm'])))
@@ -116,6 +118,7 @@ class CrmApprovalController extends Controller
                 ->concat($data['asset_usages_accountant']->filter(fn($i) => $this->crmCan($user, Permissions::COST_APPROVE_ACCOUNTANT, $i->project))->map(fn($i) => array_merge($this->formatAssetUsageItem($i), ['_approveType' => 'asset_usage_accountant'])))
                 ->concat(($data['equipment_purchases_accountant'] ?? collect([]))->filter(fn($i) => $this->crmCan($user, Permissions::COST_APPROVE_ACCOUNTANT, $i->project))->map(fn($i) => array_merge($this->formatEquipmentPurchaseItem($i), ['_approveType' => 'equipment_purchase_accountant'])))
                 ->concat(($data['equipment_inventory_accountant'] ?? collect([]))->filter(fn($i) => $this->crmCan($user, Permissions::COST_APPROVE_ACCOUNTANT, $i->project))->map(fn($i) => array_merge($this->formatEquipmentInventoryItem($i), ['_approveType' => 'equipment_inventory_accountant'])))
+                ->concat(($data['payrolls_accountant'] ?? collect([]))->filter(fn($i) => $this->crmCan($user, Permissions::COST_APPROVE_ACCOUNTANT))->map(fn($i) => array_merge($this->formatPayrollItem($i), ['_approveType' => 'payroll_confirm'])))
                 ->unique(fn($item) => ($item['type'] ?? '') . '_' . $item['id'])->values() : collect([]),
 
             'project_manager' => $userPermissions['can_pm'] ? collect([])
@@ -515,6 +518,64 @@ class CrmApprovalController extends Controller
         }
 
         return $this->delegateReject($user, 'material_bill', $id, $request->reason);
+    }
+
+    // =========================================================================
+    // PAYROLL APPROVAL
+    // =========================================================================
+
+    public function approvePayroll(Request $request, $id)
+    {
+        $payroll = Payroll::findOrFail($id);
+        $user = Auth::guard('admin')->user();
+
+        // Enforce stage-specific permission checks
+        if ($payroll->status === 'pending_management') {
+            if (!$user->isSuperAdmin() && !$user->hasPermission(Permissions::COST_APPROVE_MANAGEMENT) && !$user->hasPermission(Permissions::HR_SALARY_MANAGE)) {
+                return back()->with('error', 'Bạn không có quyền duyệt phiếu lương ở trạng thái chờ Ban điều hành duyệt.');
+            }
+        } elseif ($payroll->status === 'pending_accountant') {
+            if (!$user->isSuperAdmin() && !$user->hasPermission(Permissions::COST_APPROVE_ACCOUNTANT)) {
+                return back()->with('error', 'Bạn không có quyền xác nhận phiếu lương ở trạng thái chờ Kế toán xác nhận.');
+            }
+            // Mandatorily attach uploaded files to the Payroll if status is pending_accountant (Accountant step)
+            try {
+                $request->merge(['description' => 'after']);
+                $this->attachFilesToEntity($request, $payroll, "payrolls/{$payroll->id}", true);
+            } catch (\Exception $e) {
+                return back()->with('error', 'Yêu cầu đính kèm file chứng từ: ' . $e->getMessage());
+            }
+        } else {
+            return back()->with('error', 'Phiếu lương không ở trạng thái chờ duyệt. Trạng thái hiện tại: ' . ($payroll->status ?? 'Nháp'));
+        }
+
+        try {
+            return $this->delegateApprove($user, 'payroll', $id);
+        } catch (\Exception $e) {
+            return back()->with('error', 'Lỗi: ' . $e->getMessage());
+        }
+    }
+
+    public function rejectPayroll(Request $request, $id)
+    {
+        $request->validate(['reason' => 'required|string|max:500']);
+        $payroll = Payroll::findOrFail($id);
+        $user = Auth::guard('admin')->user();
+
+        // Enforce stage-specific permission checks for rejection
+        if ($payroll->status === 'pending_management') {
+            if (!$user->isSuperAdmin() && !$user->hasPermission(Permissions::COST_APPROVE_MANAGEMENT) && !$user->hasPermission(Permissions::HR_SALARY_MANAGE)) {
+                return back()->with('error', 'Bạn không có quyền từ chối phiếu lương ở trạng thái chờ Ban điều hành duyệt.');
+            }
+        } elseif ($payroll->status === 'pending_accountant') {
+            if (!$user->isSuperAdmin() && !$user->hasPermission(Permissions::COST_APPROVE_ACCOUNTANT)) {
+                return back()->with('error', 'Bạn không có quyền từ chối phiếu lương ở trạng thái chờ Kế toán xác nhận.');
+            }
+        } else {
+            return back()->with('error', 'Phiếu lương không ở trạng thái chờ duyệt để từ chối.');
+        }
+
+        return $this->delegateReject($user, 'payroll', $id, $request->reason);
     }
 
     // =========================================================================
@@ -1497,6 +1558,40 @@ class CrmApprovalController extends Controller
             'pending_customer' => 'Chờ duyệt',
         ];
         return $labels[$status] ?? $status;
+    }
+
+    private function formatPayrollItem(Payroll $payroll): array
+    {
+        $monthStr = $payroll->period_start ? $payroll->period_start->format('m/Y') : '';
+        $empName = $payroll->user ? $payroll->user->name : 'Nhân viên';
+        return [
+            'id' => $payroll->id,
+            'type' => 'payroll',
+            'type_label' => 'Phiếu lương',
+            'title' => "Phiếu lương - {$empName}",
+            'subtitle' => "Tháng {$monthStr}" . ($payroll->project ? ' - ' . $payroll->project->name : ''),
+            'amount' => (float) $payroll->net_salary,
+            'status' => $payroll->status,
+            'status_label' => match($payroll->status) {
+                'pending_management' => 'Chờ BĐH duyệt',
+                'pending_accountant' => 'Chờ KT xác nhận',
+                'approved' => 'Đã duyệt',
+                'rejected' => 'Bị từ chối',
+                default => $payroll->status
+            },
+            'created_by' => 'Nhân sự',
+            'created_at' => optional($payroll->created_at)->format('d/m/Y H:i') ?? '',
+            'project_id' => $payroll->project_id,
+            'attachments' => $this->formatAttachments($payroll->attachments),
+            'attachments_count' => $payroll->attachments->count(),
+            'metadata' => [
+                'base_salary' => $payroll->base_salary,
+                'bonus_amount' => $payroll->bonus_amount,
+                'allowance_amount' => $payroll->allowance_amount,
+                'deductions' => $payroll->deductions,
+                'net_salary' => $payroll->net_salary,
+            ]
+        ];
     }
 
     private function formatAttachments($attachments): \Illuminate\Support\Collection
