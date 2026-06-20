@@ -80,7 +80,7 @@ class EquipmentPurchase extends Model
             [
                 'project_id'               => $this->project_id,
                 'name'                     => "Mua thiết bị mới #" . ($this->id),
-                'amount'                   => $this->total_amount,
+                'amount'                   => $this->total_amount ?? 0,
                 'cost_date'                => $this->created_at ?: now(),
                 'category'                 => 'other',
                 'cost_group_id'            => $costGroupId,

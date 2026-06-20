@@ -269,7 +269,7 @@ class SubcontractorPayment extends Model
                 'project_id'               => $this->project_id,
                 'subcontractor_id'         => $this->subcontractor_id,
                 'name'                     => "Thanh toán thầu phụ: " . ($this->subcontractor->name ?? 'N/A') . " - Đợt: " . ($this->payment_stage ?? 'N/A'),
-                'amount'                   => $this->amount,
+                'amount'                   => $this->amount ?? 0,
                 'cost_date'                => $this->payment_date ?: now(),
                 'category'                 => 'other',
                 'cost_group_id'            => $costGroupId,

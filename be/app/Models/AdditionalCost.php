@@ -265,7 +265,7 @@ class AdditionalCost extends Model
             [
                 'project_id'               => $this->project_id,
                 'name'                     => "CP Phát sinh: " . ($this->description ?: "Không tên") . " (#" . $this->id . ")",
-                'amount'                   => $this->amount,
+                'amount'                   => $this->amount ?? 0,
                 'cost_date'                => $this->created_at ?: now(),
                 'category'                 => 'other',
                 'cost_group_id'            => $costGroupId,
