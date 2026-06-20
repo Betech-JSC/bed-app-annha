@@ -124,7 +124,7 @@
 
             <!-- Xóa (Delete) -->
             <a-popconfirm 
-              v-if="['draft', 'rejected'].includes(record.status) && can('company_cost.delete')"
+              v-if="['draft', 'rejected', 'approved'].includes(record.status) && can('company_cost.delete')"
               title="Xóa chi phí này vĩnh viễn?" ok-text="Xóa" cancel-text="Hủy"
               @confirm="deleteCost(record.id)"
             >
@@ -293,7 +293,7 @@
       <div class="fixed bottom-0 right-0 w-[560px] p-4 bg-white/80 backdrop-blur-md border-t border-gray-100 flex justify-between z-20">
         <!-- Left side: Destructive actions -->
         <div class="flex gap-2">
-          <a-popconfirm v-if="['draft', 'rejected'].includes(selectedCost.status)" title="Xóa chi phí này vĩnh viễn?" ok-text="Xóa" cancel-text="Hủy" @confirm="deleteCost(selectedCost.id); drawerVisible = false">
+          <a-popconfirm v-if="['draft', 'rejected', 'approved'].includes(selectedCost.status)" title="Xóa chi phí này vĩnh viễn?" ok-text="Xóa" cancel-text="Hủy" @confirm="deleteCost(selectedCost.id); drawerVisible = false">
             <a-button danger size="small"><DeleteOutlined /> Xóa</a-button>
           </a-popconfirm>
           <a-popconfirm v-if="['pending_management_approval', 'pending_accountant_approval', 'rejected'].includes(selectedCost.status)" title="Hoàn duyệt về trạng thái Nháp?" @confirm="revertCost(selectedCost.id)">

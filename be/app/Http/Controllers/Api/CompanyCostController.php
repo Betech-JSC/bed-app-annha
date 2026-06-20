@@ -229,11 +229,11 @@ class CompanyCostController extends Controller
     {
         $cost = Cost::companyCosts()->findOrFail($id);
 
-        // Only allow deleting if status is draft or rejected
-        if (!in_array($cost->status, ['draft', 'rejected'])) {
+        // Only allow deleting if status is draft, rejected, or approved
+        if (!in_array($cost->status, ['draft', 'rejected', 'approved'])) {
             return response()->json([
                 'success' => false,
-                'message' => 'Chỉ có thể xóa chi phí ở trạng thái nháp hoặc bị từ chối',
+                'message' => 'Chỉ có thể xóa chi phí ở trạng thái nháp, bị từ chối hoặc đã duyệt',
             ], 403);
         }
 
