@@ -285,8 +285,8 @@ class CrmFinanceController extends Controller
         $this->crmRequire($user, Permissions::COMPANY_COST_DELETE);
         $cost = Cost::companyCosts()->findOrFail($id);
 
-        if (!in_array($cost->status, ['draft', 'rejected'])) {
-            return redirect()->back()->with('error', 'Chỉ có thể xóa chi phí ở trạng thái nháp hoặc bị từ chối.');
+        if (!in_array($cost->status, ['draft', 'rejected', 'approved'])) {
+            return redirect()->back()->with('error', 'Chỉ có thể xóa chi phí ở trạng thái nháp, bị từ chối hoặc đã duyệt.');
         }
 
         $cost->delete();
