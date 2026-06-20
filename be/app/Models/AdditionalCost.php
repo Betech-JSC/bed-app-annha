@@ -125,8 +125,10 @@ class AdditionalCost extends Model
         }
         
         // Nếu có số tiền thực tế khác với số tiền ban đầu
-        if ($actualAmount !== null && $actualAmount != $this->amount) {
+        if ($actualAmount !== null && floatval($actualAmount) > 0) {
             $this->actual_amount = $actualAmount;
+        } else if (empty($this->actual_amount) || floatval($this->actual_amount) == 0) {
+            $this->actual_amount = $this->amount;
         }
 
         if ($user) {
@@ -152,6 +154,14 @@ class AdditionalCost extends Model
             $this->confirmed_by = $user->id;
             $this->confirmed_at = now();
         }
+
+        if (empty($this->actual_amount) || floatval($this->actual_amount) == 0) {
+            $this->actual_amount = $this->amount;
+        }
+        if (empty($this->paid_date)) {
+            $this->paid_date = now()->toDateString();
+        }
+
         return $this->save();
     }
 

@@ -143,22 +143,25 @@ class ProjectPayment extends Model
             return false;
         }
 
-        // Copy customer's original files as confirmation receipt files ('after' files)
-        $originalAttachments = $this->attachments()
-            ->where(function($query) {
-                $query->where('description', '!=', 'after')
-                      ->orWhereNull('description');
-            })->get();
+        // Copy customer's original files as confirmation receipt files ('after' files) ONLY if no 'after' files exist
+        $hasAfterAttachments = $this->attachments()->where('description', 'after')->exists();
+        if (!$hasAfterAttachments) {
+            $originalAttachments = $this->attachments()
+                ->where(function($query) {
+                    $query->where('description', '!=', 'after')
+                          ->orWhereNull('description');
+                })->get();
 
-        foreach ($originalAttachments as $att) {
-            $exists = $this->attachments()
-                ->where('description', 'after')
-                ->where('file_path', $att->file_path)
-                ->exists();
-            if (!$exists) {
-                $newAtt = $att->replicate();
-                $newAtt->description = 'after';
-                $newAtt->save();
+            foreach ($originalAttachments as $att) {
+                $exists = $this->attachments()
+                    ->where('description', 'after')
+                    ->where('file_path', $att->file_path)
+                    ->exists();
+                if (!$exists) {
+                    $newAtt = $att->replicate();
+                    $newAtt->description = 'after';
+                    $newAtt->save();
+                }
             }
         }
 
@@ -167,6 +170,14 @@ class ProjectPayment extends Model
             $this->confirmed_by = $user->id;
             $this->confirmed_at = now();
         }
+        
+        if (empty($this->actual_amount) || floatval($this->actual_amount) == 0) {
+            $this->actual_amount = $this->amount;
+        }
+        if (empty($this->paid_date)) {
+            $this->paid_date = now()->toDateString();
+        }
+
         return $this->save();
     }
 
@@ -188,12 +199,14 @@ class ProjectPayment extends Model
         }
         
         // Nếu có số tiền thực tế khác với số tiền ban đầu, lưu vào notes và cập nhật column thực tế
-        if ($actualAmount !== null) {
+        if ($actualAmount !== null && floatval($actualAmount) > 0) {
             $this->actual_amount = $actualAmount;
             if ($actualAmount != $this->amount) {
                 $this->notes = ($this->notes ? $this->notes . "\n" : '') . 
                     "Số tiền thực tế: " . number_format($actualAmount, 0, ',', '.') . " VND";
             }
+        } else if (empty($this->actual_amount) || floatval($this->actual_amount) == 0) {
+            $this->actual_amount = $this->amount;
         }
 
         if ($user) {

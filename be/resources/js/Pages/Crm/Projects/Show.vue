@@ -5653,19 +5653,41 @@
 
       <!-- Notes -->
       <div v-if="paymentDetailRecord.notes" class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
-        <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Ghi chú thanh toán</div>
-        <div class="text-sm text-gray-600 leading-relaxed">{{ paymentDetailRecord.notes }}</div>
+        <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2 text-blue-500"><CommentOutlined /> Lịch sử ghi chú & Phản hồi</div>
+        <div class="space-y-3.5">
+          <div v-for="(note, idx) in parsedPaymentNotes" :key="idx" 
+               class="p-4 rounded-xl border transition-all duration-200 hover:shadow-sm"
+               :class="{
+                 'bg-gray-50/50 border-gray-100': note.type === 'normal',
+                 'bg-blue-50/30 border-blue-100': note.type === 'info',
+                 'bg-green-50/30 border-green-100': note.type === 'success',
+                 'bg-red-50/30 border-red-100': note.type === 'error'
+               }">
+            <div class="flex justify-between items-center mb-1.5">
+              <span class="text-[10px] uppercase font-bold tracking-wider"
+                    :class="{
+                      'text-gray-400': note.type === 'normal',
+                      'text-blue-500 font-bold': note.type === 'info',
+                      'text-green-600 font-bold': note.type === 'success',
+                      'text-red-500 font-bold': note.type === 'error'
+                    }">
+                {{ note.author }}
+              </span>
+            </div>
+            <div class="text-sm text-gray-700 font-medium whitespace-pre-wrap leading-relaxed">{{ note.content }}</div>
+          </div>
+        </div>
       </div>
 
       <!-- Attachments -->
       <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm space-y-6">
         <div>
           <div class="flex justify-between items-center mb-4">
-             <div class="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2 text-blue-500"><CameraOutlined /> Chứng từ đính kèm ({{ (paymentDetailRecord.attachments || []).filter(a => a.description !== 'after').length }})</div>
+             <div class="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2 text-blue-500"><CameraOutlined /> Chứng từ đính kèm ({{ paymentBeforeAttachments.length }})</div>
              <a-button v-if="can('payment.update') && paymentDetailRecord.status === 'draft'" type="link" size="small" @click="openAttachModal('payment', paymentDetailRecord)" class="p-0">Thêm tệp</a-button>
           </div>
-          <div v-if="(paymentDetailRecord.attachments || []).filter(a => a.description !== 'after').length" class="flex flex-wrap gap-2">
-             <div v-for="att in paymentDetailRecord.attachments.filter(a => a.description !== 'after')" :key="att.id" 
+          <div v-if="paymentBeforeAttachments.length" class="flex flex-wrap gap-2">
+             <div v-for="att in paymentBeforeAttachments" :key="att.id" 
                   class="group relative w-16 h-16 rounded-lg border border-gray-200 overflow-hidden cursor-pointer hover:border-blue-400 transition"
                   @click="openFilePreview(att)">
                <img v-if="isImageFile(att)" :src="att.file_url || att.url" class="w-full h-full object-cover" />
@@ -5685,10 +5707,10 @@
 
         <div>
           <div class="flex justify-between items-center mb-4">
-             <div class="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2 text-green-600"><FileProtectOutlined /> Chứng từ thanh toán ({{ (paymentDetailRecord.attachments || []).filter(a => a.description === 'after').length }})</div>
+             <div class="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2 text-green-600"><FileProtectOutlined /> Chứng từ thanh toán ({{ paymentAfterAttachments.length }})</div>
           </div>
-          <div v-if="(paymentDetailRecord.attachments || []).filter(a => a.description === 'after').length" class="flex flex-wrap gap-2">
-             <div v-for="att in paymentDetailRecord.attachments.filter(a => a.description === 'after')" :key="att.id" 
+          <div v-if="paymentAfterAttachments.length" class="flex flex-wrap gap-2">
+             <div v-for="att in paymentAfterAttachments" :key="att.id" 
                   class="group relative w-16 h-16 rounded-lg border border-gray-200 overflow-hidden cursor-pointer hover:border-blue-400 transition"
                   @click="openFilePreview(att)">
                <img v-if="isImageFile(att)" :src="att.file_url || att.url" class="w-full h-full object-cover" />
@@ -7978,7 +8000,7 @@ import {
   FileAddOutlined, SafetyCertificateOutlined, PaperClipOutlined,
   CalculatorOutlined, NodeIndexOutlined, ToolOutlined, TagsOutlined,
   AlertOutlined, LockOutlined, CloudUploadOutlined, FormOutlined, FileImageOutlined, 
-  UnorderedListOutlined, AuditOutlined
+  UnorderedListOutlined, AuditOutlined, CommentOutlined
 } from '@ant-design/icons-vue'
 
 defineOptions({ layout: CrmLayout })
@@ -8341,6 +8363,69 @@ const showCostDetail = ref(false)
 const costDetailRecord = ref(null)
 const showPaymentDetail = ref(false)
 const paymentDetailRecord = ref(null)
+
+const parsedPaymentNotes = computed(() => {
+  if (!paymentDetailRecord.value || !paymentDetailRecord.value.notes) return []
+  const lines = paymentDetailRecord.value.notes.split(/\r?\n/).map(l => l.trim()).filter(Boolean)
+  return lines.map((line) => {
+    let author = 'Ghi chú gốc'
+    let role = 'pm'
+    let content = line
+    let type = 'normal'
+    
+    if (line.match(/^(Kế toán từ chối|KT từ chối|Ban điều hành từ chối|BĐH từ chối)/i) || line.includes('từ chối - Lý do:') || line.includes('từ chối — Lý do:')) {
+      author = line.includes('Kế toán') || line.includes('KT') ? 'Kế toán từ chối' : 'Ban điều hành từ chối'
+      role = 'rejection'
+      type = 'error'
+      content = line.replace(/^(Kế toán từ chối|KT từ chối|Ban điều hành từ chối|BĐH từ chối)\s*[-—:]?\s*(Lý do:)?\s*/i, '')
+    } else if (line.match(/^(Khách hàng từ chối|KH từ chối)/i)) {
+      author = 'Khách hàng từ chối'
+      role = 'rejection'
+      type = 'error'
+      content = line.replace(/^(Khách hàng từ chối|KH từ chối)\s*[-—:]?\s*(Lý do:)?\s*/i, '')
+    } else if (line.match(/^(Kế toán|KT):/i)) {
+      author = 'Kế toán'
+      role = 'accountant'
+      type = 'success'
+      content = line.replace(/^(Kế toán|KT):\s*/i, '')
+    } else if (line.startsWith('Số tiền thực tế:')) {
+      author = 'Khách hàng báo cáo'
+      role = 'customer_amount'
+      type = 'info'
+      content = line
+    }
+    
+    return { author, role, content, type }
+  })
+})
+
+const getUniqueAttachments = (attachments, filterType) => {
+  if (!attachments) return []
+  let filtered = []
+  if (filterType === 'before') {
+    filtered = attachments.filter(a => a.description !== 'after')
+  } else if (filterType === 'after') {
+    filtered = attachments.filter(a => a.description === 'after')
+  }
+  const seen = new Set()
+  return filtered.filter(a => {
+    const identifier = a.file_url || a.file_path || a.id
+    if (seen.has(identifier)) return false
+    seen.add(identifier)
+    return true
+  })
+}
+
+const paymentBeforeAttachments = computed(() => {
+  if (!paymentDetailRecord.value) return []
+  return getUniqueAttachments(paymentDetailRecord.value.attachments, 'before')
+})
+
+const paymentAfterAttachments = computed(() => {
+  if (!paymentDetailRecord.value) return []
+  return getUniqueAttachments(paymentDetailRecord.value.attachments, 'after')
+})
+
 const showSubDetailDrawer = ref(false)
 const showSubPaymentDetailDrawer = ref(false)
 const subPaymentDetail = ref(null)

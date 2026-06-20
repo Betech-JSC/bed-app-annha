@@ -252,8 +252,12 @@ class CrmProjectsController extends Controller
             // 5. DATA CLOSURES — Loaded on initial load AND available for partial reloads
             'financeData' => [
                 'payments' => $project->payments()
-                    ->select('id', 'project_id', 'payment_number', 'amount', 'status', 'due_date', 'contract_id', 'notes', 'created_at')
-                    ->with('attachments:id,attachable_id,attachable_type,file_name,original_name,file_size,file_url,mime_type,description')
+                    ->select('id', 'project_id', 'payment_number', 'amount', 'status', 'due_date', 'contract_id', 'notes', 'created_at', 'actual_amount', 'paid_date', 'confirmed_by', 'confirmed_at', 'customer_approved_by', 'customer_approved_at')
+                    ->with([
+                        'attachments:id,attachable_id,attachable_type,file_name,original_name,file_size,file_url,mime_type,description',
+                        'confirmer:id,name',
+                        'customerApprover:id,name'
+                    ])
                     ->orderByDesc('payment_number')->get(),
                 'costs' => $project->costs()
                     // ->whereNull('material_bill_id')
