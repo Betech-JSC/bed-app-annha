@@ -197,7 +197,7 @@
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1">Dự án <span class="text-red-500">*</span></label>
           <a-select v-model:value="form.project_id" style="width: 100%;" size="large" placeholder="Chọn dự án" show-search :filter-option="filterOption" option-label-prop="label">
-            <a-select-option v-for="p in projects" :key="p.id" :value="p.id" :label="`${p.code} - ${p.name}`">{{ p.code }} - {{ p.name }}</a-select-option>
+            <a-select-option v-for="p in (editingSub ? projects : activeProjects)" :key="p.id" :value="p.id" :label="`${p.code} - ${p.name}`">{{ p.code }} - {{ p.name }}</a-select-option>
           </a-select>
           <div v-if="form.errors.project_id" class="text-red-500 text-xs mt-1">{{ form.errors.project_id }}</div>
         </div>
@@ -397,6 +397,7 @@ const props = defineProps({
   stats: Object,
   charts: Object,
   projects: Array,
+  activeProjects: Array,
   filters: Object,
   globalSubcontractors: Array,
   costGroups: Array,

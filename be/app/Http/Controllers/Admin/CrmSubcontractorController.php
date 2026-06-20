@@ -97,12 +97,14 @@ class CrmSubcontractorController extends Controller
 
         // Projects for filter
         $projects = Project::orderByDesc('created_at')->get(['id', 'name', 'code']);
+        $activeProjects = Project::where('status', 'in_progress')->orderByDesc('created_at')->get(['id', 'name', 'code']);
 
         $globalSubcontractors = GlobalSubcontractor::select('id', 'name', 'category', 'bank_name', 'bank_account_number', 'bank_account_name')->orderBy('name')->get();
         $costGroups = \App\Models\CostGroup::where('is_active', true)->orderBy('name')->get(['id', 'name']);
 
         return Inertia::render('Crm/Subcontractors/Index', [
             'subcontractors' => $subcontractors,
+            'activeProjects' => $activeProjects,
             'stats' => [
                 'totalSubs' => $totalSubs,
                 'totalQuote' => $totalQuote,

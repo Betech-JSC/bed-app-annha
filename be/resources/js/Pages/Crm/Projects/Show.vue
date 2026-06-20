@@ -763,6 +763,7 @@
             row-key="id" 
             size="small" 
             class="crm-table hover-row"
+            :custom-row="customSubProgressRow"
           >
             <template #bodyCell="{ column, record }">
               <template v-if="column.key === 'subcontractor_name'">
@@ -778,8 +779,7 @@
                 <div class="flex items-center gap-1.5">
                   <div class="w-12 h-1.5 bg-gray-100 rounded-full overflow-hidden">
                     <div 
-                      class="h-full rounded-full transition-all duration-300"
-                      :class="Number(record.actual_progress) >= Number(record.planned_progress) ? 'bg-green-500' : 'bg-red-500'"
+                      class="h-full rounded-full transition-all duration-300 bg-green-500"
                       :style="{ width: `${record.actual_progress || 0}%` }"
                     ></div>
                   </div>
@@ -9938,14 +9938,11 @@ const subProgressStatusColors = {
 }
 
 const progressCols = [
-  { title: 'Nhà thầu phụ', key: 'subcontractor_name' },
+  { title: 'Tên nhà thầu', key: 'subcontractor_name' },
   { title: 'Ngày báo cáo', key: 'progress_date' },
-  { title: 'Tiến độ KH', key: 'planned_progress' },
-  { title: 'Tiến độ thực tế', key: 'actual_progress' },
-  { title: 'Khối lượng hoàn thành', key: 'completed_volume' },
-  { title: 'Nội dung công việc', key: 'work_description' },
+  { title: 'Tiến độ thực hiện', key: 'actual_progress' },
+  { title: 'Nội dung kiểm tra', key: 'work_description' },
   { title: 'Trạng thái', key: 'status' },
-  { title: 'Ảnh nhật ký', key: 'attachments' },
   { title: 'Phê duyệt', key: 'verified_at' },
   { title: '', key: 'actions', width: 120 }
 ]
@@ -9962,6 +9959,28 @@ const allSubcontractorProgress = computed(() => {
   })
   return list.sort((a, b) => new Date(b.progress_date) - new Date(a.progress_date))
 })
+
+const customSubProgressRow = (record) => {
+  return {
+    onClick: (event) => {
+      if (
+        event.target.closest('button') || 
+        event.target.closest('.ant-btn') || 
+        event.target.closest('a') || 
+        event.target.closest('.ant-popover') ||
+        event.target.closest('.ant-popconfirm')
+      ) {
+        return
+      }
+      if (record.attachments && record.attachments.length > 0) {
+        openFilePreview(record.attachments[0])
+      } else {
+        message.info('Báo cáo này không có hình ảnh/chứng từ đính kèm.')
+      }
+    },
+    style: 'cursor: pointer'
+  }
+}
 
 const openSubProgressModal = (record = null, defaultSubcontractorId = null) => {
   subProgressFiles.value = []
