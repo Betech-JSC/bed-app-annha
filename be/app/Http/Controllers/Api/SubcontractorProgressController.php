@@ -62,9 +62,9 @@ class SubcontractorProgressController extends Controller
             'project_id' => 'required|exists:projects,id',
             'subcontractor_contract_id' => 'nullable|exists:subcontractor_contracts,id',
             'progress_date' => 'required|date',
-            'planned_progress' => 'required|numeric|min:0|max:100',
+            'planned_progress' => 'nullable|numeric|min:0|max:100',
             'actual_progress' => 'required|numeric|min:0|max:100',
-            'completed_volume' => 'required|numeric|min:0',
+            'completed_volume' => 'nullable|numeric|min:0',
             'volume_unit' => 'nullable|string|max:20',
             'work_description' => 'nullable|string',
             'next_week_plan' => 'nullable|string',
@@ -117,9 +117,9 @@ class SubcontractorProgressController extends Controller
 
         $validated = $request->validate([
             'progress_date' => 'sometimes|required|date',
-            'planned_progress' => 'sometimes|required|numeric|min:0|max:100',
+            'planned_progress' => 'sometimes|nullable|numeric|min:0|max:100',
             'actual_progress' => 'sometimes|required|numeric|min:0|max:100',
-            'completed_volume' => 'sometimes|required|numeric|min:0',
+            'completed_volume' => 'sometimes|nullable|numeric|min:0',
             'volume_unit' => 'nullable|string|max:20',
             'work_description' => 'nullable|string',
             'next_week_plan' => 'nullable|string',

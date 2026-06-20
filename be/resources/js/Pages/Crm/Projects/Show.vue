@@ -3045,19 +3045,7 @@
       </a-row>
 
       <a-row :gutter="16">
-        <a-col :span="12">
-          <a-form-item label="Tiến độ kế hoạch (%)" required>
-            <a-input-number 
-              v-model:value="subProgressForm.planned_progress" 
-              size="large" 
-              class="w-full" 
-              :min="0" 
-              :max="100" 
-              placeholder="Ví dụ: 50"
-            />
-          </a-form-item>
-        </a-col>
-        <a-col :span="12">
+        <a-col :span="24">
           <a-form-item label="Tiến độ thực tế (%)" required>
             <a-input-number 
               v-model:value="subProgressForm.actual_progress" 
@@ -3066,29 +3054,6 @@
               :min="0" 
               :max="100" 
               placeholder="Ví dụ: 48"
-            />
-          </a-form-item>
-        </a-col>
-      </a-row>
-
-      <a-row :gutter="16">
-        <a-col :span="12">
-          <a-form-item label="Khối lượng hoàn thành" required>
-            <a-input-number 
-              v-model:value="subProgressForm.completed_volume" 
-              size="large" 
-              class="w-full" 
-              :min="0" 
-              placeholder="Ví dụ: 150"
-            />
-          </a-form-item>
-        </a-col>
-        <a-col :span="12">
-          <a-form-item label="Đơn vị tính">
-            <a-input 
-              v-model:value="subProgressForm.volume_unit" 
-              size="large" 
-              placeholder="Ví dụ: m2, md, m3"
             />
           </a-form-item>
         </a-col>

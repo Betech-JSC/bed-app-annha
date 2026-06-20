@@ -221,9 +221,14 @@ class SubcontractorService
                 }
             }
 
+            // Default progress fields if null/missing
+            $data['planned_progress'] = $data['planned_progress'] ?? 0;
+            $data['completed_volume'] = $data['completed_volume'] ?? 0;
+            $data['volume_unit'] = $data['volume_unit'] ?? 'm2';
+
             // Auto-calculate status if not provided
             if (!isset($data['status']) && (isset($data['planned_progress']) || isset($data['actual_progress']))) {
-                $planned = $data['planned_progress'] ?? ($progress ? $progress->planned_progress : 0);
+                $planned = $data['planned_progress'];
                 $actual = $data['actual_progress'] ?? ($progress ? $progress->actual_progress : 0);
                 $diff = $actual - $planned;
                 
