@@ -580,7 +580,7 @@ const form = useForm({
   progress_end_date: '',
   progress_status: 'not_started',
   global_subcontractor_id: null,
-  create_cost: true,
+  create_cost: false,
   cost_group_id: null,
 })
 
@@ -588,7 +588,7 @@ const showCreateModal = () => {
   editingSub.value = null
   form.reset()
   form.progress_status = 'not_started'
-  form.create_cost = true
+  form.create_cost = false
   form.cost_group_id = null
   form.global_subcontractor_id = null
   formStartDate.value = null

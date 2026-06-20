@@ -17,6 +17,12 @@ class CrmSupplierController extends Controller
     {
         $user = Auth::guard('admin')->user();
         $this->crmRequire($user, Permissions::SUPPLIER_VIEW);
+
+        // Self-heal: recalculate financials for all suppliers to ensure correct stats and columns
+        Supplier::all()->each(function ($supplier) {
+            $supplier->recalculateFinancials();
+        });
+
         $query = Supplier::withCount(['contracts', 'acceptances'])->orderByDesc('created_at');
 
         // Filters

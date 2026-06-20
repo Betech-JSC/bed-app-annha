@@ -739,9 +739,114 @@
         </div>
       </a-tab-pane>
 
+      <!-- ============ SUBCONTRACTOR PROGRESS TAB ============ -->
+      <a-tab-pane key="subcontractor_progress" v-if="isTabVisible('subcontractor_progress')">
+        <template #tab>
+          <a-tooltip title="Theo dõi tiến độ, nhật ký thi công thầu phụ" placement="bottom">
+            Tiến độ ({{ allSubcontractorProgress.length || 0 }})
+          </a-tooltip>
+        </template>
+        <div class="p-4 space-y-4">
+          <div class="flex justify-between items-center">
+            <h4 class="text-sm font-semibold text-gray-800 flex items-center gap-1.5">
+              <span>👷 Nhật ký tiến độ nhà thầu phụ</span>
+            </h4>
+            <a-button v-if="can('subcontractor.update')" type="primary" size="small" @click="openSubProgressModal()">
+              <template #icon><PlusOutlined /></template>Báo cáo tiến độ
+            </a-button>
+          </div>
+
+          <a-table 
+            :columns="progressCols" 
+            :data-source="allSubcontractorProgress" 
+            :pagination="{ pageSize: 10 }" 
+            row-key="id" 
+            size="small" 
+            class="crm-table hover-row"
+          >
+            <template #bodyCell="{ column, record }">
+              <template v-if="column.key === 'subcontractor_name'">
+                <span class="font-semibold text-gray-800">{{ record.subcontractor_name }}</span>
+              </template>
+              <template v-else-if="column.key === 'progress_date'">
+                <span class="text-xs text-gray-500">{{ fmtDate(record.progress_date) }}</span>
+              </template>
+              <template v-else-if="column.key === 'planned_progress'">
+                <span class="text-xs text-gray-500">{{ record.planned_progress || 0 }}%</span>
+              </template>
+              <template v-else-if="column.key === 'actual_progress'">
+                <div class="flex items-center gap-1.5">
+                  <div class="w-12 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                    <div 
+                      class="h-full rounded-full transition-all duration-300"
+                      :class="Number(record.actual_progress) >= Number(record.planned_progress) ? 'bg-green-500' : 'bg-red-500'"
+                      :style="{ width: `${record.actual_progress || 0}%` }"
+                    ></div>
+                  </div>
+                  <span class="text-xs font-semibold text-gray-700">{{ record.actual_progress || 0 }}%</span>
+                </div>
+              </template>
+              <template v-else-if="column.key === 'completed_volume'">
+                <span class="text-xs font-medium text-gray-800">
+                  {{ record.completed_volume || 0 }} {{ record.volume_unit || '' }}
+                </span>
+              </template>
+              <template v-else-if="column.key === 'work_description'">
+                <div class="max-w-[220px] text-xs text-gray-600 line-clamp-2" :title="record.work_description">
+                  {{ record.work_description || '—' }}
+                </div>
+              </template>
+              <template v-else-if="column.key === 'status'">
+                <a-tag :color="subProgressStatusColors[record.status] || 'default'" class="rounded-full text-[10px]">
+                  {{ subProgressStatusLabels[record.status] || record.status }}
+                </a-tag>
+              </template>
+              <template v-else-if="column.key === 'attachments'">
+                <div v-if="record.attachments?.length" class="flex flex-wrap gap-1.5">
+                  <div v-for="a in record.attachments" :key="a.id" class="w-8 h-8 rounded border overflow-hidden cursor-pointer" @click="openFilePreview(a)">
+                    <img v-if="a.mime_type?.startsWith('image/')" :src="a.file_url" class="w-full h-full object-cover" />
+                    <div v-else class="w-full h-full flex items-center justify-center bg-gray-50 text-[10px] text-gray-400">FILE</div>
+                  </div>
+                </div>
+                <span v-else class="text-xs text-gray-300">—</span>
+              </template>
+              <template v-else-if="column.key === 'verified_at'">
+                <div v-if="record.verified_at" class="text-xs text-green-600 flex flex-col">
+                  <span class="font-medium">✔️ Đã duyệt</span>
+                  <span class="text-[10px] text-gray-400">bởi {{ record.verifier?.name || 'PM' }}</span>
+                </div>
+                <div v-else class="text-xs text-amber-500 font-medium">⏳ Chờ duyệt</div>
+              </template>
+              <template v-else-if="column.key === 'actions'">
+                <div class="flex items-center gap-1">
+                  <!-- PM Approve Button -->
+                  <a-popconfirm 
+                    v-if="!record.verified_at && can('subcontractor.approve')" 
+                    title="Duyệt báo cáo tiến độ này?" 
+                    @confirm="verifySubProgress(record)"
+                  >
+                    <a-button type="link" size="small" class="p-0 text-green-600 hover:text-green-700">Duyệt</a-button>
+                  </a-popconfirm>
+                  <!-- Edit/Delete only if not verified -->
+                  <template v-if="!record.verified_at && can('subcontractor.update')">
+                    <a-button type="text" size="small" @click="openSubProgressModal(record)" class="text-gray-400 hover:text-blue-600 p-1"><EditOutlined /></a-button>
+                  </template>
+                  <template v-if="!record.verified_at && can('subcontractor.delete')">
+                    <a-popconfirm title="Xóa báo cáo này?" @confirm="deleteSubProgress(record)">
+                      <a-button type="text" size="small" danger class="text-gray-400 hover:text-red-500 p-1"><DeleteOutlined /></a-button>
+                    </a-popconfirm>
+                  </template>
+                </div>
+              </template>
+            </template>
+          </a-table>
+          <a-empty v-if="!allSubcontractorProgress.length" description="Chưa có báo cáo tiến độ nào" />
+        </div>
+      </a-tab-pane>
+
       <!-- ============ SUBCONTRACTORS COSTS TAB ============ -->
       <a-tab-pane key="subcontractors" v-if="isTabVisible('subcontractors')">
-        <template #tab><a-tooltip title="Theo dõi chi phí, thanh toán nhà thầu phụ" placement="bottom">Nhà thầu phụ ({{ allSubcontractorPayments.length || 0 }})</a-tooltip></template>
+        <template #tab><a-tooltip title="Theo dõi chi phí, thanh toán nhà thầu phụ" placement="bottom">Thanh toán ({{ allSubcontractorPayments.length || 0 }})</a-tooltip></template>
         <div class="p-4">
           <div class="flex justify-end mb-3">
             <a-button v-if="can('subcontractor_payment.create')" type="primary" size="small" @click="openSubPaymentDrawer(null)">
@@ -2894,6 +2999,159 @@
       <a-form-item v-if="personnelRoles.length" label="Vai trò"><a-select v-model:value="personnelForm.personnel_role_id" size="large" class="w-full" allow-clear placeholder="Chọn vai trò">
         <a-select-option v-for="r in personnelRoles" :key="r.id" :value="r.id">{{ r.name }}</a-select-option>
       </a-select></a-form-item>
+    </a-form>
+  </a-modal>
+
+  <!-- Subcontractor Progress Modal -->
+  <a-modal 
+    v-model:open="showSubProgressModal" 
+    :title="editingSubProgress ? 'Cập nhật tiến độ nhà thầu phụ' : 'Báo cáo tiến độ nhà thầu phụ'" 
+    :width="640" 
+    @ok="saveSubProgress" 
+    ok-text="Lưu" 
+    cancel-text="Hủy" 
+    centered 
+    destroy-on-close 
+    class="crm-modal"
+  >
+    <a-form layout="vertical" class="mt-4">
+      <a-row :gutter="16">
+        <a-col :span="12">
+          <a-form-item label="Nhà thầu phụ" required>
+            <a-select 
+              v-model:value="subProgressForm.subcontractor_id" 
+              size="large" 
+              class="w-full" 
+              placeholder="Chọn nhà thầu phụ"
+              :disabled="!!editingSubProgress"
+            >
+              <a-select-option v-for="s in (project.subcontractors || [])" :key="s.id" :value="s.id">
+                {{ s.name }}
+              </a-select-option>
+            </a-select>
+          </a-form-item>
+        </a-col>
+        <a-col :span="12">
+          <a-form-item label="Ngày báo cáo" required>
+            <a-date-picker 
+              v-model:value="subProgressForm.progress_date" 
+              size="large" 
+              class="w-full" 
+              format="DD/MM/YYYY" 
+              value-format="YYYY-MM-DD" 
+            />
+          </a-form-item>
+        </a-col>
+      </a-row>
+
+      <a-row :gutter="16">
+        <a-col :span="12">
+          <a-form-item label="Tiến độ kế hoạch (%)" required>
+            <a-input-number 
+              v-model:value="subProgressForm.planned_progress" 
+              size="large" 
+              class="w-full" 
+              :min="0" 
+              :max="100" 
+              placeholder="Ví dụ: 50"
+            />
+          </a-form-item>
+        </a-col>
+        <a-col :span="12">
+          <a-form-item label="Tiến độ thực tế (%)" required>
+            <a-input-number 
+              v-model:value="subProgressForm.actual_progress" 
+              size="large" 
+              class="w-full" 
+              :min="0" 
+              :max="100" 
+              placeholder="Ví dụ: 48"
+            />
+          </a-form-item>
+        </a-col>
+      </a-row>
+
+      <a-row :gutter="16">
+        <a-col :span="12">
+          <a-form-item label="Khối lượng hoàn thành" required>
+            <a-input-number 
+              v-model:value="subProgressForm.completed_volume" 
+              size="large" 
+              class="w-full" 
+              :min="0" 
+              placeholder="Ví dụ: 150"
+            />
+          </a-form-item>
+        </a-col>
+        <a-col :span="12">
+          <a-form-item label="Đơn vị tính">
+            <a-input 
+              v-model:value="subProgressForm.volume_unit" 
+              size="large" 
+              placeholder="Ví dụ: m2, md, m3"
+            />
+          </a-form-item>
+        </a-col>
+      </a-row>
+
+      <a-form-item label="Trạng thái tiến độ">
+        <a-select v-model:value="subProgressForm.status" size="large" class="w-full">
+          <a-select-option value="on_schedule">🔵 Đúng tiến độ</a-select-option>
+          <a-select-option value="delayed">🔴 Chậm tiến độ</a-select-option>
+          <a-select-option value="ahead_of_schedule">🟢 Vượt tiến độ</a-select-option>
+          <a-select-option value="at_risk">🟠 Có rủi ro</a-select-option>
+        </a-select>
+      </a-form-item>
+
+      <a-form-item label="Nội dung công việc đã thực hiện">
+        <a-textarea v-model:value="subProgressForm.work_description" :rows="3" placeholder="Chi tiết các hạng mục đã hoàn thành..." />
+      </a-form-item>
+
+      <a-form-item label="Kế hoạch tiếp theo">
+        <a-textarea v-model:value="subProgressForm.next_week_plan" :rows="2" placeholder="Công việc dự kiến cho tuần sau..." />
+      </a-form-item>
+
+      <a-form-item label="Khó khăn, vướng mắc (nếu có)">
+        <a-textarea v-model:value="subProgressForm.issues_and_risks" :rows="2" placeholder="Các rủi ro, chậm trễ vật tư..." />
+      </a-form-item>
+
+      <!-- Attachments Section -->
+      <div class="border-t pt-3 mt-2">
+        <div class="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-1"><FileOutlined /> Chứng từ / Hình ảnh nhật ký đính kèm</div>
+        <div v-if="editingSubProgress?.attachments?.length" class="flex flex-wrap gap-2 mb-2">
+          <div v-for="a in editingSubProgress.attachments" :key="a.id" class="relative group">
+            <a href="#" @click.prevent="openFilePreview(a)" 
+               class="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-lg transition cursor-pointer border"
+               :class="isAttachmentDeleted(subProgressForm, a.id) ? 'bg-gray-100 text-gray-400 border-gray-200 opacity-60' : 'bg-blue-50 text-blue-600 border-blue-100 hover:bg-blue-100 shadow-sm'">
+              <span v-if="isAttachmentDeleted(subProgressForm, a.id)" class="text-[10px] line-through italic mr-1 flex items-center gap-1"><CloseCircleOutlined /> Đã đánh dấu xóa</span>
+              <EyeOutlined v-else class="text-[10px]" /> {{ a.original_name || a.file_name }}
+            </a>
+            <div v-if="!isAttachmentDeleted(subProgressForm, a.id)" 
+                 class="absolute -top-1.5 -right-1.5 opacity-0 group-hover:opacity-100 transition-all cursor-pointer bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center shadow-lg border border-white hover:bg-red-600 z-10"
+                 @click.stop="toggleDeleteAttachment(subProgressForm, a.id)">
+              <CloseOutlined class="text-[10px] font-bold" />
+            </div>
+            <div v-else 
+                 class="absolute -top-1.5 -right-1.5 opacity-0 group-hover:opacity-100 transition-all cursor-pointer bg-blue-500 text-white rounded-full w-4 h-4 flex items-center justify-center shadow-lg border border-white hover:bg-blue-600 z-10"
+                 @click.stop="toggleDeleteAttachment(subProgressForm, a.id)">
+              <ReloadOutlined class="text-[10px] font-bold" />
+            </div>
+          </div>
+        </div>
+        <div class="relative flex items-center justify-center border-2 border-dashed border-gray-300 rounded-xl p-6 hover:border-blue-400 transition bg-gray-50/50">
+          <div class="text-center">
+            <CloudUploadOutlined class="text-gray-400 text-3xl mb-2" />
+            <div class="text-sm font-semibold text-gray-700">Tải lên hình ảnh/tệp đính kèm</div>
+            <div class="text-xs text-gray-400 mt-1">Hỗ trợ nhiều tệp ảnh minh chứng</div>
+          </div>
+          <input type="file" multiple @change="e => subProgressFiles = [...(e.target.files || [])]" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
+        </div>
+        <div v-if="subProgressFiles.length" class="mt-2 space-y-1">
+          <div v-for="(f, i) in subProgressFiles" :key="i" class="text-xs text-gray-600 flex items-center gap-1.5 bg-gray-50 px-2.5 py-1 rounded-lg border border-gray-100">
+            <PaperClipOutlined class="text-[10px]" /> <span class="truncate max-w-[400px]">{{ f.name }}</span> <span class="text-gray-400 font-mono">({{ (f.size/1024).toFixed(1) }} KB)</span>
+          </div>
+        </div>
+      </div>
     </a-form>
   </a-modal>
 
@@ -7887,9 +8145,9 @@ const hasSystemPermission = (perm) => {
 // Tab group → sub-tab mapping
 const tabGroupTabs = {
   overview: ['overview'],
-  subcontractor_main: ['subcontractor_info'],
+  subcontractor_main: ['subcontractor_info', 'subcontractor_progress', 'subcontractors'],
   finance: ['contract', 'costs', 'payments', 'additional_costs', 'budgets', 'finance', 'invoices'],
-  expense: ['subcontractors', 'materials', 'equipment'],
+  expense: ['materials', 'equipment'],
   monitor: ['gantt', 'progress', 'logs', 'acceptance', 'defects', 'change_requests', 'comments', 'risks'],
   hr: ['personnel', 'attendance', 'labor'],
   warranty: ['warranty', 'maintenances'],
@@ -7906,6 +8164,7 @@ const tabPermissions = {
   budgets: 'budgets.view',
   finance: 'finance.view',
   subcontractor_info: 'subcontractor.view',
+  subcontractor_progress: 'subcontractor.view',
   subcontractors: 'subcontractor.view',
   materials: 'material.view',
   equipment: 'equipment.view',
@@ -7991,7 +8250,10 @@ const getSubTabCount = (tabKey) => {
   const map = {
     gantt: c.tasks, progress: c.tasks,
     contract: 1, costs: c.costs, payments: c.payments, additional_costs: c.additional_costs, budgets: c.budgets, finance: 1, invoices: c.invoices,
-    subcontractors: c.subcontractors, materials: c.material_bills || c.materials, equipment: c.equipment,
+    subcontractor_info: c.subcontractors,
+    subcontractor_progress: props.project.subcontractors?.reduce((acc, s) => acc + (s.progress?.length || 0), 0) || 0,
+    subcontractors: props.teamData?.subcontractors?.reduce((acc, s) => acc + (s.payments?.length || 0), 0) || allSubcontractorPayments.value?.length || 0,
+    materials: c.material_bills || c.materials, equipment: c.equipment,
     logs: c.construction_logs, acceptance: c.acceptance_stages, defects: c.defects, change_requests: c.change_requests, comments: c.comments, risks: c.risks, acceptances: c.acceptance_stages,
     personnel: c.personnel, attendance: c.attendance, labor: c.labor_productivity,
     warranty: c.warranties, maintenances: c.maintenances,
@@ -8006,7 +8268,7 @@ const getInitialTab = () => {
   const validTabs = [
     'overview', 'gantt', 'progress',
     'contract', 'costs', 'payments', 'additional_costs', 'budgets', 'finance', 'invoices',
-    'subcontractors', 'materials', 'equipment',
+    'subcontractor_info', 'subcontractor_progress', 'subcontractors', 'materials', 'equipment',
     'logs', 'acceptance', 'defects', 'change_requests', 'comments', 'risks',
     'personnel', 'attendance', 'labor',
     'warranty', 'maintenances',
@@ -8020,7 +8282,8 @@ const getInitialTab = () => {
   const groups = [
     { key: 'monitor', tabs: ['gantt', 'progress', 'logs', 'acceptance', 'defects', 'change_requests'] },
     { key: 'finance', tabs: ['contract', 'costs', 'payments'] },
-    { key: 'expense', tabs: ['subcontractors', 'materials', 'equipment'] },
+    { key: 'subcontractor_main', tabs: ['subcontractor_info', 'subcontractor_progress', 'subcontractors'] },
+    { key: 'expense', tabs: ['materials', 'equipment'] },
     { key: 'hr', tabs: ['personnel', 'attendance'] },
     { key: 'warranty', tabs: ['warranty', 'maintenances'] },
     { key: 'other', tabs: ['documents'] },
@@ -8045,9 +8308,11 @@ const getGroupForTab = (tab) => {
   const groupMap = {
     overview: 'overview',
     subcontractor_info: 'subcontractor_main',
+    subcontractor_progress: 'subcontractor_main',
+    subcontractors: 'subcontractor_main',
     gantt: 'monitor', progress: 'monitor',
     contract: 'finance', costs: 'finance', payments: 'finance', additional_costs: 'finance', budgets: 'finance', finance: 'finance', invoices: 'finance',
-    subcontractors: 'expense', materials: 'expense', equipment: 'expense',
+    materials: 'expense', equipment: 'expense',
     logs: 'monitor', acceptance: 'monitor', defects: 'monitor', change_requests: 'monitor', comments: 'monitor', risks: 'monitor',
     personnel: 'hr', attendance: 'hr', labor: 'hr',
     warranty: 'warranty', maintenances: 'warranty',
@@ -9590,6 +9855,135 @@ const deleteUploadedFileDirectly = (fileId) => {
   })
 }
 
+// ============ SUBCONTRACTOR PROGRESS ============
+const showSubProgressModal = ref(false)
+const editingSubProgress = ref(null)
+const subProgressFiles = ref([])
+const subProgressForm = ref({
+  subcontractor_id: null,
+  subcontractor_contract_id: null,
+  progress_date: null,
+  planned_progress: 0,
+  actual_progress: 0,
+  completed_volume: 0,
+  volume_unit: '',
+  work_description: '',
+  next_week_plan: '',
+  issues_and_risks: '',
+  status: 'on_schedule',
+  deleted_attachment_ids: []
+})
+
+const subProgressStatusLabels = {
+  on_schedule: 'Đúng tiến độ',
+  delayed: 'Chậm tiến độ',
+  ahead_of_schedule: 'Vượt tiến độ',
+  at_risk: 'Có rủi ro'
+}
+const subProgressStatusColors = {
+  on_schedule: 'blue',
+  delayed: 'red',
+  ahead_of_schedule: 'green',
+  at_risk: 'orange'
+}
+
+const progressCols = [
+  { title: 'Nhà thầu phụ', key: 'subcontractor_name' },
+  { title: 'Ngày báo cáo', key: 'progress_date' },
+  { title: 'Tiến độ KH', key: 'planned_progress' },
+  { title: 'Tiến độ thực tế', key: 'actual_progress' },
+  { title: 'Khối lượng hoàn thành', key: 'completed_volume' },
+  { title: 'Nội dung công việc', key: 'work_description' },
+  { title: 'Trạng thái', key: 'status' },
+  { title: 'Ảnh nhật ký', key: 'attachments' },
+  { title: 'Phê duyệt', key: 'verified_at' },
+  { title: '', key: 'actions', width: 120 }
+]
+
+const allSubcontractorProgress = computed(() => {
+  const list = []
+  const subs = props.teamData?.subcontractors || props.project?.subcontractors || []
+  subs.forEach(sub => {
+    if (sub.progress) {
+      sub.progress.forEach(p => {
+        list.push({ ...p, subcontractor_name: sub.name, subcontractor: sub })
+      })
+    }
+  })
+  return list.sort((a, b) => new Date(b.progress_date) - new Date(a.progress_date))
+})
+
+const openSubProgressModal = (record = null, defaultSubcontractorId = null) => {
+  subProgressFiles.value = []
+  if (record) {
+    editingSubProgress.value = record
+    subProgressForm.value = {
+      subcontractor_id: record.subcontractor_id,
+      subcontractor_contract_id: record.subcontractor_contract_id,
+      progress_date: record.progress_date ? dayjs(record.progress_date).format('YYYY-MM-DD') : null,
+      planned_progress: Number(record.planned_progress || 0),
+      actual_progress: Number(record.actual_progress || 0),
+      completed_volume: Number(record.completed_volume || 0),
+      volume_unit: record.volume_unit || '',
+      work_description: record.work_description || '',
+      next_week_plan: record.next_week_plan || '',
+      issues_and_risks: record.issues_and_risks || '',
+      status: record.status || 'on_schedule',
+      deleted_attachment_ids: []
+    }
+  } else {
+    editingSubProgress.value = null
+    subProgressForm.value = {
+      subcontractor_id: defaultSubcontractorId || (props.project?.subcontractors?.[0]?.id || null),
+      subcontractor_contract_id: null,
+      progress_date: dayjs().format('YYYY-MM-DD'),
+      planned_progress: 0,
+      actual_progress: 0,
+      completed_volume: 0,
+      volume_unit: '',
+      work_description: '',
+      next_week_plan: '',
+      issues_and_risks: '',
+      status: 'on_schedule',
+      deleted_attachment_ids: []
+    }
+  }
+  showSubProgressModal.value = true
+}
+
+const saveSubProgress = () => {
+  if (!subProgressForm.value.subcontractor_id) {
+    message.error('Vui lòng chọn nhà thầu phụ')
+    return
+  }
+  const subId = subProgressForm.value.subcontractor_id
+  const url = editingSubProgress.value 
+    ? `/projects/${props.project.id}/subcontractors/${subId}/progress/${editingSubProgress.value.id}` 
+    : `/projects/${props.project.id}/subcontractors/${subId}/progress`
+
+  const formData = new FormData()
+  appendFormEntries(formData, subProgressForm.value)
+  subProgressFiles.value.forEach(f => formData.append('files[]', f))
+  if (editingSubProgress.value) formData.append('_method', 'PUT')
+
+  router.post(url, formData, savingOptions({
+    forceFormData: true,
+    preserveScroll: true,
+    onSuccess: () => {
+      showSubProgressModal.value = false
+      subProgressFiles.value = []
+    },
+  }))
+}
+
+const verifySubProgress = (p) => {
+  router.post(`/projects/${props.project.id}/subcontractors/${p.subcontractor_id}/progress/${p.id}/verify`, {}, loadingOptions(`verify-sub-progress-${p.id}`, { preserveScroll: true }))
+}
+
+const deleteSubProgress = (p) => {
+  router.delete(`/projects/${props.project.id}/subcontractors/${p.subcontractor_id}/progress/${p.id}`, loadingOptions(`delete-sub-progress-${p.id}`, { preserveScroll: true }))
+}
+
 // ============ PERSONNEL CRUD ============
 const showPersonnelModal = ref(false)
 const personnelForm = ref({ user_id: null, personnel_role_id: null })
@@ -10091,12 +10485,12 @@ const recalculateTasks = async () => {
 const showSubModal = ref(false)
 const editingSub = ref(null)
 const subFiles = ref([])
-const subForm = ref({ name: '', category: '', total_quote: null, bank_name: '', bank_account_number: '', bank_account_name: '', progress_start_date: null, progress_end_date: null, progress_status: 'not_started', global_subcontractor_id: null, create_cost: true, cost_group_id: null, deleted_attachment_ids: [] })
+const subForm = ref({ name: '', category: '', total_quote: null, bank_name: '', bank_account_number: '', bank_account_name: '', progress_start_date: null, progress_end_date: null, progress_status: 'not_started', global_subcontractor_id: null, create_cost: false, cost_group_id: null, deleted_attachment_ids: [] })
 const openSubModal = (s) => {
   editingSub.value = s
   subFiles.value = []
   subForm.value = s ? { name: s.name, category: s.category || '', total_quote: s.total_quote, bank_name: s.bank_name || '', bank_account_number: s.bank_account_number || '', bank_account_name: s.bank_account_name || '', progress_start_date: s.progress_start_date || null, progress_end_date: s.progress_end_date || null, progress_status: s.progress_status || 'not_started', deleted_attachment_ids: [] }
-    : { name: '', category: '', total_quote: null, bank_name: '', bank_account_number: '', bank_account_name: '', progress_start_date: null, progress_end_date: null, progress_status: 'not_started', global_subcontractor_id: null, create_cost: true, cost_group_id: null, deleted_attachment_ids: [] }
+    : { name: '', category: '', total_quote: null, bank_name: '', bank_account_number: '', bank_account_name: '', progress_start_date: null, progress_end_date: null, progress_status: 'not_started', global_subcontractor_id: null, create_cost: false, cost_group_id: null, deleted_attachment_ids: [] }
   showSubModal.value = true
 }
 const onGlobalSubChange = (id) => {

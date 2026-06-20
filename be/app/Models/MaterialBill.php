@@ -264,10 +264,22 @@ class MaterialBill extends Model
         static::saved(function ($model) {
             // Tự động đồng bộ sang Cost khi Bill thay đổi
             $model->syncToCost();
+            if ($model->supplier_id) {
+                $model->supplier->recalculateFinancials();
+            }
+            if ($model->wasChanged('supplier_id') && $model->getOriginal('supplier_id')) {
+                $oldSupplier = \App\Models\Supplier::find($model->getOriginal('supplier_id'));
+                if ($oldSupplier) {
+                    $oldSupplier->recalculateFinancials();
+                }
+            }
         });
 
         static::deleted(function ($model) {
             Cost::where('material_bill_id', $model->id)->delete();
+            if ($model->supplier_id) {
+                $model->supplier->recalculateFinancials();
+            }
         });
     }
 

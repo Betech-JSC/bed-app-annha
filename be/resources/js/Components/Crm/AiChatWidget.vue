@@ -200,7 +200,7 @@ watch(messages, scrollToBottom, { deep: true })
 /* ─── FAB Button ─── */
 .ai-chat-fab {
   position: fixed;
-  bottom: 28px;
+  bottom: 80px;
   right: 28px;
   width: 56px;
   height: 56px;
@@ -240,7 +240,7 @@ watch(messages, scrollToBottom, { deep: true })
 /* ─── Chat Window ─── */
 .ai-chat-window {
   position: fixed;
-  bottom: 96px;
+  bottom: 148px;
   right: 28px;
   width: 400px;
   max-height: 560px;

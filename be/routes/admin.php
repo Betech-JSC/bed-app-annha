@@ -368,6 +368,12 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         Route::post('/{project}/subcontractors/{sub}/payments/{payment}/cancel', [CrmProjectsController::class, 'cancelSubPayment'])->name('subcontractors.payments.cancel');
         Route::delete('/{project}/subcontractors/{sub}/payments/{payment}', [CrmProjectsController::class, 'destroySubPayment'])->name('subcontractors.payments.destroy');
 
+        // Subcontractor Progress
+        Route::post('/{project}/subcontractors/{sub}/progress', [CrmProjectsController::class, 'storeSubProgress'])->name('subcontractors.progress.store');
+        Route::put('/{project}/subcontractors/{sub}/progress/{progress}', [CrmProjectsController::class, 'updateSubProgress'])->name('subcontractors.progress.update');
+        Route::post('/{project}/subcontractors/{sub}/progress/{progress}/verify', [CrmProjectsController::class, 'verifySubProgress'])->name('subcontractors.progress.verify');
+        Route::delete('/{project}/subcontractors/{sub}/progress/{progress}', [CrmProjectsController::class, 'destroySubProgress'])->name('subcontractors.progress.destroy');
+
         // Additional Costs
         Route::post('/{project}/additional-costs', [CrmProjectsController::class, 'storeAdditionalCost'])->name('additional-costs.store');
         Route::put('/{project}/additional-costs/{ac}', [CrmProjectsController::class, 'updateAdditionalCost'])->name('additional-costs.update');

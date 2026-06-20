@@ -569,6 +569,23 @@ class Cost extends Model
             if ($cost->additional_cost_id) {
                 $cost->syncToAdditionalCost();
             }
+
+            // Recalculate Supplier Financials if supplier_id is set
+            if ($cost->supplier_id) {
+                $cost->supplier->recalculateFinancials();
+            }
+            if ($cost->wasChanged('supplier_id') && $cost->getOriginal('supplier_id')) {
+                $oldSupplier = \App\Models\Supplier::find($cost->getOriginal('supplier_id'));
+                if ($oldSupplier) {
+                    $oldSupplier->recalculateFinancials();
+                }
+            }
+        });
+
+        static::deleted(function ($cost) {
+            if ($cost->supplier_id) {
+                $cost->supplier->recalculateFinancials();
+            }
         });
     }
 

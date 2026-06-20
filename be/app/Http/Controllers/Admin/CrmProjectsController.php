@@ -253,7 +253,7 @@ class CrmProjectsController extends Controller
             'financeData' => [
                 'payments' => $project->payments()
                     ->select('id', 'project_id', 'payment_number', 'amount', 'status', 'due_date', 'contract_id', 'notes', 'created_at')
-                    ->with('attachments:id,attachable_id,attachable_type,file_name,original_name,file_size,file_url,mime_type')
+                    ->with('attachments:id,attachable_id,attachable_type,file_name,original_name,file_size,file_url,mime_type,description')
                     ->orderByDesc('payment_number')->get(),
                 'costs' => $project->costs()
                     // ->whereNull('material_bill_id')
@@ -261,7 +261,7 @@ class CrmProjectsController extends Controller
                     // ->whereNull('equipment_rental_id')
                     // ->whereNull('equipment_allocation_id')
                     ->select('id', 'project_id', 'name', 'amount', 'status', 'category', 'attendance_id', 'cost_date', 'created_by', 'management_approved_by', 'accountant_approved_by', 'cost_group_id', 'subcontractor_id', 'supplier_id', 'budget_item_id', 'created_at', 'material_bill_id', 'subcontractor_payment_id', 'equipment_rental_id', 'equipment_allocation_id')
-                    ->with(['creator:id,name', 'costGroup:id,name,code', 'subcontractor:id,name', 'attachments:id,attachable_id,attachable_type,file_name,original_name,file_size,file_url,mime_type', 'managementApprover:id,name', 'accountantApprover:id,name'])
+                    ->with(['creator:id,name', 'costGroup:id,name,code', 'subcontractor:id,name', 'attachments:id,attachable_id,attachable_type,file_name,original_name,file_size,file_url,mime_type,description', 'managementApprover:id,name', 'accountantApprover:id,name'])
                     ->orderByDesc('cost_date')->orderByDesc('created_at')->get(),
                 'invoices' => $project->invoices()->select('id', 'project_id', 'invoice_number', 'subtotal', 'total_amount', 'invoice_date', 'description')->get(),
                 'budgets' => $project->budgets()->select('id', 'project_id', 'name', 'status', 'total_budget', 'actual_cost', 'budget_date', 'version', 'created_by', 'approved_at', 'created_at', 'contract_value', 'profit_percentage', 'profit_amount')->with(['items.costGroup', 'creator:id,name'])->get(),
@@ -288,7 +288,11 @@ class CrmProjectsController extends Controller
 
             'teamData' => [
                 'personnel' => $project->personnel()->with(['user:id,name,email,image as avatar,phone', 'personnelRole:id,name'])->get(),
-                'subcontractors' => $project->subcontractors()->with(['attachments', 'payments.attachments'])->get(),
+                'subcontractors' => $project->subcontractors()->with([
+                    'attachments', 
+                    'payments.attachments', 
+                    'progress' => fn($q) => $q->with(['attachments', 'reporter', 'verifier'])->orderByDesc('progress_date')
+                ])->get(),
             ],
 
             'equipmentData' => fn() => [
@@ -811,6 +815,7 @@ class CrmProjectsController extends Controller
                         'mime_type' => $file->getClientMimeType(),
                         'file_size' => $file->getSize(),
                         'type' => 'payment_proof',
+                        'description' => 'after',
                         'attachable_type' => ProjectPayment::class,
                         'attachable_id' => $payment->id,
                         'uploaded_by' => $user->id,
@@ -2300,6 +2305,118 @@ class CrmProjectsController extends Controller
         $sub = Subcontractor::where('project_id', $project->id)->findOrFail($subId);
         $count = $this->attachFilesToEntity($request, $sub, "subcontractors/{$project->id}/{$subId}");
         return back()->with('success', "Đã đính kèm {$count} file vào NTP.");
+    }
+
+    public function storeSubProgress(Request $request, string $projectId, string $subId)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $this->crmRequire($user, Permissions::SUBCONTRACTOR_UPDATE, $project);
+
+        $sub = Subcontractor::where('project_id', $project->id)->findOrFail($subId);
+
+        $validated = $request->validate([
+            'progress_date' => 'required|date',
+            'planned_progress' => 'required|numeric|min:0|max:100',
+            'actual_progress' => 'required|numeric|min:0|max:100',
+            'completed_volume' => 'required|numeric|min:0',
+            'volume_unit' => 'nullable|string|max:20',
+            'work_description' => 'nullable|string',
+            'next_week_plan' => 'nullable|string',
+            'issues_and_risks' => 'nullable|string',
+            'status' => 'nullable|in:on_schedule,delayed,ahead_of_schedule,at_risk',
+        ]);
+
+        try {
+            $progress = $this->subcontractorService->upsertProgress(
+                array_merge($validated, [
+                    'project_id' => $project->id,
+                    'subcontractor_id' => $sub->id,
+                ]),
+                null,
+                $user
+            );
+
+            if ($request->hasFile('files')) {
+                $this->attachFilesToEntity($request, $progress, "subcontractor-progress/{$project->id}/{$progress->id}");
+            }
+
+            return back()->with('success', 'Đã lưu báo cáo tiến độ nhà thầu phụ.');
+        } catch (\Exception $e) {
+            return back()->with('error', 'Lỗi: ' . $e->getMessage());
+        }
+    }
+
+    public function updateSubProgress(Request $request, string $projectId, string $subId, string $progressId)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $this->crmRequire($user, Permissions::SUBCONTRACTOR_UPDATE, $project);
+
+        $sub = Subcontractor::where('project_id', $project->id)->findOrFail($subId);
+        $progress = \App\Models\SubcontractorProgress::where('project_id', $project->id)->where('subcontractor_id', $sub->id)->findOrFail($progressId);
+
+        $validated = $request->validate([
+            'progress_date' => 'required|date',
+            'planned_progress' => 'required|numeric|min:0|max:100',
+            'actual_progress' => 'required|numeric|min:0|max:100',
+            'completed_volume' => 'required|numeric|min:0',
+            'volume_unit' => 'nullable|string|max:20',
+            'work_description' => 'nullable|string',
+            'next_week_plan' => 'nullable|string',
+            'issues_and_risks' => 'nullable|string',
+            'status' => 'nullable|in:on_schedule,delayed,ahead_of_schedule,at_risk',
+        ]);
+
+        try {
+            $this->subcontractorService->upsertProgress($validated, $progress, $user);
+
+            if ($request->hasFile('files')) {
+                $this->attachFilesToEntity($request, $progress, "subcontractor-progress/{$project->id}/{$progress->id}");
+            }
+
+            return back()->with('success', 'Đã cập nhật tiến độ nhà thầu phụ.');
+        } catch (\Exception $e) {
+            return back()->with('error', 'Lỗi: ' . $e->getMessage());
+        }
+    }
+
+    public function verifySubProgress(Request $request, string $projectId, string $subId, string $progressId)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $this->crmRequire($user, Permissions::SUBCONTRACTOR_APPROVE, $project);
+
+        $sub = Subcontractor::where('project_id', $project->id)->findOrFail($subId);
+        $progress = \App\Models\SubcontractorProgress::where('project_id', $project->id)->where('subcontractor_id', $sub->id)->findOrFail($progressId);
+
+        try {
+            $this->subcontractorService->verifyProgress($progress, $user);
+            return back()->with('success', 'Đã duyệt báo cáo tiến độ nhà thầu phụ.');
+        } catch (\Exception $e) {
+            return back()->with('error', 'Lỗi: ' . $e->getMessage());
+        }
+    }
+
+    public function destroySubProgress(Request $request, string $projectId, string $subId, string $progressId)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $this->crmRequire($user, Permissions::SUBCONTRACTOR_DELETE, $project);
+
+        $sub = Subcontractor::where('project_id', $project->id)->findOrFail($subId);
+        $progress = \App\Models\SubcontractorProgress::where('project_id', $project->id)->where('subcontractor_id', $sub->id)->findOrFail($progressId);
+
+        if ($progress->verified_at) {
+            return back()->with('error', 'Không thể xóa báo cáo tiến độ đã được xác nhận.');
+        }
+
+        try {
+            $progress->delete();
+            return back()->with('success', 'Đã xóa báo cáo tiến độ.');
+        } catch (\Exception $e) {
+            return back()->with('error', 'Lỗi: ' . $e->getMessage());
+        }
     }
 
     // ===================================================================

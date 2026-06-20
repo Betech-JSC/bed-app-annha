@@ -91,6 +91,18 @@ class Supplier extends Model
         return $this->save();
     }
 
+    public function recalculateFinancials(): void
+    {
+        $this->total_debt = 
+            (\App\Models\MaterialBill::where('supplier_id', $this->id)->where('status', 'approved')->sum('total_amount') ?: 0) +
+            (\App\Models\SupplierAcceptance::where('supplier_id', $this->id)->where('status', 'approved')->sum('accepted_amount') ?: 0);
+
+        $this->total_paid = 
+            \App\Models\Cost::where('supplier_id', $this->id)->where('status', 'approved')->sum('amount') ?: 0;
+
+        $this->save();
+    }
+
     // ==================================================================
     // BOOT
     // ==================================================================

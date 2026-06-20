@@ -142,5 +142,23 @@ class SupplierAcceptance extends Model
                 $acceptance->uuid = Str::uuid();
             }
         });
+
+        static::saved(function ($model) {
+            if ($model->supplier_id) {
+                $model->supplier->recalculateFinancials();
+            }
+            if ($model->wasChanged('supplier_id') && $model->getOriginal('supplier_id')) {
+                $oldSupplier = \App\Models\Supplier::find($model->getOriginal('supplier_id'));
+                if ($oldSupplier) {
+                    $oldSupplier->recalculateFinancials();
+                }
+            }
+        });
+
+        static::deleted(function ($model) {
+            if ($model->supplier_id) {
+                $model->supplier->recalculateFinancials();
+            }
+        });
     }
 }
