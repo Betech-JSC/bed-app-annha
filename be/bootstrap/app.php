@@ -39,5 +39,29 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
-        //
+        $exceptions->render(function (\Illuminate\Database\QueryException $e, \Illuminate\Http\Request $request) {
+            if ($request->is('api/*') || $request->expectsJson()) {
+                $message = 'Đã xảy ra lỗi cơ sở dữ liệu. Vui lòng kiểm tra lại.';
+                $sqlState = $e->errorInfo[0] ?? null;
+                $sqlError = $e->errorInfo[1] ?? null;
+                
+                if ($sqlState === '23000') {
+                    if ($sqlError === 1048) {
+                        preg_match("/Column '([^']+)' cannot be null/", $e->getMessage(), $matches);
+                        $column = $matches[1] ?? 'trường bắt buộc';
+                        $message = "Trường dữ liệu '{$column}' không được để trống.";
+                    } elseif ($sqlError === 1451 || $sqlError === 1452) {
+                        $message = 'Dữ liệu liên kết không hợp lệ hoặc đang được sử dụng ở nơi khác.';
+                    } elseif ($sqlError === 1062) {
+                        $message = 'Dữ liệu này đã tồn tại trong hệ thống (bị trùng lặp).';
+                    }
+                }
+                
+                return response()->json([
+                    'success' => false,
+                    'message' => $message,
+                    'debug' => config('app.debug') ? $e->getMessage() : null
+                ], 400);
+            }
+        });
     })->create();

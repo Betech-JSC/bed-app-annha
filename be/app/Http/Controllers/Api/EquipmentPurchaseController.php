@@ -109,29 +109,6 @@ class EquipmentPurchaseController extends Controller
             $validated['project_id'] = $projectId;
             $purchase = $this->equipmentService->upsertPurchase($validated, null, $user);
 
-            // Create project cost (draft) for tracking
-            $costGroup = CostGroup::where('code', 'equipment')
-                ->orWhere('name', 'like', '%thiết bị%')
-                ->where('is_active', true)
-                ->first();
-
-            $itemNames = collect($validated['items'])->pluck('name')->implode(', ');
-            if (strlen($itemNames) > 100) {
-                $itemNames = substr($itemNames, 0, 97) . '...';
-            }
-
-            Cost::create([
-                'project_id' => $projectId,
-                'cost_group_id' => $costGroup ? $costGroup->id : null,
-                'category' => 'equipment',
-                'name' => "Mua thiết bị: {$itemNames}",
-                'amount' => $purchase->total_amount,
-                'description' => "Từ phiếu mua thiết bị #{$purchase->id}. " . ($purchase->notes ?? ""),
-                'cost_date' => now()->toDateString(),
-                'status' => 'draft',
-                'created_by' => $user->id,
-            ]);
-
             return response()->json([
                 'success' => true,
                 'message' => 'Đã tạo phiếu mua thiết bị.',
@@ -331,28 +308,6 @@ class EquipmentPurchaseController extends Controller
 
         try {
             $this->equipmentService->confirmPurchaseByAccountant($purchase, $user);
-
-            // Create global project cost for reporting (approved state)
-            $costGroup = CostGroup::where('code', 'equipment')
-                ->orWhere('name', 'like', '%thiết bị%')
-                ->where('is_active', true)
-                ->first();
-
-            Cost::create([
-                'project_id'             => $projectId,
-                'cost_group_id'          => $costGroup ? $costGroup->id : null,
-                'category'               => 'equipment',
-                'name'                   => "Mua thiết bị cho DA: {$project->name}",
-                'amount'                 => $purchase->total_amount,
-                'description'            => "Từ phiếu mua thiết bị #{$purchase->id}. " . ($purchase->notes ?? ""),
-                'cost_date'              => now(),
-                'status'                 => 'approved',
-                'created_by'             => $purchase->created_by,
-                'management_approved_by' => $purchase->approved_by,
-                'management_approved_at' => $purchase->approved_at,
-                'accountant_approved_by' => $user->id,
-                'accountant_approved_at' => now(),
-            ]);
 
             return response()->json([
                 'success' => true,

@@ -145,7 +145,7 @@ class EquipmentRental extends Model
                 'project_id'               => $this->project_id,
                 'equipment_id'             => $this->equipment_id,
                 'name'                     => "Thuê thiết bị: " . ($this->equipment_name ?: ($this->equipment->name ?? 'N/A')),
-                'amount'                   => $this->total_cost,
+                'amount'                   => $this->total_cost ?? 0,
                 'cost_date'                => $this->rental_start_date ?: now(),
                 'category'                 => 'other',
                 'cost_group_id'            => $costGroupId,

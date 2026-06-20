@@ -235,7 +235,7 @@ class MaterialBill extends Model
             [
                 'project_id'               => $this->project_id,
                 'name'                     => $name,
-                'amount'                   => $this->total_amount,
+                'amount'                   => $this->total_amount ?? 0,
                 'cost_date'                => $this->bill_date ?: now(),
                 'cost_group_id'            => $this->cost_group_id,
                 'budget_item_id'           => $this->budget_item_id,

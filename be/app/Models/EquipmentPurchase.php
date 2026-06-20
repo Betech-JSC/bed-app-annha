@@ -75,11 +75,21 @@ class EquipmentPurchase extends Model
             default              => 'draft'
         };
 
+        $itemNames = $this->items()->pluck('name')->implode(', ');
+        if ($itemNames) {
+            if (strlen($itemNames) > 100) {
+                $itemNames = substr($itemNames, 0, 97) . '...';
+            }
+            $costName = "Mua thiết bị: {$itemNames}";
+        } else {
+            $costName = "Mua thiết bị mới #" . ($this->id);
+        }
+
         Cost::updateOrCreate(
             ['equipment_purchase_id' => $this->id],
             [
                 'project_id'               => $this->project_id,
-                'name'                     => "Mua thiết bị mới #" . ($this->id),
+                'name'                     => $costName,
                 'amount'                   => $this->total_amount ?? 0,
                 'cost_date'                => $this->created_at ?: now(),
                 'category'                 => 'other',
