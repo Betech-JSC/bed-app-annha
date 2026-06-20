@@ -105,6 +105,32 @@
           <div class="flex items-center gap-2">
             <a-button type="link" size="small" @click="showDetail(record)" class="px-1">Xem</a-button>
             
+            <!-- Gửi duyệt (Submit) -->
+            <a-popconfirm 
+              v-if="record.status === 'draft' && can('company_cost.submit')"
+              title="Gửi duyệt chi phí này?" ok-text="Gửi" cancel-text="Hủy"
+              @confirm="submitCost(record.id)"
+            >
+              <a-button type="link" size="small" class="px-1 text-blue-600">Gửi duyệt</a-button>
+            </a-popconfirm>
+
+            <!-- Sửa (Edit) -->
+            <a-button 
+              v-if="['draft', 'rejected'].includes(record.status) && can('company_cost.update')"
+              type="link" size="small" @click="showEditModal(record)" class="px-1 text-amber-600"
+            >
+              Sửa
+            </a-button>
+
+            <!-- Xóa (Delete) -->
+            <a-popconfirm 
+              v-if="['draft', 'rejected'].includes(record.status) && can('company_cost.delete')"
+              title="Xóa chi phí này vĩnh viễn?" ok-text="Xóa" cancel-text="Hủy"
+              @confirm="deleteCost(record.id)"
+            >
+              <a-button type="link" size="small" danger class="px-1">Xóa</a-button>
+            </a-popconfirm>
+
             <!-- Quick Approve Management -->
             <a-button 
               v-if="record.status === 'pending_management_approval' && can('company_cost.approve.management')"
@@ -120,6 +146,15 @@
             >
               Xác nhận chi
             </a-button>
+
+            <!-- Hoàn duyệt (Revert) -->
+            <a-popconfirm 
+              v-if="['pending_management_approval', 'pending_accountant_approval', 'rejected'].includes(record.status) && can('company_cost.revert')"
+              title="Hoàn duyệt về trạng thái Nháp?" ok-text="Đồng ý" cancel-text="Hủy"
+              @confirm="revertCost(record.id)"
+            >
+              <a-button type="link" size="small" class="px-1 text-gray-500">Hoàn duyệt</a-button>
+            </a-popconfirm>
           </div>
         </template>
       </template>
@@ -258,7 +293,7 @@
       <div class="fixed bottom-0 right-0 w-[560px] p-4 bg-white/80 backdrop-blur-md border-t border-gray-100 flex justify-between z-20">
         <!-- Left side: Destructive actions -->
         <div class="flex gap-2">
-          <a-popconfirm v-if="selectedCost.status === 'draft'" title="Xóa chi phí này vĩnh viễn?" ok-text="Xóa" cancel-text="Hủy" @confirm="deleteCost(selectedCost.id); drawerVisible = false">
+          <a-popconfirm v-if="['draft', 'rejected'].includes(selectedCost.status)" title="Xóa chi phí này vĩnh viễn?" ok-text="Xóa" cancel-text="Hủy" @confirm="deleteCost(selectedCost.id); drawerVisible = false">
             <a-button danger size="small"><DeleteOutlined /> Xóa</a-button>
           </a-popconfirm>
           <a-popconfirm v-if="['pending_management_approval', 'pending_accountant_approval', 'rejected'].includes(selectedCost.status)" title="Hoàn duyệt về trạng thái Nháp?" @confirm="revertCost(selectedCost.id)">
@@ -269,10 +304,10 @@
         <!-- Right side: Primary actions -->
         <div class="flex gap-2">
           <!-- Edit -->
-          <a-button v-if="selectedCost.status === 'draft'" size="small" @click="showEditModal(selectedCost)"><EditOutlined /> Sửa</a-button>
+          <a-button v-if="['draft', 'rejected'].includes(selectedCost.status)" size="small" @click="showEditModal(selectedCost)"><EditOutlined /> Sửa</a-button>
 
           <!-- Submit -->
-          <a-popconfirm v-if="selectedCost.status === 'draft'" title="Gửi duyệt chi phí này?" @confirm="submitCost(selectedCost.id)">
+          <a-popconfirm v-if="['draft', 'rejected'].includes(selectedCost.status)" title="Gửi duyệt chi phí này?" @confirm="submitCost(selectedCost.id)">
             <a-button type="primary" size="small"><SendOutlined /> Gửi duyệt</a-button>
           </a-popconfirm>
 
@@ -598,7 +633,7 @@ const columns = [
   { title: 'Ngày', dataIndex: 'cost_date', key: 'cost_date', width: 110 },
   { title: 'Trạng thái', dataIndex: 'status', key: 'status', width: 120 },
   { title: 'Người tạo', dataIndex: 'creator', key: 'creator', width: 130 },
-  { title: '', dataIndex: 'actions', key: 'actions', width: 70, fixed: 'right' },
+  { title: '', dataIndex: 'actions', key: 'actions', width: 200, fixed: 'right' },
 ]
 
 const statusLabel = (s) => ({
