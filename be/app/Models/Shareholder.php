@@ -12,18 +12,25 @@ class Shareholder extends Model
         'uuid', 'name', 'phone', 'email', 'id_number',
         'contributed_amount', 'share_percentage',
         'contribution_date', 'status', 'notes', 'created_by',
+        'user_id', 'shares_count',
     ];
 
     protected $casts = [
         'contributed_amount' => 'decimal:2',
         'share_percentage'   => 'decimal:4',
         'contribution_date'  => 'date',
+        'shares_count'       => 'integer',
     ];
 
     // --- Relationships ---
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'user_id');
     }
 
     // --- Scopes ---

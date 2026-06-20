@@ -324,7 +324,7 @@ class EquipmentService
                     'purchase_price'  => $item->unit_price,
                     'current_value'   => $item->unit_price * $item->quantity,
                     'status'          => 'available',
-                    'notes'           => "Nhập từ phiếu mua #{$purchase->id} - DA: " . ($purchase->project->name ?? 'N/A'),
+                    'notes'           => "Nhập từ phiếu mua #{$purchase->id} - DA: " . ($purchase->project?->name ?? 'N/A'),
                     'project_id'      => $purchase->project_id,
                     'supplier_id'     => $purchase->supplier_id,
                     'purchase_date'   => $purchase->purchase_date ?: now()->toDateString(),

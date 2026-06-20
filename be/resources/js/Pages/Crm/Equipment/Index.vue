@@ -172,8 +172,8 @@
       <template v-if="filters.tab === 'approvals'">
         <a-row :gutter="16">
           <a-col :span="12">
-            <a-form-item label="Dự án" required>
-              <a-select v-model:value="form.project_id" placeholder="Chọn dự án..." size="large" show-search option-filter-prop="label">
+            <a-form-item label="Dự án">
+              <a-select v-model:value="form.project_id" placeholder="Chọn dự án (để trống nếu nhập kho công ty)..." size="large" show-search option-filter-prop="label" allow-clear>
                 <a-select-option v-for="p in props.projects" :key="p.id" :value="p.id" :label="p.name">
                   {{ p.name }} <span class="text-gray-400 font-mono text-xs">({{ p.code }})</span>
                 </a-select-option>

@@ -120,7 +120,7 @@ class CrmEquipmentController extends Controller
         $user = auth('admin')->user();
 
         $request->validate([
-            'project_id' => 'required|exists:projects,id',
+            'project_id' => 'nullable|exists:projects,id',
             'supplier_id' => 'required|exists:suppliers,id',
             'purchase_date' => 'required|date',
             'notes' => 'nullable|string',
@@ -131,7 +131,7 @@ class CrmEquipmentController extends Controller
             'items.*.unit_price' => 'required|numeric|min:0',
         ]);
 
-        $project = Project::findOrFail($request->project_id);
+        $project = $request->project_id ? Project::find($request->project_id) : null;
         $this->crmRequire($user, Permissions::EQUIPMENT_CREATE, $project);
 
         try {
@@ -170,7 +170,7 @@ class CrmEquipmentController extends Controller
         try {
             if ($tab === 'approvals') {
                 $request->validate([
-                    'project_id' => 'required|exists:projects,id',
+                    'project_id' => 'nullable|exists:projects,id',
                     'supplier_id' => 'required|exists:suppliers,id',
                     'purchase_date' => 'required|date',
                     'notes' => 'nullable|string',

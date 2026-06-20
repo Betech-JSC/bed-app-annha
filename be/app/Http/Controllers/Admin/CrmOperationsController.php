@@ -119,15 +119,33 @@ class CrmOperationsController extends Controller
     {
         $user = Auth::guard('admin')->user();
         $this->crmRequire($user, Permissions::SHAREHOLDER_VIEW);
-        $shareholders = Shareholder::with('creator:id,name')
+        $shareholders = Shareholder::with(['creator:id,name', 'user:id,name'])
             ->orderByDesc('contributed_amount')
             ->get();
 
         $totalCapital = $shareholders->where('status', 'active')->sum('contributed_amount');
 
+        // Fetch employees
+        $employees = User::employees()
+            ->orderBy('name')
+            ->get(['id', 'name', 'phone', 'email']);
+
+        // Fetch share issuances
+        $shareIssuances = \App\Models\ShareIssuance::with('creator:id,name')
+            ->orderByDesc('issue_date')
+            ->orderByDesc('id')
+            ->get();
+
+        $totalShares = $shareIssuances->sum('shares_count');
+        $sharePrice = $shareIssuances->first()?->share_price ?? 10000;
+
         return Inertia::render('Crm/Operations/Shareholders', [
-            'shareholders' => $shareholders,
-            'totalCapital' => $totalCapital,
+            'shareholders'   => $shareholders,
+            'totalCapital'   => $totalCapital,
+            'employees'      => $employees,
+            'shareIssuances' => $shareIssuances,
+            'totalShares'    => $totalShares,
+            'sharePrice'     => $sharePrice,
         ]);
     }
 
@@ -136,15 +154,19 @@ class CrmOperationsController extends Controller
         $user = Auth::guard('admin')->user();
         $this->crmRequire($user, Permissions::SHAREHOLDER_CREATE);
         $validated = $request->validate([
+            'user_id'            => 'nullable|exists:users,id',
             'name'               => 'required|string|max:255',
             'phone'              => 'nullable|string|max:20',
             'email'              => 'nullable|email|max:255',
             'id_number'          => 'nullable|string|max:50',
+            'shares_count'       => 'required|integer|min:0',
             'contributed_amount' => 'required|numeric|min:0',
             'share_percentage'   => 'required|numeric|min:0|max:100',
             'contribution_date'  => 'nullable|date',
             'notes'              => 'nullable|string',
         ]);
+
+        $validated['created_by'] = $user->id;
 
         Shareholder::create($validated);
         return redirect()->back()->with('success', 'Đã thêm cổ đông thành công.');
@@ -157,10 +179,12 @@ class CrmOperationsController extends Controller
         $shareholder = Shareholder::findOrFail($id);
 
         $validated = $request->validate([
+            'user_id'            => 'nullable|exists:users,id',
             'name'               => 'required|string|max:255',
             'phone'              => 'nullable|string|max:20',
             'email'              => 'nullable|email|max:255',
             'id_number'          => 'nullable|string|max:50',
+            'shares_count'       => 'required|integer|min:0',
             'contributed_amount' => 'required|numeric|min:0',
             'share_percentage'   => 'required|numeric|min:0|max:100',
             'contribution_date'  => 'nullable|date',
@@ -178,6 +202,25 @@ class CrmOperationsController extends Controller
         $this->crmRequire($user, Permissions::SHAREHOLDER_DELETE);
         Shareholder::findOrFail($id)->delete();
         return redirect()->back()->with('success', 'Đã xóa cổ đông.');
+    }
+
+    public function storeShareIssuance(Request $request)
+    {
+        $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::SHAREHOLDER_CREATE);
+
+        $validated = $request->validate([
+            'issue_date'   => 'required|date',
+            'shares_count' => 'required|integer|min:1',
+            'share_price'  => 'required|numeric|min:1',
+            'description'  => 'nullable|string|max:255',
+        ]);
+
+        $validated['created_by'] = $user->id;
+
+        \App\Models\ShareIssuance::create($validated);
+
+        return redirect()->back()->with('success', 'Đã phát hành thêm cổ phiếu thành công.');
     }
 
     // ================================================================

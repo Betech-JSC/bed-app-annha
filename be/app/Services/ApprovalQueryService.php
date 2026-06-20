@@ -148,7 +148,7 @@ class ApprovalQueryService
             'id' => $cost->id,
             'type' => $type,
             'title' => $cost->name,
-            'subtitle' => $cost->costGroup->name ?? ($cost->project->name ?? 'Không phân nhóm'),
+            'subtitle' => $cost->costGroup->name ?? ($cost->project?->name ?? 'Không phân nhóm'),
             'amount' => (float) $cost->amount,
             'status' => $cost->status,
             'status_label' => $this->getStatusLabel($cost->status),
@@ -678,7 +678,7 @@ class ApprovalQueryService
             if ($type === 'all' || $type === 'management' || $type === 'equipment_purchase') {
                 foreach ($data['equipment_purchases_management'] ?? [] as $p) {
                     $items[] = [
-                        'id' => $p->id, 'type' => 'equipment_purchase', 'title' => 'Mua TB mới: ' . ($p->project->name ?? 'Dự án'),
+                        'id' => $p->id, 'type' => 'equipment_purchase', 'title' => 'Mua TB mới: ' . ($p->project?->name ?? 'Dự án'),
                         'subtitle' => 'Tổng cộng: ' . number_format($p->total_amount, 0) . 'đ', 'amount' => (float) $p->total_amount,
                         'status' => $p->status, 'status_label' => $this->getStatusLabel($p->status),
                         'created_by' => $p->creator->name ?? 'N/A', 'created_at' => $p->created_at->toISOString(),
@@ -804,7 +804,7 @@ class ApprovalQueryService
             if ($type === 'all' || $type === 'accountant' || $type === 'equipment_purchase') {
                 foreach ($data['equipment_purchases_accountant'] ?? [] as $p) {
                     $items[] = [
-                        'id' => $p->id, 'type' => 'equipment_purchase', 'title' => 'Mua TB mới: ' . ($p->project->name ?? 'Dự án'),
+                        'id' => $p->id, 'type' => 'equipment_purchase', 'title' => 'Mua TB mới: ' . ($p->project?->name ?? 'Dự án'),
                         'subtitle' => 'Tổng cộng: ' . number_format($p->total_amount, 0) . 'đ', 'amount' => (float) $p->total_amount,
                         'status' => $p->status, 'status_label' => $this->getStatusLabel($p->status),
                         'created_by' => $p->creator->name ?? 'N/A', 'created_at' => $p->created_at->toISOString(),
@@ -1058,7 +1058,7 @@ class ApprovalQueryService
                     'id'               => $att->id,
                     'type'             => 'attendance',
                     'title'            => ($att->user->name ?? "NV #{$att->user_id}") . ' — ' . optional($att->work_date)->format('d/m/Y'),
-                    'subtitle'         => ($att->project->code ?? 'N/A') . ' - ' . ($att->project->name ?? 'Không có dự án'),
+                    'subtitle'         => ($att->project?->code ?? 'N/A') . ' - ' . ($att->project?->name ?? 'Không có dự án'),
                     'amount'           => 0,
                     'status'           => $att->workflow_status,
                     'status_label'     => 'Chờ duyệt',
@@ -1066,7 +1066,7 @@ class ApprovalQueryService
                     'created_by'       => $att->user->name ?? 'N/A',
                     'created_at'       => optional($att->work_date)->toISOString() ?? now()->toISOString(),
                     'project_id'       => $att->project_id,
-                    'project_name'     => $att->project->name ?? null,
+                    'project_name'     => $att->project?->name ?? null,
                     'can_approve'      => true,
                     'approval_level'   => 'hr',
                     'role_group'       => 'hr',
@@ -1113,7 +1113,7 @@ class ApprovalQueryService
                 $recentActions->push(['id' => $item->id, 'type' => 'equipment_rental', 'title' => 'Thuê TB: ' . ($item->equipment_name ?: ($item->equipment->name ?? 'N/A')), 'subtitle' => $item->project->name ?? 'Dự án', 'amount' => (float) ($item->total_cost ?? 0), 'status' => $item->status, 'status_label' => $this->getStatusLabel($item->status), 'created_at' => $item->updated_at->toISOString(), 'approval_level' => 'history']);
             }
             foreach ($recent['equipment_purchases'] ?? [] as $item) {
-                $recentActions->push(['id' => $item->id, 'type' => 'equipment_purchase', 'title' => 'Mua TB: ' . ($item->project->name ?? "#{$item->id}"), 'subtitle' => number_format($item->total_amount ?? 0, 0) . 'đ', 'amount' => (float) ($item->total_amount ?? 0), 'status' => $item->status, 'status_label' => $this->getStatusLabel($item->status), 'created_at' => $item->updated_at->toISOString(), 'approval_level' => 'history']);
+                $recentActions->push(['id' => $item->id, 'type' => 'equipment_purchase', 'title' => 'Mua TB: ' . ($item->project?->name ?? "#{$item->id}"), 'subtitle' => number_format($item->total_amount ?? 0, 0) . 'đ', 'amount' => (float) ($item->total_amount ?? 0), 'status' => $item->status, 'status_label' => $this->getStatusLabel($item->status), 'created_at' => $item->updated_at->toISOString(), 'approval_level' => 'history']);
             }
         }
 

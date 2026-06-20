@@ -677,6 +677,7 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         Route::post('/shareholders', [CrmOperationsController::class, 'storeShareholder'])->name('shareholders.store');
         Route::put('/shareholders/{id}', [CrmOperationsController::class, 'updateShareholder'])->name('shareholders.update');
         Route::delete('/shareholders/{id}', [CrmOperationsController::class, 'destroyShareholder'])->name('shareholders.destroy');
+        Route::post('/shareholders/issue', [CrmOperationsController::class, 'storeShareIssuance'])->name('shareholders.issue');
 
         // Assets
         Route::get('/assets', [CrmOperationsController::class, 'assets'])->name('assets');
