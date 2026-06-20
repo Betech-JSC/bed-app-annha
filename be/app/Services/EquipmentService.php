@@ -167,15 +167,21 @@ class EquipmentService
     public function upsertRental(array $data, ?EquipmentRental $rental = null, $user = null): EquipmentRental
     {
         return DB::transaction(function () use ($data, $rental, $user) {
+            $fillable = collect($data)->only([
+                'uuid', 'project_id', 'equipment_name', 'equipment_id', 'quantity', 'unit_price',
+                'supplier_id', 'rental_start_date', 'rental_end_date', 'total_cost',
+                'status', 'rejection_reason', 'notes', 'created_by', 'cost_id'
+            ])->toArray();
+
             if (!$rental) {
-                $data['status'] = 'draft';
-                $data['created_by'] = $user ? $user->id : null;
-                $rental = EquipmentRental::create($data);
+                $fillable['status'] = 'draft';
+                $fillable['created_by'] = $user ? $user->id : null;
+                $rental = EquipmentRental::create($fillable);
             } else {
                 if (!in_array($rental->status, ['draft', 'rejected'])) {
                     throw new \Exception('Chất lượng chỉ có thể chỉnh sửa phiếu thuê ở trạng thái Nháp hoặc Từ chối.');
                 }
-                $rental->update($data);
+                $rental->update($fillable);
             }
 
             // Sync with Cost table logic (handled by Model saved hook, but we ensure data integrity here)
@@ -247,22 +253,30 @@ class EquipmentService
     public function upsertPurchase(array $data, ?EquipmentPurchase $purchase = null, $user = null): EquipmentPurchase
     {
         return DB::transaction(function () use ($data, $purchase, $user) {
+            $fillable = collect($data)->only([
+                'uuid', 'project_id', 'supplier_id', 'purchase_date', 'total_amount', 'status', 
+                'rejection_reason', 'notes', 'created_by'
+            ])->toArray();
+
             if (!$purchase) {
-                $data['status'] = 'draft';
-                $data['created_by'] = $user ? $user->id : null;
-                $purchase = EquipmentPurchase::create($data);
+                $fillable['status'] = 'draft';
+                $fillable['created_by'] = $user ? $user->id : null;
+                $purchase = EquipmentPurchase::create($fillable);
             } else {
                 if (!in_array($purchase->status, ['draft', 'rejected'])) {
                     throw new \Exception('Chỉ có thể chỉnh sửa phiếu mua ở trạng thái Nháp hoặc Từ chối.');
                 }
-                $purchase->update($data);
+                $purchase->update($fillable);
             }
 
             // Sync Items
             if (isset($data['items']) && is_array($data['items'])) {
                 $purchase->items()->delete();
                 foreach ($data['items'] as $itemData) {
-                    $purchase->items()->create($itemData);
+                    $itemFillable = collect($itemData)->only([
+                        'purchase_id', 'name', 'code', 'quantity', 'unit_price', 'total_price'
+                    ])->toArray();
+                    $purchase->items()->create($itemFillable);
                 }
                 $purchase->recalculateTotal();
             }
@@ -413,15 +427,21 @@ class EquipmentService
                 }
             }
 
+            $fillable = collect($data)->only([
+                'uuid', 'project_id', 'equipment_id', 'company_asset_id', 'quantity',
+                'receiver_id', 'received_date', 'returned_date',
+                'status', 'notes', 'created_by', 'rejection_reason'
+            ])->toArray();
+
             if (!$usage) {
-                $data['status'] = 'draft';
-                $data['created_by'] = $user ? $user->id : null;
-                $usage = AssetUsage::create($data);
+                $fillable['status'] = 'draft';
+                $fillable['created_by'] = $user ? $user->id : null;
+                $usage = AssetUsage::create($fillable);
             } else {
                 if (!in_array($usage->status, ['draft', 'rejected'])) {
                     throw new \Exception('Chỉ có thể chỉnh sửa phiếu mượn ở trạng thái Nháp hoặc Từ chối.');
                 }
-                $usage->update($data);
+                $usage->update($fillable);
             }
 
             if (isset($data['attachment_ids'])) {
