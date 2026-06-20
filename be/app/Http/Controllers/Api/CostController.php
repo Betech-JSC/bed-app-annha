@@ -364,11 +364,11 @@ class CostController extends Controller
             ], 403);
         }
 
-        // Chỉ cho phép xóa khi ở trạng thái draft (trừ Super Admin)
-        if (!$user->owner && $cost->status !== 'draft') {
+        // Chỉ cho phép xóa khi ở trạng thái nháp hoặc bị từ chối (trừ Super Admin)
+        if (!$user->owner && !in_array($cost->status, ['draft', 'rejected'])) {
             return response()->json([
                 'success' => false,
-                'message' => 'Chỉ có thể xóa chi phí ở trạng thái nháp.',
+                'message' => 'Chỉ có thể xóa chi phí ở trạng thái nháp hoặc bị từ chối.',
             ], 400);
         }
 

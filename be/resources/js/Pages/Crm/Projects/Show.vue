@@ -3811,7 +3811,7 @@
     <template #footer>
       <div v-if="costDetailRecord" class="flex justify-between items-center w-full">
         <div class="flex gap-2">
-           <a-popconfirm v-if="can('cost.delete') && costDetailRecord.status === 'draft'" title="Xóa phiếu chi này?" @confirm="deleteCost(costDetailRecord)">
+           <a-popconfirm v-if="can('cost.delete') && ['draft', 'rejected'].includes(costDetailRecord.status)" title="Xóa phiếu chi này?" @confirm="deleteCost(costDetailRecord)">
              <a-button danger type="text"><DeleteOutlined /> Xóa phiếu</a-button>
            </a-popconfirm>
            <a-button v-if="can('cost.update') && costDetailRecord.status === 'draft'" @click="openCostModal(costDetailRecord)"><EditOutlined /> Sửa</a-button>
