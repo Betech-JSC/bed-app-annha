@@ -25,6 +25,14 @@ class CompanyCostController extends Controller
      */
     public function index(Request $request)
     {
+        $user = Auth::user();
+        if (!$this->authService->can($user, Permissions::COMPANY_COST_VIEW)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền xem chi phí công ty.',
+            ], 403);
+        }
+
         $query = Cost::companyCosts()
             ->with(['creator', 'managementApprover', 'accountantApprover', 'costGroup', 'attachments', 'supplier', 'inputInvoice'])
             ->orderBy('cost_date', 'desc');
@@ -69,6 +77,14 @@ class CompanyCostController extends Controller
      */
     public function store(Request $request)
     {
+        $user = Auth::user();
+        if (!$this->authService->can($user, Permissions::COMPANY_COST_CREATE)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền tạo chi phí công ty.',
+            ], 403);
+        }
+
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
             'amount' => 'required|numeric|min:0',
@@ -132,6 +148,14 @@ class CompanyCostController extends Controller
      */
     public function show($id)
     {
+        $user = Auth::user();
+        if (!$this->authService->can($user, Permissions::COMPANY_COST_VIEW)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền xem chi phí công ty.',
+            ], 403);
+        }
+
         $cost = Cost::companyCosts()
             ->with(['creator', 'managementApprover', 'accountantApprover', 'costGroup', 'attachments', 'supplier', 'inputInvoice'])
             ->findOrFail($id);
@@ -147,6 +171,14 @@ class CompanyCostController extends Controller
      */
     public function update(Request $request, $id)
     {
+        $user = Auth::user();
+        if (!$this->authService->can($user, Permissions::COMPANY_COST_UPDATE)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền chỉnh sửa chi phí công ty.',
+            ], 403);
+        }
+
         $cost = Cost::companyCosts()->findOrFail($id);
 
         // Only allow editing if status is draft or rejected
@@ -227,6 +259,14 @@ class CompanyCostController extends Controller
      */
     public function destroy($id)
     {
+        $user = Auth::user();
+        if (!$this->authService->can($user, Permissions::COMPANY_COST_DELETE)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền xóa chi phí công ty.',
+            ], 403);
+        }
+
         $cost = Cost::companyCosts()->findOrFail($id);
 
         // Only allow deleting if status is draft, rejected, or approved
@@ -250,6 +290,14 @@ class CompanyCostController extends Controller
      */
     public function submit($id)
     {
+        $user = Auth::user();
+        if (!$this->authService->can($user, Permissions::COMPANY_COST_SUBMIT)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền gửi duyệt chi phí công ty.',
+            ], 403);
+        }
+
         $cost = Cost::companyCosts()->findOrFail($id);
 
         if (!$cost->submitForManagementApproval()) {
@@ -274,8 +322,8 @@ class CompanyCostController extends Controller
         $cost = Cost::companyCosts()->findOrFail($id);
         $user = Auth::user();
 
-        // RBAC check: only users with cost.approve.management can approve
-        if (!$this->authService->can($user, Permissions::COST_APPROVE_MANAGEMENT)) {
+        // RBAC check: only users with company_cost.approve.management can approve
+        if (!$this->authService->can($user, Permissions::COMPANY_COST_APPROVE_MANAGEMENT)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Bạn không có quyền duyệt chi phí (Ban điều hành).',
@@ -299,24 +347,41 @@ class CompanyCostController extends Controller
     /**
      * Approve company cost by accountant (final approval).
      */
-    public function approveByAccountant($id)
+    public function approveByAccountant(Request $request, $id)
     {
         $cost = Cost::companyCosts()->findOrFail($id);
         $user = Auth::user();
 
-        // RBAC check: only users with cost.approve.accountant can approve
-        if (!$this->authService->can($user, Permissions::COST_APPROVE_ACCOUNTANT)) {
+        // RBAC check: only users with company_cost.approve.accountant can approve
+        if (!$this->authService->can($user, Permissions::COMPANY_COST_APPROVE_ACCOUNTANT)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Bạn không có quyền xác nhận chi phí (Kế toán).',
             ], 403);
         }
 
-        if ($cost->attachments()->count() === 0) {
+        // Validate that accountant has provided a confirmation document
+        $hasFiles = $request->hasFile('files');
+        $hasAttachmentIds = $request->has('attachment_ids') && is_array($request->attachment_ids) && count($request->attachment_ids) > 0;
+
+        if (!$hasFiles && !$hasAttachmentIds && $cost->attachments()->where('description', 'after')->count() === 0) {
             return response()->json([
                 'success' => false,
-                'message' => 'Bắt buộc phải có ít nhất một chứng từ trước khi Kế toán duyệt.',
+                'message' => 'Bắt buộc phải có ít nhất một chứng từ thanh toán/biên lai chuyển tiền từ Kế toán.',
             ], 422);
+        }
+
+        // Handle uploaded files
+        if ($hasFiles) {
+            $attachmentService = app(\App\Services\AttachmentService::class);
+            $request->merge(['description' => 'after']);
+            $attachmentService->handleCrmUpload($request, $cost, "company-costs/{$cost->id}", true);
+        }
+
+        // Handle pre-uploaded attachment IDs
+        if ($hasAttachmentIds) {
+            $attachmentService = app(\App\Services\AttachmentService::class);
+            $attachmentService->linkExistingAttachments($request->attachment_ids, $cost, 'after');
         }
 
         if (!$cost->approveByAccountant($user)) {
@@ -329,7 +394,7 @@ class CompanyCostController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Đã xác nhận chi phí (kế toán)',
-            'data' => $cost->fresh(['creator', 'managementApprover', 'accountantApprover', 'costGroup']),
+            'data' => $cost->fresh(['creator', 'managementApprover', 'accountantApprover', 'costGroup', 'attachments']),
         ]);
     }
 
@@ -352,6 +417,27 @@ class CompanyCostController extends Controller
 
         $cost = Cost::companyCosts()->findOrFail($id);
         $user = Auth::user();
+
+        if ($cost->status === 'pending_management_approval') {
+            if (!$this->authService->can($user, Permissions::COMPANY_COST_APPROVE_MANAGEMENT)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Bạn không có quyền từ chối chi phí này (Ban điều hành).',
+                ], 403);
+            }
+        } elseif ($cost->status === 'pending_accountant_approval') {
+            if (!$this->authService->can($user, Permissions::COMPANY_COST_APPROVE_ACCOUNTANT)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Bạn không có quyền từ chối chi phí này (Kế toán).',
+                ], 403);
+            }
+        } else {
+            return response()->json([
+                'success' => false,
+                'message' => 'Trạng thái không hợp lệ để từ chối.',
+            ], 400);
+        }
 
         if (!$cost->reject($request->reason, $user)) {
             return response()->json([
@@ -384,7 +470,8 @@ class CompanyCostController extends Controller
 
         $summary = [
             'total_costs' => $query->count(),
-            'total_amount' => $query->approved()->sum('amount'),
+            'total_amount' => $query->sum('amount'),
+            'approved_amount' => (clone $query)->approved()->sum('amount'),
             'draft_count' => (clone $query)->where('status', 'draft')->count(),
             'pending_count' => (clone $query)->pending()->count(),
             'approved_count' => (clone $query)->approved()->count(),

@@ -12,7 +12,7 @@
 
   <!-- ═══ Stats ═══ -->
   <div class="crm-stats-grid">
-    <StatCard :value="fmtCurrency(stats.totalAmount)" label="Tổng chi phí (Đã duyệt)" :icon="DollarOutlined" variant="primary" format="text" />
+    <StatCard :value="fmtCurrency(stats.totalAmount)" label="Tổng chi phí" :icon="DollarOutlined" variant="primary" format="text" />
     <StatCard :value="fmtCurrency(stats.approvedAmount)" label="Thực chi" :icon="CheckCircleOutlined" variant="success" format="text" />
     <StatCard :value="stats.pendingCount" label="Chờ duyệt" :icon="ClockCircleOutlined" variant="warning" />
     <StatCard :value="stats.draftCount" label="Nháp" :icon="FileTextOutlined" variant="accent" />
@@ -229,10 +229,10 @@
         <!-- Attachments -->
         <div class="space-y-3">
           <div class="text-sm font-semibold text-gray-700 flex items-center gap-2">
-            <PaperClipOutlined /> Chứng từ đính kèm ({{ selectedCost.attachments?.length || 0 }})
+            <PaperClipOutlined /> Chứng từ đính kèm ({{ selectedCost.attachments?.filter(a => a.description !== 'after')?.length || 0 }})
           </div>
-          <div v-if="selectedCost.attachments?.length" class="grid grid-cols-2 gap-3">
-            <div v-for="file in selectedCost.attachments" :key="file.id" class="relative group border border-gray-100 rounded-xl overflow-hidden bg-white hover:border-blue-300 hover:shadow-md transition-all cursor-pointer">
+          <div v-if="selectedCost.attachments?.filter(a => a.description !== 'after')?.length" class="grid grid-cols-2 gap-3">
+            <div v-for="file in selectedCost.attachments.filter(a => a.description !== 'after')" :key="file.id" class="relative group border border-gray-100 rounded-xl overflow-hidden bg-white hover:border-blue-300 hover:shadow-md transition-all cursor-pointer">
               <!-- Image files: clickable preview -->
               <template v-if="file.type === 'image' || file.mime_type?.startsWith('image/')">
                 <a-image
@@ -271,11 +271,42 @@
                 <div class="text-xs text-blue-600">Duyệt bởi: {{ selectedCost.management_approver?.name }} lúc {{ formatDate(selectedCost.management_approved_at, 'HH:mm DD/MM/YYYY') }}</div>
               </div>
             </div>
-            <div v-if="selectedCost.accountant_approved_at" class="flex items-start gap-3 p-3 bg-green-50/50 rounded-xl border border-green-100">
-              <CheckCircleOutlined style="color: #10B981; margin-top: 2px;" />
-              <div>
-                <div class="text-sm font-medium text-green-800">Kế toán đã xác nhận</div>
-                <div class="text-xs text-green-600">Xác nhận bởi: {{ selectedCost.accountant_approver?.name }} lúc {{ formatDate(selectedCost.accountant_approved_at, 'HH:mm DD/MM/YYYY') }}</div>
+            <div v-if="selectedCost.accountant_approved_at" class="flex flex-col gap-2 p-3 bg-green-50/50 rounded-xl border border-green-100">
+              <div class="flex items-start gap-3">
+                <CheckCircleOutlined style="color: #10B981; margin-top: 2px;" />
+                <div>
+                  <div class="text-sm font-medium text-green-800">Kế toán đã xác nhận</div>
+                  <div class="text-xs text-green-600">Xác nhận bởi: {{ selectedCost.accountant_approver?.name }} lúc {{ formatDate(selectedCost.accountant_approved_at, 'HH:mm DD/MM/YYYY') }}</div>
+                </div>
+              </div>
+              
+              <!-- Accountant payment confirmation vouchers (description === 'after') -->
+              <div v-if="selectedCost.attachments?.filter(a => a.description === 'after')?.length" class="mt-2 pl-7 space-y-2">
+                <div class="text-[10px] font-bold text-green-700 tracking-wider">CHỨNG TỪ THANH TOÁN / ỦY NHIỆM CHI:</div>
+                <div class="grid grid-cols-2 gap-2">
+                  <div v-for="file in selectedCost.attachments.filter(a => a.description === 'after')" :key="file.id" class="relative group border border-green-100 rounded-lg overflow-hidden bg-white hover:border-green-300 hover:shadow-sm transition-all cursor-pointer">
+                    <template v-if="file.type === 'image' || file.mime_type?.startsWith('image/')">
+                      <a-image
+                        :src="file.file_url"
+                        :preview-mask="false"
+                        class="w-full"
+                        style="aspect-ratio: 16/10; object-fit: cover;"
+                      />
+                    </template>
+                    <template v-else>
+                      <a :href="file.file_url" target="_blank" class="block">
+                        <div class="aspect-[16/10] flex items-center justify-center bg-gray-50">
+                          <FileTextOutlined style="font-size: 24px; color: #9CA3AF;" />
+                        </div>
+                      </a>
+                    </template>
+                    <div class="p-1.5 text-[9px] truncate bg-white border-t border-gray-50 font-medium text-gray-600">
+                      <a :href="file.file_url" target="_blank" class="hover:text-green-600 transition-colors">
+                        {{ file.original_name || file.file_name || 'File' }}
+                      </a>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
             <div v-if="selectedCost.status === 'rejected'" class="flex items-start gap-3 p-3 bg-red-50/50 rounded-xl border border-red-100">

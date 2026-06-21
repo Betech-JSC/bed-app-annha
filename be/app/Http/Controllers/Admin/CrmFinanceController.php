@@ -99,9 +99,8 @@ class CrmFinanceController extends Controller
 
         $costs = $query->paginate(20)->withQueryString();
 
-        // Stats
-        // Stats: Total amount now ONLY includes APPROVED costs per user request "Duyệt mới + vào báo cáo"
-        $totalAmount = Cost::companyCosts()->approved()->sum('amount') ?: 0;
+        // Stats: Total amount includes all costs (approved + unapproved)
+        $totalAmount = Cost::companyCosts()->sum('amount') ?: 0;
         $approvedAmount = Cost::companyCosts()->approved()->sum('amount') ?: 0;
         $pendingCount = Cost::companyCosts()->pending()->count();
         $draftCount = Cost::companyCosts()->draft()->count();
