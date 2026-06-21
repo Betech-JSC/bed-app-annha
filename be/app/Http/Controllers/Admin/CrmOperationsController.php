@@ -166,6 +166,13 @@ class CrmOperationsController extends Controller
             'notes'              => 'nullable|string',
         ]);
 
+        $totalIssuedShares = \App\Models\ShareIssuance::sum('shares_count');
+        $allocatedShares = Shareholder::active()->sum('shares_count');
+        $newSharesCount = $validated['shares_count'];
+        if ($allocatedShares + $newSharesCount > $totalIssuedShares) {
+            return redirect()->back()->withErrors(['shares_count' => "Tổng số cổ phiếu phân bổ cho các cổ đông (" . number_format($allocatedShares + $newSharesCount) . ") không được vượt quá tổng số cổ phiếu phát hành của công ty (" . number_format($totalIssuedShares) . ")."]);
+        }
+
         $validated['created_by'] = $user->id;
 
         Shareholder::create($validated);
@@ -191,6 +198,15 @@ class CrmOperationsController extends Controller
             'status'             => 'nullable|in:active,inactive',
             'notes'              => 'nullable|string',
         ]);
+
+        $status = $validated['status'] ?? $shareholder->status;
+        $totalIssuedShares = \App\Models\ShareIssuance::sum('shares_count');
+        $allocatedShares = Shareholder::active()->where('id', '!=', $id)->sum('shares_count');
+        $newSharesCount = $status === 'active' ? $validated['shares_count'] : 0;
+        
+        if ($allocatedShares + $newSharesCount > $totalIssuedShares) {
+            return redirect()->back()->withErrors(['shares_count' => "Tổng số cổ phiếu phân bổ cho các cổ đông (" . number_format($allocatedShares + $newSharesCount) . ") không được vượt quá tổng số cổ phiếu phát hành của công ty (" . number_format($totalIssuedShares) . ")."]);
+        }
 
         $shareholder->update($validated);
         return redirect()->back()->with('success', 'Đã cập nhật thông tin cổ đông.');

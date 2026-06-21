@@ -164,8 +164,26 @@ const fmtCurrencyShort = (v) => {
 
 // --- Constants ---
 const categoryLabels = { computer: 'Máy tính / CNTT', machinery: 'Máy móc thi công', vehicle: 'Xe công ty', furniture: 'Nội thất VP', other: 'Khác' }
-const assetStatusLabel = { in_stock: 'Trong kho', in_use: 'Đang dùng', under_repair: 'Sửa chữa', disposed: 'Thanh lý' }
-const assetStatusColor = { in_stock: 'blue', in_use: 'green', under_repair: 'orange', disposed: 'default' }
+const assetStatusLabel = {
+  draft: 'Nháp',
+  pending_management: 'Chờ BĐH duyệt',
+  pending_accountant: 'Chờ Kế toán',
+  available: 'Sẵn sàng (Trong kho)',
+  in_use: 'Đang sử dụng',
+  maintenance: 'Bảo trì',
+  retired: 'Thanh lý',
+  rejected: 'Từ chối',
+}
+const assetStatusColor = {
+  draft: 'default',
+  pending_management: 'warning',
+  pending_accountant: 'processing',
+  available: 'success',
+  in_use: 'cyan',
+  maintenance: 'orange',
+  retired: 'error',
+  rejected: 'error',
+}
 
 // --- Charts ---
 const barOpts = computed(() => ({

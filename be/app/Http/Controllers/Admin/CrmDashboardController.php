@@ -22,6 +22,7 @@ use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use App\Models\Supplier;
 use App\Models\GlobalEquipment;
+use App\Models\ConstructionLog;
 
 class CrmDashboardController extends Controller
 {
@@ -44,37 +45,47 @@ class CrmDashboardController extends Controller
         // ── Period Filter ──────────────────────────────────────
         $period = $request->get('period', 'month'); // month, quarter, year, custom
         $compare = $request->boolean('compare', false);
+        $projectId = $request->get('project_id', 'all');
 
         $now = Carbon::now();
         [$periodStart, $periodEnd, $prevStart, $prevEnd] = $this->resolvePeriodRange($period, $now, $request);
 
         // ── Get centralized metrics from service ──────────────
-        $metrics = $this->reportingService->getDashboardMetrics();
+        $metrics = $this->reportingService->getDashboardMetrics($projectId);
 
         // ── Period-filtered stats ─────────────────────────────
-        $periodStats = $this->getPeriodStats($periodStart, $periodEnd);
-        $prevStats = $compare ? $this->getPeriodStats($prevStart, $prevEnd) : null;
+        $periodStats = $this->getPeriodStats($periodStart, $periodEnd, $projectId);
+        $prevStats = $compare ? $this->getPeriodStats($prevStart, $prevEnd, $projectId) : null;
 
         // ── Additional data points for CEO dashboard ──────────
-        $pendingCosts = Cost::whereIn('status', ['pending_management_approval', 'pending_accountant_approval'])->count();
-        $pendingCostsAmount = Cost::whereIn('status', ['pending_management_approval', 'pending_accountant_approval'])->sum('amount');
+        $pendingCostsQuery = Cost::whereIn('status', ['pending_management_approval', 'pending_accountant_approval']);
+        if ($projectId && $projectId !== 'all') {
+            $pendingCostsQuery->where('project_id', $projectId);
+        }
+        $pendingCosts = (clone $pendingCostsQuery)->count();
+        $pendingCostsAmount = (clone $pendingCostsQuery)->sum('amount');
 
-        $totalEquipment = Equipment::count();
-        $activeEquipment = Equipment::where('status', 'active')->count();
+        $equipmentQuery = Equipment::query();
+        if ($projectId && $projectId !== 'all') {
+            $equipmentQuery->where('project_id', $projectId);
+        }
+        $totalEquipment = $equipmentQuery->count();
+        $activeEquipment = (clone $equipmentQuery)->where('status', 'active')->count();
 
-        $paidPayments = ProjectPayment::where('status', 'paid')->sum('amount');
-        $periodPaidPayments = ProjectPayment::where('status', 'paid')
-            ->whereBetween('paid_date', [$periodStart, $periodEnd])
-            ->sum('amount');
+        $paidPaymentsQuery = ProjectPayment::where('status', 'paid');
+        if ($projectId && $projectId !== 'all') {
+            $paidPaymentsQuery->where('project_id', $projectId);
+        }
+        $paidPayments = $paidPaymentsQuery->sum('amount');
 
         // Subcontractor debt
-        $subDebtData = $this->getSubcontractorDebtSummary();
+        $subDebtData = $this->getSubcontractorDebtSummary($projectId);
 
         // Project progress for active projects
-        $projectProgress = $this->getActiveProjectProgress();
+        $projectProgress = $this->getActiveProjectProgress($projectId);
 
         // Pending costs list (top 5)
-        $pendingCostsList = Cost::whereIn('status', ['pending_management_approval', 'pending_accountant_approval'])
+        $pendingCostsList = (clone $pendingCostsQuery)
             ->with(['project:id,name,code', 'creator:id,name', 'costGroup:id,name'])
             ->orderByDesc('amount')
             ->take(5)
@@ -92,11 +103,14 @@ class CrmDashboardController extends Controller
             ]);
 
         // Monthly revenue vs cost comparison (stacked bar)
-        $monthlyComparison = $this->getMonthlyRevenueVsCost(6);
+        $monthlyComparison = $this->getMonthlyRevenueVsCost(6, $projectId);
 
         // Recent Projects
-        $recentProjects = Project::with(['projectManager:id,name', 'contract:id,project_id,contract_value'])
-            ->latest()
+        $recentProjectsQuery = Project::with(['projectManager:id,name', 'contract:id,project_id,contract_value']);
+        if ($projectId && $projectId !== 'all') {
+            $recentProjectsQuery->where('id', $projectId);
+        }
+        $recentProjects = $recentProjectsQuery->latest()
             ->take(6)
             ->get()
             ->map(fn($p) => [
@@ -110,6 +124,12 @@ class CrmDashboardController extends Controller
                 'end_date' => $p->end_date?->format('d/m/Y'),
             ]);
 
+        // Project Dropdown List
+        $projectsList = Project::orderBy('name')->get(['id', 'name', 'code']);
+
+        // Recent Activities
+        $recentActivities = $this->getRecentActivities($projectId);
+
         // RENDER
         return Inertia::render('Crm/Dashboard/Index', [
             'stats' => array_merge($metrics['stats'], [
@@ -122,9 +142,9 @@ class CrmDashboardController extends Controller
                 'totalSubcontractorDebt' => (float) $subDebtData['total'],
             ]),
             'charts' => array_merge($metrics['charts'], [
-                'costStatus' => $this->getCostStatusStats(),
+                'costStatus' => $this->getCostStatusStats($projectId),
                 'newProjects' => $this->getNewProjectsTrend(),
-                'topProjectsCost' => $this->getTopProjectsByCost(),
+                'topProjectsCost' => $this->getTopProjectsByCost($projectId),
                 'monthlyComparison' => $monthlyComparison,
             ]),
             'periodStats' => $periodStats,
@@ -133,9 +153,12 @@ class CrmDashboardController extends Controller
             'pendingCostsList' => $pendingCostsList,
             'subcontractorDebt' => $subDebtData['details'],
             'recentProjects' => $recentProjects,
+            'projectsList' => $projectsList,
+            'recentActivities' => $recentActivities,
             'filters' => [
                 'period' => $period,
                 'compare' => $compare,
+                'project_id' => $projectId,
                 'periodLabel' => $this->getPeriodLabel($period, $periodStart, $periodEnd),
                 'prevLabel' => $compare ? $this->getPeriodLabel($period, $prevStart, $prevEnd) : null,
             ],
@@ -192,23 +215,35 @@ class CrmDashboardController extends Controller
     // PERIOD-FILTERED STATS
     // ══════════════════════════════════════════════════════════════
 
-    private function getPeriodStats(Carbon $start, Carbon $end): array
+    private function getPeriodStats(Carbon $start, Carbon $end, $projectId = null): array
     {
-        $revenue = Contract::whereHas('project', fn($q) => $q->whereBetween('created_at', [$start, $end]))
-            ->sum('contract_value') ?: 0;
+        $contractQuery = Contract::query();
+        $costQuery = Cost::where('status', 'approved')
+            ->whereBetween('cost_date', [$start, $end]);
+        $paymentQuery = ProjectPayment::where('status', 'paid')
+            ->whereBetween('paid_date', [$start, $end]);
+        $projectQuery = Project::whereBetween('created_at', [$start, $end]);
 
-        $costs = Cost::where('status', 'approved')
-            ->whereBetween('cost_date', [$start, $end])
-            ->sum('amount') ?: 0;
+        if ($projectId && $projectId !== 'all') {
+            $contractQuery->where('project_id', $projectId);
+            $costQuery->where('project_id', $projectId);
+            $paymentQuery->where('project_id', $projectId);
+            $projectQuery->where('id', $projectId);
+        } else {
+            $contractQuery->whereHas('project', fn($q) => $q->whereBetween('created_at', [$start, $end]));
+        }
 
-        $paidPayments = ProjectPayment::where('status', 'paid')
-            ->whereBetween('paid_date', [$start, $end])
-            ->sum('amount') ?: 0;
-
-        $newProjects = Project::whereBetween('created_at', [$start, $end])->count();
-        $completedProjects = Project::where('status', 'completed')
-            ->whereBetween('updated_at', [$start, $end])
-            ->count();
+        $revenue = $contractQuery->sum('contract_value') ?: 0;
+        $costs = $costQuery->sum('amount') ?: 0;
+        $paidPayments = $paymentQuery->sum('amount') ?: 0;
+        $newProjects = $projectQuery->count();
+        
+        $completedQuery = Project::where('status', 'completed')
+            ->whereBetween('updated_at', [$start, $end]);
+        if ($projectId && $projectId !== 'all') {
+            $completedQuery->where('id', $projectId);
+        }
+        $completedProjects = $completedQuery->count();
 
         return [
             'revenue' => (float) $revenue,
@@ -225,11 +260,16 @@ class CrmDashboardController extends Controller
     // SUBCONTRACTOR DEBT
     // ══════════════════════════════════════════════════════════════
 
-    private function getSubcontractorDebtSummary(): array
+    private function getSubcontractorDebtSummary($projectId = null): array
     {
-        $subs = Subcontractor::select('id', 'name', 'project_id', 'total_quote')
-            ->withSum(['payments' => fn($q) => $q->whereIn('status', ['paid', 'accountant_confirmed'])], 'amount')
-            ->having(DB::raw('total_quote - COALESCE(payments_sum_amount, 0)'), '>', 0)
+        $query = Subcontractor::select('id', 'name', 'project_id', 'total_quote')
+            ->withSum(['payments' => fn($q) => $q->whereIn('status', ['paid', 'accountant_confirmed'])], 'amount');
+
+        if ($projectId && $projectId !== 'all') {
+            $query->where('project_id', $projectId);
+        }
+
+        $subs = $query->having(DB::raw('total_quote - COALESCE(payments_sum_amount, 0)'), '>', 0)
             ->orderByDesc(DB::raw('total_quote - COALESCE(payments_sum_amount, 0)'))
             ->limit(8)
             ->get();
@@ -252,10 +292,13 @@ class CrmDashboardController extends Controller
     // PROJECT PROGRESS
     // ══════════════════════════════════════════════════════════════
 
-    private function getActiveProjectProgress(): array
+    private function getActiveProjectProgress($projectId = null): array
     {
-        return Project::where('status', 'in_progress')
-            ->with(['progress:id,project_id,overall_percentage', 'projectManager:id,name'])
+        $query = Project::where('status', 'in_progress');
+        if ($projectId && $projectId !== 'all') {
+            $query->where('id', $projectId);
+        }
+        return $query->with(['progress:id,project_id,overall_percentage', 'projectManager:id,name'])
             ->take(8)
             ->get()
             ->map(fn($p) => [
@@ -273,7 +316,7 @@ class CrmDashboardController extends Controller
     // MONTHLY REVENUE VS COST (STACKED BAR)
     // ══════════════════════════════════════════════════════════════
 
-    private function getMonthlyRevenueVsCost(int $months = 6): array
+    private function getMonthlyRevenueVsCost(int $months = 6, $projectId = null): array
     {
         $now = Carbon::now();
         $labels = [];
@@ -286,13 +329,19 @@ class CrmDashboardController extends Controller
             $monthStart = $m->copy()->startOfMonth();
             $monthEnd = $m->copy()->endOfMonth();
 
-            $revenue[] = (float) (ProjectPayment::where('status', 'paid')
-                ->whereBetween('paid_date', [$monthStart, $monthEnd])
-                ->sum('amount') ?: 0);
+            $revenueQuery = ProjectPayment::where('status', 'paid')
+                ->whereBetween('paid_date', [$monthStart, $monthEnd]);
+            
+            $costQuery = Cost::where('status', 'approved')
+                ->whereBetween('cost_date', [$monthStart, $monthEnd]);
 
-            $cost[] = (float) (Cost::where('status', 'approved')
-                ->whereBetween('cost_date', [$monthStart, $monthEnd])
-                ->sum('amount') ?: 0);
+            if ($projectId && $projectId !== 'all') {
+                $revenueQuery->where('project_id', $projectId);
+                $costQuery->where('project_id', $projectId);
+            }
+
+            $revenue[] = (float) ($revenueQuery->sum('amount') ?: 0);
+            $cost[] = (float) ($costQuery->sum('amount') ?: 0);
         }
 
         return compact('labels', 'revenue', 'cost');
@@ -302,9 +351,13 @@ class CrmDashboardController extends Controller
     // EXISTING HELPERS (kept)
     // ══════════════════════════════════════════════════════════════
 
-    private function getCostStatusStats(): array
+    private function getCostStatusStats($projectId = null): array
     {
-        $counts = Cost::selectRaw('status, COUNT(*) as cnt')->groupBy('status')->pluck('cnt', 'status')->toArray();
+        $query = Cost::selectRaw('status, COUNT(*) as cnt');
+        if ($projectId && $projectId !== 'all') {
+            $query->where('project_id', $projectId);
+        }
+        $counts = $query->groupBy('status')->pluck('cnt', 'status')->toArray();
         $labels = [
             'draft' => 'Nháp',
             'pending_management_approval' => 'Chờ BĐH',
@@ -341,11 +394,16 @@ class CrmDashboardController extends Controller
         return ['labels' => $labels, 'data' => $data];
     }
 
-    private function getTopProjectsByCost(): array
+    private function getTopProjectsByCost($projectId = null): array
     {
-        $top = Project::select('id', 'name', 'code')
-            ->withSum(['costs' => fn($q) => $q->where('status', 'approved')], 'amount')
-            ->having('costs_sum_amount', '>', 0)
+        $query = Project::select('id', 'name', 'code')
+            ->withSum(['costs' => fn($q) => $q->where('status', 'approved')], 'amount');
+
+        if ($projectId && $projectId !== 'all') {
+            $query->where('id', $projectId);
+        }
+
+        $top = $query->having('costs_sum_amount', '>', 0)
             ->orderByDesc('costs_sum_amount')
             ->limit(5)->get();
 
@@ -353,6 +411,81 @@ class CrmDashboardController extends Controller
             'labels' => $top->pluck('name')->map(fn($n) => mb_strlen($n) > 20 ? mb_substr($n, 0, 20) . '...' : $n)->toArray(),
             'data' => $top->pluck('costs_sum_amount')->toArray(),
         ];
+    }
+
+    /**
+     * Get recent activities for CEO Activity Feed.
+     */
+    private function getRecentActivities($projectId = null): array
+    {
+        $activities = collect();
+
+        // 1. Fetch recent costs
+        $costsQuery = Cost::with(['project:id,name', 'creator:id,name'])->latest()->take(10);
+        if ($projectId && $projectId !== 'all') {
+            $costsQuery->where('project_id', $projectId);
+        }
+        $costs = $costsQuery->get();
+        foreach ($costs as $c) {
+            $statusStr = match($c->status) {
+                'draft' => 'đã lưu nháp',
+                'pending_management_approval' => 'đã gửi duyệt (chờ BĐH)',
+                'pending_accountant_approval' => 'đã duyệt cấp BĐH (chờ Kế toán)',
+                'approved' => 'đã được duyệt chi',
+                'rejected' => 'bị từ chối duyệt chi',
+                default => $c->status,
+            };
+            $activities->push([
+                'type' => 'cost',
+                'title' => "Khoản chi '" . (mb_strlen($c->name) > 25 ? mb_substr($c->name, 0, 25) . '...' : $c->name) . "' " . $statusStr,
+                'subtitle' => ($c->project ? "Dự án: " . mb_substr($c->project->name, 0, 18) . "... • " : "") . "Số tiền: " . number_format($c->amount) . " đ",
+                'user' => $c->creator->name ?? 'Hệ thống',
+                'time' => $c->created_at,
+                'avatar' => $c->creator->name ? mb_substr($c->creator->name, 0, 1) : 'C',
+                'color' => '#1B4F72'
+            ]);
+        }
+
+        // 2. Fetch recent project payments
+        $paymentsQuery = ProjectPayment::where('status', 'paid')->with('project:id,name')->latest('paid_date')->take(10);
+        if ($projectId && $projectId !== 'all') {
+            $paymentsQuery->where('project_id', $projectId);
+        }
+        $payments = $paymentsQuery->get();
+        foreach ($payments as $p) {
+            $activities->push([
+                'type' => 'payment',
+                'title' => "Khách hàng thanh toán",
+                'subtitle' => "Dự án: " . mb_substr($p->project->name, 0, 18) . "... • Số tiền: " . number_format($p->amount) . " đ",
+                'user' => 'Kế toán',
+                'time' => $p->paid_date ? Carbon::parse($p->paid_date) : $p->updated_at,
+                'avatar' => 'K',
+                'color' => '#10B981'
+            ]);
+        }
+
+        // 3. Fetch recent construction logs
+        $logsQuery = ConstructionLog::with(['project:id,name', 'creator:id,name'])->latest('log_date')->take(10);
+        if ($projectId && $projectId !== 'all') {
+            $logsQuery->where('project_id', $projectId);
+        }
+        $logs = $logsQuery->get();
+        foreach ($logs as $l) {
+            $activities->push([
+                'type' => 'log',
+                'title' => "Cập nhật nhật ký thi công",
+                'subtitle' => "Dự án: " . mb_substr($l->project->name, 0, 18) . "... • Tiến độ đạt: {$l->completion_percentage}%",
+                'user' => $l->creator->name ?? 'Giám sát',
+                'time' => $l->log_date ? Carbon::parse($l->log_date) : $l->created_at,
+                'avatar' => $l->creator->name ? mb_substr($l->creator->name, 0, 1) : 'G',
+                'color' => '#F39C12'
+            ]);
+        }
+
+        return $activities->sortByDesc('time')->take(10)->values()->map(function($act) {
+            $act['time_label'] = Carbon::parse($act['time'])->diffForHumans();
+            return $act;
+        })->toArray();
     }
 
     /**

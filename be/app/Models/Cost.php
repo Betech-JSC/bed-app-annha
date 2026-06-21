@@ -583,6 +583,18 @@ class Cost extends Model
         });
 
         static::deleted(function ($cost) {
+            if ($cost->status === 'approved') {
+                if ($cost->subcontractor_id) {
+                    $cost->updateSubcontractorStatus();
+                }
+                if ($cost->material_id || $cost->material_bill_id) {
+                    $inventoryService = app(\App\Services\MaterialInventoryService::class);
+                    $inventoryService->deleteTransactionFromCost($cost);
+                }
+                if ($cost->project_id) {
+                    $cost->updateBudgetItems();
+                }
+            }
             if ($cost->supplier_id) {
                 $cost->supplier->recalculateFinancials();
             }

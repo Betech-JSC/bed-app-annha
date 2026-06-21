@@ -41,5 +41,36 @@ class Shareholder extends Model
     {
         parent::boot();
         static::creating(fn($m) => $m->uuid = $m->uuid ?: Str::uuid());
+
+        static::saved(function ($model) {
+            self::recalculatePercentages();
+        });
+        static::deleted(function ($model) {
+            self::recalculatePercentages();
+        });
+    }
+
+    /**
+     * Tự động tính toán lại và cập nhật tỷ lệ cổ phần của tất cả cổ đông
+     */
+    public static function recalculatePercentages()
+    {
+        $totalShares = \App\Models\ShareIssuance::sum('shares_count');
+        if ($totalShares <= 0) {
+            self::withoutEvents(function() {
+                self::query()->update(['share_percentage' => 0]);
+            });
+            return;
+        }
+
+        $shareholders = self::all();
+        foreach ($shareholders as $shareholder) {
+            $percentage = round(($shareholder->shares_count / $totalShares) * 100, 4);
+            if (abs($shareholder->share_percentage - $percentage) > 0.0001) {
+                self::withoutEvents(function() use ($shareholder, $percentage) {
+                    $shareholder->update(['share_percentage' => $percentage]);
+                });
+            }
+        }
     }
 }

@@ -400,27 +400,49 @@ class ProjectReportingService
     /**
      * Get comprehensive dashboard metrics for CRM Home.
      */
-    public function getDashboardMetrics(): array
+    public function getDashboardMetrics($projectId = null): array
     {
         $now = Carbon::now();
         $startOfMonth = $now->copy()->startOfMonth();
 
         // 1. Core Summary Stats
-        $totalProjects = Project::count();
-        $activeProjects = Project::where('status', 'in_progress')->count();
-        $completedProjects = Project::where('status', 'completed')->count();
-        $planningProjects = Project::where('status', 'planning')->count();
-        $totalEmployees = \App\Models\User::count();
+        $projectQuery = Project::query();
+        $contractQuery = \App\Models\Contract::query();
+        $costQuery = Cost::query();
+
+        if ($projectId && $projectId !== 'all') {
+            $projectQuery->where('id', $projectId);
+            $contractQuery->where('project_id', $projectId);
+            $costQuery->where('project_id', $projectId);
+        }
+
+        $totalProjects = (clone $projectQuery)->count();
+        $activeProjects = (clone $projectQuery)->where('status', 'in_progress')->count();
+        $completedProjects = (clone $projectQuery)->where('status', 'completed')->count();
+        $planningProjects = (clone $projectQuery)->where('status', 'planning')->count();
+        
+        if ($projectId && $projectId !== 'all') {
+            $totalEmployees = \App\Models\ProjectPersonnel::where('project_id', $projectId)->count();
+        } else {
+            $totalEmployees = \App\Models\User::count();
+        }
 
         // Revenue
-        $totalRevenue = \App\Models\Contract::sum('contract_value') ?: 0;
-        $monthRevenue = \App\Models\Contract::whereHas('project', function ($q) use ($startOfMonth) {
-            $q->where('created_at', '>=', $startOfMonth);
-        })->sum('contract_value') ?: 0;
+        $totalRevenue = (clone $contractQuery)->sum('contract_value') ?: 0;
+        
+        $monthRevenueQuery = (clone $contractQuery);
+        if ($projectId && $projectId !== 'all') {
+            $monthRevenueQuery->where('created_at', '>=', $startOfMonth);
+        } else {
+            $monthRevenueQuery->whereHas('project', function ($q) use ($startOfMonth) {
+                $q->where('created_at', '>=', $startOfMonth);
+            });
+        }
+        $monthRevenue = $monthRevenueQuery->sum('contract_value') ?: 0;
 
         // Costs
-        $totalCosts = Cost::where('status', 'approved')->sum('amount') ?: 0;
-        $monthCosts = Cost::where('status', 'approved')
+        $totalCosts = (clone $costQuery)->where('status', 'approved')->sum('amount') ?: 0;
+        $monthCosts = (clone $costQuery)->where('status', 'approved')
             ->where('created_at', '>=', $startOfMonth)
             ->sum('amount') ?: 0;
 
@@ -439,11 +461,17 @@ class ProjectReportingService
             $monthStart = $month->copy()->startOfMonth();
             $monthEnd = $month->copy()->endOfMonth();
 
-            $rev = \App\Models\Contract::whereHas('project', function ($q) use ($monthStart, $monthEnd) {
-                $q->whereBetween('created_at', [$monthStart, $monthEnd]);
-            })->sum('contract_value') ?: 0;
+            $revQuery = (clone $contractQuery);
+            if ($projectId && $projectId !== 'all') {
+                $revQuery->whereBetween('created_at', [$monthStart, $monthEnd]);
+            } else {
+                $revQuery->whereHas('project', function ($q) use ($monthStart, $monthEnd) {
+                    $q->whereBetween('created_at', [$monthStart, $monthEnd]);
+                });
+            }
+            $rev = $revQuery->sum('contract_value') ?: 0;
 
-            $cost = Cost::where('status', 'approved')
+            $cost = (clone $costQuery)->where('status', 'approved')
                 ->whereBetween('created_at', [$monthStart, $monthEnd])
                 ->sum('amount') ?: 0;
 
@@ -453,7 +481,8 @@ class ProjectReportingService
         }
 
         // 3. Distributions
-        $projectStatuses = Project::selectRaw('status, COUNT(*) as count')->groupBy('status')->pluck('count', 'status')->toArray();
+        $statusQuery = (clone $projectQuery)->selectRaw('status, COUNT(*) as count')->groupBy('status');
+        $projectStatuses = $statusQuery->pluck('count', 'status')->toArray();
         $statusLabels = ['planning' => 'Lập kế hoạch', 'in_progress' => 'Đang thi công', 'completed' => 'Hoàn thành', 'suspended' => 'Tạm dừng', 'cancelled' => 'Hủy bỏ'];
         
         $projectStatusChart = ['labels' => [], 'data' => []];
@@ -462,26 +491,26 @@ class ProjectReportingService
             $projectStatusChart['data'][] = $count;
         }
 
-        $costByGroupRaw = Cost::select('cost_group_id', DB::raw('SUM(amount) as total'))
+        $costByGroupRawQuery = (clone $costQuery)->select('cost_group_id', DB::raw('SUM(amount) as total'))
             ->where('status', 'approved')
             ->whereNotNull('cost_group_id')
             ->groupBy('cost_group_id')
             ->orderByDesc('total')
             ->limit(8)
-            ->with('costGroup:id,name')
-            ->get();
+            ->with('costGroup:id,name');
+        $costByGroupRaw = $costByGroupRawQuery->get();
 
         $costGroupChart = [
-            'labels' => $costByGroupRaw->pluck('costGroup.name')->toArray(),
+            'labels' => $costByGroupRaw->pluck('costGroup.name')->filter()->toArray(),
             'data' => $costByGroupRaw->pluck('total')->toArray(),
         ];
 
         // 4. Budget Utilization
-        $budgetUtilization = Project::select('id', 'name')
-            ->whereHas('contract')
+        $budgetUtilQuery = (clone $projectQuery)->whereHas('contract')
             ->with('contract:id,project_id,contract_value')
             ->withSum(['costs' => fn($q) => $q->where('status', 'approved')], 'amount')
-            ->limit(6)->get()->filter(fn($p) => $p->contract && $p->contract->contract_value > 0)
+            ->limit(6);
+        $budgetUtilization = $budgetUtilQuery->get()->filter(fn($p) => $p->contract && $p->contract->contract_value > 0)
             ->map(fn($p) => [
                 'name' => mb_strlen($p->name) > 18 ? mb_substr($p->name, 0, 18) . '...' : $p->name,
                 'spent' => $p->costs_sum_amount ?? 0,

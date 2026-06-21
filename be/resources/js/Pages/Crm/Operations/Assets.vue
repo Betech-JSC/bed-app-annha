@@ -248,8 +248,26 @@ const props = defineProps({ assets: Object, stats: Object, users: Array, project
 const categoryLabels = { computer: 'Máy tính / CNTT', machinery: 'Máy móc thi công', vehicle: 'Xe công ty', furniture: 'Nội thất VP', other: 'Khác' }
 const categoryIcons = { computer: '💻', machinery: '🏗️', vehicle: '🚗', furniture: '🪑', other: '📦' }
 const categoryGradients = { computer: 'linear-gradient(135deg, #2E86C1, #1B4F72)', machinery: 'linear-gradient(135deg, #E67E22, #D68910)', vehicle: 'linear-gradient(135deg, #1D8348, #27AE60)', furniture: 'linear-gradient(135deg, #8E44AD, #6C3483)', other: 'linear-gradient(135deg, #9CA3AF, #6B7280)' }
-const statusLabels = { in_stock: 'Trong kho', in_use: 'Đang sử dụng', under_repair: 'Đang sửa chữa', disposed: 'Đã thanh lý' }
-const statusColors = { in_stock: 'blue', in_use: 'green', under_repair: 'orange', disposed: 'default' }
+const statusLabels = {
+  draft: 'Nháp',
+  pending_management: 'Chờ BĐH duyệt',
+  pending_accountant: 'Chờ Kế toán',
+  available: 'Sẵn sàng (Trong kho)',
+  in_use: 'Đang sử dụng',
+  maintenance: 'Bảo trì',
+  retired: 'Thanh lý',
+  rejected: 'Từ chối',
+}
+const statusColors = {
+  draft: 'default',
+  pending_management: 'warning',
+  pending_accountant: 'processing',
+  available: 'success',
+  in_use: 'cyan',
+  maintenance: 'orange',
+  retired: 'error',
+  rejected: 'error',
+}
 
 // Format
 const fmtCurrency = (v) => {

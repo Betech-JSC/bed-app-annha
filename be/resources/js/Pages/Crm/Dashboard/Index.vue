@@ -1,5 +1,5 @@
 <template>
-  <Head title="Tổng quan CEO" />
+  <Head title="Tổng quan điều hành" />
 
   <!-- PAGE HEADER + FILTER BAR -->
   <div class="flex flex-wrap items-center justify-between gap-4 mb-6">
@@ -8,6 +8,22 @@
       <p class="text-sm text-gray-500 mt-1">Bảng điều khiển CEO — Cập nhật realtime</p>
     </div>
     <div class="flex items-center gap-3 flex-wrap">
+      <!-- Project Selector Dropdown -->
+      <a-select
+        v-model:value="selectedProjectId"
+        placeholder="Chọn dự án"
+        style="width: 240px"
+        class="rounded-xl font-medium"
+        show-search
+        option-filter-prop="label"
+        @change="onProjectChange"
+      >
+        <a-select-option value="all">📁 Tất cả dự án</a-select-option>
+        <a-select-option v-for="p in projectsList" :key="p.id" :value="p.id" :label="`${p.code} - ${p.name}`">
+          {{ p.code }} - {{ p.name }}
+        </a-select-option>
+      </a-select>
+
       <a-segmented v-model:value="activePeriod" :options="periodOptions" @change="onPeriodChange" />
       <a-range-picker v-if="activePeriod === 'Tùy chỉnh'" v-model:value="customRange" format="DD/MM/YYYY" @change="onCustomRange" size="middle" class="rounded-xl" />
       <a-switch v-model:checked="compareMode" @change="onCompareToggle" size="small" />
@@ -51,6 +67,39 @@
         <div class="kpi-label">Thu thực tế</div>
         <div class="kpi-value kpi-value--cyan">{{ fmt(stats.paidPayments) }}</div>
         <div class="kpi-sub kpi-sub--blue">Kỳ này: {{ fmt(periodStats?.paidPayments) }}</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- QUICK ACTIONS ROW -->
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+    <div class="quick-action-card hover-lift cursor-pointer" @click="router.visit('/projects')">
+      <div class="quick-action-card__icon icon-badge--primary">
+        <PlusCircleOutlined />
+      </div>
+      <div class="quick-action-card__info">
+        <h4 class="quick-action-card__title">Khởi tạo dự án</h4>
+        <p class="quick-action-card__desc">Tạo dự án thi công mới & khai báo thông tin ban đầu</p>
+      </div>
+    </div>
+
+    <div class="quick-action-card hover-lift cursor-pointer" @click="router.visit('/finance/company-costs')">
+      <div class="quick-action-card__icon icon-badge--warning">
+        <DollarOutlined />
+      </div>
+      <div class="quick-action-card__info">
+        <h4 class="quick-action-card__title">Khai báo chi phí</h4>
+        <p class="quick-action-card__desc">Ghi nhận chi phí công ty hoặc chi phí dự án mới</p>
+      </div>
+    </div>
+
+    <div class="quick-action-card hover-lift cursor-pointer" @click="router.visit('/files')">
+      <div class="quick-action-card__icon icon-badge--success">
+        <FileTextOutlined />
+      </div>
+      <div class="quick-action-card__info">
+        <h4 class="quick-action-card__title">Tài liệu & Hóa đơn</h4>
+        <p class="quick-action-card__desc">Quản lý hóa đơn chứng từ đầu vào đầu ra của hệ thống</p>
       </div>
     </div>
   </div>
@@ -124,9 +173,9 @@
   </div>
 
   <!-- DATA TABLES ROW: Pending Costs + Subcontractor Debt -->
-  <div class="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-8">
-    <!-- Pending Costs -->
-    <div class="crm-content-card">
+  <div class="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-8">
+    <!-- Pending Costs (takes 2/3) -->
+    <div class="xl:col-span-2 crm-content-card">
       <div class="crm-content-card__header">
         <h3 class="crm-content-card__title"><span class="icon-badge icon-badge--danger"><ExclamationCircleOutlined /></span> Chi phí chờ duyệt</h3>
         <a-button type="link" @click="router.visit('/approvals')">Xem tất cả →</a-button>
@@ -145,70 +194,132 @@
               {{ record.status?.includes('management') ? 'Chờ BĐH' : 'Chờ KT' }}
             </a-tag>
           </template>
+          <template v-if="column.key === 'action'">
+            <div class="flex items-center gap-1.5 justify-center">
+              <a-button
+                v-slot:icon
+                v-if="canApprove(record)"
+                type="primary"
+                size="small"
+                class="rounded-lg bg-emerald-600 hover:bg-emerald-500 border-none flex items-center justify-center text-xs px-2.5 h-7"
+                :loading="isSubmitting"
+                @click="handleQuickApprove(record)"
+              >
+                Duyệt
+              </a-button>
+              <a-button
+                v-slot:icon
+                v-if="canApprove(record)"
+                type="primary"
+                danger
+                ghost
+                size="small"
+                class="rounded-lg flex items-center justify-center text-xs px-2.5 h-7"
+                :loading="isSubmitting"
+                @click="handleQuickReject(record)"
+              >
+                Từ chối
+              </a-button>
+              <span v-else class="text-xs text-gray-400">Không có quyền</span>
+            </div>
+          </template>
         </template>
       </a-table>
     </div>
 
-    <!-- Subcontractor Debt -->
+    <!-- Subcontractor Debt (takes 1/3) -->
     <div class="crm-content-card">
       <div class="crm-content-card__header">
-        <h3 class="crm-content-card__title"><span class="icon-badge icon-badge--warning"><DollarOutlined /></span> Công nợ nhà thầu phụ</h3>
-        <a-tag color="red" class="rounded-lg font-bold">Tổng: {{ fmt(stats.totalSubcontractorDebt) }}</a-tag>
+        <h3 class="crm-content-card__title"><span class="icon-badge icon-badge--warning"><DollarOutlined /></span> Công nợ NTP</h3>
       </div>
       <a-table :columns="debtCols" :data-source="subcontractorDebt" :pagination="false" row-key="id" class="crm-table" size="small">
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'name'">
-            <span class="font-medium text-sm text-gray-800">{{ record.name }}</span>
+            <span class="font-medium text-xs text-gray-800 truncate block max-w-[140px]" :title="record.name">{{ record.name }}</span>
           </template>
           <template v-if="column.key === 'debt'">
-            <span class="font-bold text-sm text-red-600">{{ fmt(record.debt) }}</span>
+            <span class="font-bold text-xs text-red-600">{{ fmtCompact(record.debt) }}</span>
           </template>
           <template v-if="column.key === 'paid_pct'">
-            <a-progress :percent="record.total_quote > 0 ? Math.round(record.paid / record.total_quote * 100) : 0" :size="5" :stroke-color="'#10B981'" :show-info="true" style="width: 90px" />
+            <a-progress :percent="record.total_quote > 0 ? Math.round(record.paid / record.total_quote * 100) : 0" :size="4" :stroke-color="'#10B981'" :show-info="true" style="width: 75px" />
           </template>
         </template>
       </a-table>
     </div>
   </div>
 
-  <!-- RECENT PROJECTS TABLE -->
-  <div class="crm-content-card">
-    <div class="crm-content-card__header">
-      <h3 class="crm-content-card__title"><span class="icon-badge icon-badge--primary"><ProjectOutlined /></span> Dự án gần đây</h3>
-      <a-button type="link" @click="router.visit('/projects')">Xem tất cả →</a-button>
+  <!-- RECENT PROJECTS TABLE + REALTIME ACTIVITY FEED -->
+  <div class="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-8">
+    <!-- Recent Projects (takes 2/3) -->
+    <div class="xl:col-span-2 crm-content-card">
+      <div class="crm-content-card__header">
+        <h3 class="crm-content-card__title"><span class="icon-badge icon-badge--primary"><ProjectOutlined /></span> Dự án gần đây</h3>
+        <a-button type="link" @click="router.visit('/projects')">Xem tất cả →</a-button>
+      </div>
+      <a-table :columns="projectCols" :data-source="recentProjects" :pagination="false" row-key="id" class="crm-table" :scroll="{ x: 500 }">
+        <template #bodyCell="{ column, record }">
+          <template v-if="column.key === 'name'">
+            <div class="flex items-center gap-3 cursor-pointer" @click="router.visit(`/projects/${record.id}`)">
+              <a-avatar :size="32" shape="square" class="project-avatar">{{ record.name?.charAt(0) }}</a-avatar>
+              <div>
+                <div class="font-semibold text-gray-800 text-xs truncate max-w-[180px]" :title="record.name">{{ record.name }}</div>
+                <div class="text-[10px] text-gray-400 font-mono">{{ record.code }}</div>
+              </div>
+            </div>
+          </template>
+          <template v-if="column.key === 'status'">
+            <span class="crm-tag" :class="statusClass(record.status)">{{ statusLabel(record.status) }}</span>
+          </template>
+          <template v-if="column.key === 'contract_value'">
+            <span class="font-semibold text-xs">{{ fmtCompact(record.contract_value) }}</span>
+          </template>
+        </template>
+      </a-table>
     </div>
-    <a-table :columns="projectCols" :data-source="recentProjects" :pagination="false" row-key="id" class="crm-table" :scroll="{ x: 800 }">
-      <template #bodyCell="{ column, record }">
-        <template v-if="column.key === 'name'">
-          <div class="flex items-center gap-3 cursor-pointer" @click="router.visit(`/projects/${record.id}`)">
-            <a-avatar :size="34" shape="square" class="project-avatar">{{ record.name?.charAt(0) }}</a-avatar>
-            <div><div class="font-semibold text-gray-800 text-sm">{{ record.name }}</div><div class="text-xs text-gray-400">{{ record.code }}</div></div>
+
+    <!-- Realtime Activity Feed (takes 1/3) -->
+    <div class="crm-content-card">
+      <div class="crm-content-card__header">
+        <h3 class="crm-content-card__title"><span class="icon-badge icon-badge--primary"><HistoryOutlined /></span> Hoạt động gần đây</h3>
+      </div>
+      <div class="p-4 space-y-3 overflow-y-auto" style="max-height: 295px;">
+        <div v-for="(act, idx) in recentActivities" :key="idx" class="flex gap-2.5 items-start border-b border-gray-50 pb-2.5 last:border-0 last:pb-0">
+          <a-avatar :size="28" :style="{ backgroundColor: act.color, verticalAlign: 'middle' }" class="flex-shrink-0 font-bold text-xs">
+            {{ act.avatar }}
+          </a-avatar>
+          <div class="flex-1 min-w-0">
+            <div class="text-[11px] font-semibold text-gray-800 leading-snug break-words">{{ act.title }}</div>
+            <div class="text-[10px] text-gray-400 mt-0.5">{{ act.subtitle }}</div>
+            <div class="flex items-center justify-between mt-1">
+              <span class="text-[9px] text-gray-400 font-medium">{{ act.user }}</span>
+              <span class="text-[9px] text-blue-500 bg-blue-50 px-1 py-0.5 rounded font-mono">{{ act.time_label }}</span>
+            </div>
           </div>
-        </template>
-        <template v-if="column.key === 'status'">
-          <span class="crm-tag" :class="statusClass(record.status)">{{ statusLabel(record.status) }}</span>
-        </template>
-        <template v-if="column.key === 'contract_value'">
-          <span class="font-semibold text-sm">{{ fmt(record.contract_value) }}</span>
-        </template>
-      </template>
-    </a-table>
+        </div>
+        <div v-if="!recentActivities || !recentActivities.length" class="text-center text-gray-400 py-12 text-xs">
+          Không có hoạt động gần đây
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
-import { Head, router } from '@inertiajs/vue3'
+import { ref, computed, h } from 'vue'
+import { Head, router, usePage } from '@inertiajs/vue3'
 import { Line, Doughnut, Bar } from 'vue-chartjs'
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend, Filler } from 'chart.js'
 import CrmLayout from '@/Layouts/CrmLayout.vue'
 import StatCard from '@/Components/Crm/StatCard.vue'
 import ChartCard from '@/Components/Crm/ChartCard.vue'
 import { useChart, CHART_COLORS } from '@/Composables/useChart'
+import { message, Modal } from 'ant-design-vue'
+import dayjs from 'dayjs'
 import {
   ProjectOutlined, ThunderboltOutlined, CheckCircleOutlined, ClockCircleOutlined,
   TeamOutlined, ExclamationCircleOutlined, DollarOutlined, ToolOutlined,
-  BarChartOutlined, RocketOutlined,
+  BarChartOutlined, RocketOutlined, HistoryOutlined, PlusCircleOutlined,
+  FileTextOutlined, CloseOutlined, CheckOutlined
 } from '@ant-design/icons-vue'
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend, Filler)
@@ -224,6 +335,8 @@ const props = defineProps({
   pendingCostsList: Array,
   subcontractorDebt: Array,
   filters: Object,
+  projectsList: Array,
+  recentActivities: Array,
 })
 
 const { defaultOptions, doughnutOptions, barOptions, formatCompact } = useChart()
@@ -234,17 +347,136 @@ const periodMap = { 'Tháng': 'month', 'Quý': 'quarter', 'Năm': 'year', 'Tùy 
 const periodMapReverse = { month: 'Tháng', quarter: 'Quý', year: 'Năm', custom: 'Tùy chỉnh' }
 const activePeriod = ref(periodMapReverse[props.filters?.period] || 'Tháng')
 const compareMode = ref(props.filters?.compare || false)
+const selectedProjectId = ref(props.filters?.project_id || 'all')
 const customRange = ref(null)
 
-const navigateDashboard = (params) => {
+if (props.filters?.period === 'custom' && props.filters?.from && props.filters?.to) {
+  customRange.value = [dayjs(props.filters.from), dayjs(props.filters.to)]
+}
+
+const navigateDashboard = (extraParams = {}) => {
+  const params = {
+    period: periodMap[activePeriod.value] || 'month',
+    compare: compareMode.value,
+    project_id: selectedProjectId.value,
+    ...extraParams
+  }
+  if (params.period === 'custom' && customRange.value?.[0] && customRange.value?.[1]) {
+    params.from = customRange.value[0].format('YYYY-MM-DD')
+    params.to = customRange.value[1].format('YYYY-MM-DD')
+  }
   router.get('/dashboard', params, { preserveState: true, preserveScroll: true })
 }
-const onPeriodChange = (val) => navigateDashboard({ period: periodMap[val] || 'month', compare: compareMode.value })
-const onCompareToggle = (val) => navigateDashboard({ period: periodMap[activePeriod.value] || 'month', compare: val })
+
+const onPeriodChange = (val) => {
+  navigateDashboard({ period: periodMap[val] || 'month' })
+}
+const onCompareToggle = (val) => {
+  compareMode.value = val
+  navigateDashboard()
+}
 const onCustomRange = (dates) => {
   if (dates?.[0] && dates?.[1]) {
-    navigateDashboard({ period: 'custom', compare: compareMode.value, from: dates[0].format('YYYY-MM-DD'), to: dates[1].format('YYYY-MM-DD') })
+    navigateDashboard({ period: 'custom' })
   }
+}
+const onProjectChange = (val) => {
+  selectedProjectId.value = val
+  navigateDashboard()
+}
+
+// ── Permissions Helpers ──
+const page = usePage()
+const can = (perm) => {
+  const user = page.props.auth?.user
+  if (!user) return false
+  if (user.super_admin) return true
+  return user.permissions?.includes(perm) || false
+}
+
+const canApprove = (record) => {
+  if (record.status === 'pending_management_approval') {
+    return record.project_id ? can('cost.approve.management') : can('company_cost.approve.management')
+  } else if (record.status === 'pending_accountant_approval') {
+    return record.project_id ? can('cost.approve.accountant') : can('company_cost.approve.accountant')
+  }
+  return false
+}
+
+// ── Quick Approvals Handlers ──
+const isSubmitting = ref(false)
+
+const handleQuickApprove = (record) => {
+  Modal.confirm({
+    title: 'Xác nhận duyệt chi phí',
+    content: `Bạn có chắc chắn muốn duyệt khoản chi "${record.name}" với số tiền ${fmt(record.amount)}?`,
+    okText: 'Duyệt',
+    cancelText: 'Hủy',
+    centered: true,
+    async onOk() {
+      isSubmitting.value = true
+      const url = record.status === 'pending_management_approval'
+        ? `/approvals/${record.id}/approve-management`
+        : `/approvals/${record.id}/approve-accountant`
+        
+      router.post(url, {}, {
+        preserveState: true,
+        preserveScroll: true,
+        onSuccess: () => {
+          message.success('Đã duyệt chi phí thành công')
+        },
+        onError: (err) => {
+          message.error(err.message || 'Không thể duyệt chi phí')
+        },
+        onFinish: () => {
+          isSubmitting.value = false
+        }
+      })
+    }
+  })
+}
+
+const handleQuickReject = (record) => {
+  let rejectReason = ''
+  Modal.confirm({
+    title: 'Từ chối duyệt chi phí',
+    content: () => h('div', { class: 'space-y-3' }, [
+      h('div', `Nhập lý do từ chối khoản chi "${record.name}":`),
+      h('textarea', {
+        class: 'w-full border border-gray-300 rounded-lg p-2 text-sm outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500',
+        rows: 3,
+        placeholder: 'Lý do từ chối (bắt buộc)...',
+        onInput: (e) => { rejectReason = e.target.value }
+      })
+    ]),
+    okText: 'Từ chối',
+    okType: 'danger',
+    cancelText: 'Hủy',
+    centered: true,
+    async onOk() {
+      if (!rejectReason.trim()) {
+        message.warning('Vui lòng nhập lý do từ chối')
+        return Promise.reject()
+      }
+      isSubmitting.value = true
+      router.post(`/approvals/${record.id}/reject`, {
+        reason: rejectReason,
+        type: record.status === 'pending_management_approval' ? 'management' : 'accountant'
+      }, {
+        preserveState: true,
+        preserveScroll: true,
+        onSuccess: () => {
+          message.success('Đã từ chối duyệt chi phí')
+        },
+        onError: (err) => {
+          message.error(err.message || 'Có lỗi xảy ra')
+        },
+        onFinish: () => {
+          isSubmitting.value = false
+        }
+      })
+    }
+  })
 }
 
 // ── Formatters ──
@@ -333,19 +565,18 @@ const pendingCostCols = [
   { title: 'Số tiền', key: 'amount', align: 'right', width: 140 },
   { title: 'Trạng thái', key: 'status', width: 100 },
   { title: 'Ngày tạo', dataIndex: 'created_at', width: 100 },
+  { title: 'Thao tác', key: 'action', width: 160, align: 'center' }
 ]
 const debtCols = [
-  { title: 'Nhà thầu', key: 'name', width: 180 },
-  { title: 'Còn nợ', key: 'debt', align: 'right', width: 140 },
-  { title: 'Thanh toán', key: 'paid_pct', width: 130 },
+  { title: 'Nhà thầu', key: 'name', width: 130 },
+  { title: 'Còn nợ', key: 'debt', align: 'right', width: 90 },
+  { title: 'Thanh toán', key: 'paid_pct', width: 100 },
 ]
 const projectCols = [
   { title: 'Tên dự án', key: 'name', width: 260 },
-  { title: 'Quản lý', dataIndex: 'manager', width: 150 },
-  { title: 'Trạng thái', key: 'status', width: 140 },
-  { title: 'Giá trị HĐ', key: 'contract_value', align: 'right', width: 160 },
-  { title: 'Bắt đầu', dataIndex: 'start_date', width: 110 },
-  { title: 'Kết thúc', dataIndex: 'end_date', width: 110 },
+  { title: 'Quản lý', dataIndex: 'manager', width: 130 },
+  { title: 'Trạng thái', key: 'status', width: 110 },
+  { title: 'Giá trị HĐ', key: 'contract_value', align: 'right', width: 110 },
 ]
 
 const statusLabel = (s) => ({ planning: 'Lập kế hoạch', in_progress: 'Đang thi công', completed: 'Hoàn thành', suspended: 'Tạm dừng', cancelled: 'Hủy bỏ' })[s] || s
@@ -354,37 +585,212 @@ const statusClass = (s) => ({ planning: 'crm-tag--pending', in_progress: 'crm-ta
 
 <style scoped>
 /* ─── KPI Banner ─── */
-.kpi-banner { position: relative; border-radius: 20px; overflow: hidden; }
-.kpi-banner__bg { position: absolute; inset: 0; background: linear-gradient(135deg, #0C1B2A 0%, #1B4F72 50%, #2E86C1 100%); }
-.kpi-banner__bg::before { content: ''; position: absolute; inset: 0; background: radial-gradient(circle at 15% 50%, rgba(46,134,193,0.3) 0%, transparent 55%), radial-gradient(circle at 85% 30%, rgba(243,156,18,0.12) 0%, transparent 50%); }
-.kpi-banner__content { position: relative; z-index: 2; display: flex; align-items: center; justify-content: space-around; padding: 28px 40px; gap: 16px; }
-.kpi-item { text-align: center; flex: 1; }
-.kpi-label { font-size: 10px; font-weight: 700; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 6px; }
-.kpi-value { font-size: 26px; font-weight: 800; color: #fff; letter-spacing: -0.02em; }
-.kpi-value--amber { color: #FBBF24; }
-.kpi-value--green { color: #6EE7B7; }
-.kpi-value--cyan { color: #67E8F9; }
-.kpi-value--red { color: #FCA5A5; }
-.kpi-sub { font-size: 11px; font-weight: 500; margin-top: 4px; }
-.kpi-sub--blue { color: rgba(174,214,241,0.7); }
-.kpi-sub--amber { color: rgba(251,191,36,0.6); }
-.kpi-sub--green { color: rgba(110,231,183,0.7); }
-.kpi-sub--red { color: rgba(252,165,165,0.7); }
-.kpi-sep { width: 1px; height: 56px; background: rgba(255,255,255,0.1); flex-shrink: 0; }
-.kpi-delta { font-size: 11px; font-weight: 700; margin-top: 4px; padding: 2px 8px; border-radius: 8px; display: inline-block; }
-.kpi-delta--up { background: rgba(16,185,129,0.2); color: #6EE7B7; }
-.kpi-delta--down { background: rgba(239,68,68,0.2); color: #FCA5A5; }
+.kpi-banner {
+  position: relative;
+  border-radius: 24px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 20px 40px rgba(12, 27, 42, 0.25);
+}
+.kpi-banner__bg {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, #08121e 0%, #0f2d4a 60%, #174b76 100%);
+}
+.kpi-banner__bg::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: 
+    radial-gradient(circle at 10% 20%, rgba(46, 134, 193, 0.25) 0%, transparent 50%),
+    radial-gradient(circle at 90% 80%, rgba(245, 158, 11, 0.15) 0%, transparent 45%),
+    radial-gradient(circle at 50% 50%, rgba(16, 185, 129, 0.08) 0%, transparent 60%);
+  filter: blur(40px);
+}
+.kpi-banner__content {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  padding: 32px 40px;
+  gap: 20px;
+  backdrop-filter: blur(12px);
+  background: rgba(8, 18, 30, 0.4);
+}
+.kpi-item {
+  text-align: center;
+  flex: 1;
+  transition: transform 0.3s ease, filter 0.3s ease;
+}
+.kpi-item:hover {
+  transform: translateY(-2px);
+  filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.1));
+}
+.kpi-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.45);
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  margin-bottom: 8px;
+}
+.kpi-value {
+  font-size: 28px;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: -0.03em;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+}
+.kpi-value--amber {
+  color: #fbbf24;
+  text-shadow: 0 2px 12px rgba(245, 158, 11, 0.35);
+}
+.kpi-value--green {
+  color: #34d399;
+  text-shadow: 0 2px 12px rgba(52, 211, 153, 0.35);
+}
+.kpi-value--cyan {
+  color: #22d3ee;
+  text-shadow: 0 2px 12px rgba(34, 211, 238, 0.35);
+}
+.kpi-sub {
+  font-size: 11px;
+  font-weight: 600;
+  margin-top: 6px;
+  display: inline-block;
+}
+.kpi-sub--blue {
+  color: rgba(147, 197, 253, 0.85);
+}
+.kpi-sub--amber {
+  color: rgba(253, 230, 138, 0.85);
+}
+.kpi-sub--green {
+  color: rgba(167, 243, 208, 0.85);
+}
+.kpi-sub--red {
+  color: rgba(252, 165, 165, 0.85);
+}
+.kpi-sep {
+  width: 1px;
+  height: 64px;
+  background: linear-gradient(to bottom, transparent, rgba(255, 255, 255, 0.15), transparent);
+  flex-shrink: 0;
+}
+.kpi-delta {
+  font-size: 11px;
+  font-weight: 700;
+  margin-top: 4px;
+  padding: 2px 8px;
+  border-radius: 8px;
+  display: inline-block;
+}
+.kpi-delta--up {
+  background: rgba(16, 185, 129, 0.2);
+  color: #6EE7B7;
+}
+.kpi-delta--down {
+  background: rgba(239, 68, 68, 0.2);
+  color: #FCA5A5;
+}
+
+/* ─── Quick Actions & Hovers ─── */
+.quick-action-card {
+  background: #ffffff;
+  border: 1px solid #f1f5f9;
+  border-radius: 16px;
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.03), 0 2px 4px -1px rgba(0, 0, 0, 0.02);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.quick-action-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.08), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  border-color: #e2e8f0;
+}
+.quick-action-card__icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  flex-shrink: 0;
+  transition: transform 0.3s ease;
+}
+.quick-action-card:hover .quick-action-card__icon {
+  transform: scale(1.1) rotate(3deg);
+}
+.quick-action-card__info {
+  flex: 1;
+  min-w: 0;
+}
+.quick-action-card__title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #1e293b;
+  margin-bottom: 2px;
+}
+.quick-action-card__desc {
+  font-size: 11px;
+  color: #64748b;
+  line-height: 1.4;
+  margin: 0;
+}
 
 /* ─── Misc ─── */
-.icon-badge { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 10px; margin-right: 10px; font-size: 15px; flex-shrink: 0; }
-.icon-badge--primary { background: rgba(27,79,114,0.1); color: #1B4F72; }
-.icon-badge--danger { background: rgba(239,68,68,0.1); color: #EF4444; }
-.icon-badge--warning { background: rgba(243,156,18,0.1); color: #F39C12; }
-.project-avatar { background: linear-gradient(135deg, #1B4F72, #2E86C1) !important; color: #fff !important; font-weight: 700 !important; font-size: 13px !important; border-radius: 10px !important; }
+.icon-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  margin-right: 10px;
+  font-size: 15px;
+  flex-shrink: 0;
+}
+.icon-badge--primary {
+  background: rgba(27, 79, 114, 0.08);
+  color: #1B4F72;
+}
+.icon-badge--danger {
+  background: rgba(239, 68, 68, 0.08);
+  color: #EF4444;
+}
+.icon-badge--warning {
+  background: rgba(243, 156, 18, 0.08);
+  color: #F39C12;
+}
+.icon-badge--success {
+  background: rgba(16, 185, 129, 0.08);
+  color: #10B981;
+}
+.project-avatar {
+  background: linear-gradient(135deg, #1B4F72, #2E86C1) !important;
+  color: #fff !important;
+  font-weight: 700 !important;
+  font-size: 12px !important;
+  border-radius: 8px !important;
+}
 
 @media (max-width: 768px) {
-  .kpi-banner__content { flex-direction: column; gap: 12px; padding: 20px; }
-  .kpi-sep { width: 80px; height: 1px; }
-  .kpi-value { font-size: 20px; }
+  .kpi-banner__content {
+    flex-direction: column;
+    gap: 12px;
+    padding: 20px;
+  }
+  .kpi-sep {
+    width: 80px;
+    height: 1px;
+  }
+  .kpi-value {
+    font-size: 22px;
+  }
 }
 </style>

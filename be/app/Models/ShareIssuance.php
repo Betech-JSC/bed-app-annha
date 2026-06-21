@@ -21,4 +21,17 @@ class ShareIssuance extends Model
     {
         return $this->belongsTo(User::class, 'created_by');
     }
+
+    protected static function boot()
+    {
+        parent::boot();
+
+        static::saved(function ($model) {
+            \App\Models\Shareholder::recalculatePercentages();
+        });
+
+        static::deleted(function ($model) {
+            \App\Models\Shareholder::recalculatePercentages();
+        });
+    }
 }
