@@ -649,6 +649,7 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         // Wildcard ID routes
         Route::put('/{id}', [CrmEquipmentController::class, 'update'])->name('update');
         Route::delete('/{id}', [CrmEquipmentController::class, 'destroy'])->name('destroy');
+        Route::delete('/{id}/items/{itemId}', [CrmEquipmentController::class, 'destroyItem'])->name('destroy-item');
         // Approval workflow
         Route::post('/{id}/submit', [CrmEquipmentController::class, 'submit'])->name('submit');
         Route::post('/{id}/approve-management', [CrmEquipmentController::class, 'approveManagement'])->name('approve.management');

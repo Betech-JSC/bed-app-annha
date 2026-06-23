@@ -2292,7 +2292,9 @@ class CrmProjectsController extends Controller
         $user = auth('admin')->user();
 
         $payment = SubcontractorPayment::where('project_id', $project->id)->findOrFail($paymentId);
-        if ($payment->status === 'paid') {
+        
+        $isSuperAdmin = $user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
+        if (!$isSuperAdmin && $payment->status === 'paid') {
             return back()->with('error', 'Không thể xóa phiếu đã thanh toán.');
         }
 
@@ -2587,7 +2589,9 @@ class CrmProjectsController extends Controller
         $this->crmRequire($user, Permissions::ADDITIONAL_COST_DELETE, $project);
 
         $cost = AdditionalCost::where('project_id', $project->id)->findOrFail($id);
-        if (!in_array($cost->status, ['draft', 'pending_approval', 'rejected', 'approved'])) {
+        
+        $isSuperAdmin = $user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
+        if (!$isSuperAdmin && !in_array($cost->status, ['draft', 'pending_approval', 'rejected', 'approved'])) {
             return back()->with('error', 'Chỉ xóa được CP phát sinh ở trạng thái Nháp, Chờ duyệt hoặc Bị từ chối.');
         }
 
@@ -3086,7 +3090,8 @@ class CrmProjectsController extends Controller
 
         $acceptance = \App\Models\Acceptance::where('project_id', $project->id)->findOrFail($id);
 
-        if ($acceptance->workflow_status !== 'draft' && $acceptance->workflow_status !== 'rejected') {
+        $isSuperAdmin = $user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
+        if (!$isSuperAdmin && $acceptance->workflow_status !== 'draft' && $acceptance->workflow_status !== 'rejected') {
             return back()->with('error', 'Chỉ có thể xóa phiếu nghiệm thu ở trạng thái Nháp hoặc Từ chối.');
         }
 
@@ -3900,7 +3905,9 @@ class CrmProjectsController extends Controller
         $this->crmRequire($user, Permissions::EQUIPMENT_DELETE, $project);
 
         $usage = \App\Models\AssetUsage::where('project_id', $project->id)->findOrFail($usageId);
-        if (!in_array($usage->status, ['draft', 'rejected'])) {
+        
+        $isSuperAdmin = $user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
+        if (!$isSuperAdmin && !in_array($usage->status, ['draft', 'rejected'])) {
             return back()->with('error', 'Chỉ có thể xóa phiếu ở trạng thái Nháp hoặc Từ chối.');
         }
 

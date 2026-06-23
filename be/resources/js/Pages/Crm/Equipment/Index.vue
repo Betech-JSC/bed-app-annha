@@ -305,13 +305,13 @@
           </div>
 
           <div class="space-y-4 max-h-[300px] overflow-y-auto pr-1">
-            <div v-for="(item, idx) in form.items" :key="idx" class="p-3 bg-gray-50 rounded-xl border border-gray-100 relative group/row">
+            <div v-for="(item, idx) in form.items" :key="idx" class="p-3 bg-gray-50 rounded-xl border border-gray-100 relative">
               <a-button 
                 type="text" 
                 danger 
                 shape="circle" 
                 size="small" 
-                class="absolute -top-2 -right-2 bg-white shadow-sm border border-gray-100 opacity-0 group-hover/row:opacity-100 transition-opacity z-10 animate-fade-in" 
+                class="absolute -top-2 -right-2 bg-white shadow-sm border border-red-200 text-red-500 hover:bg-red-50 transition-colors z-10" 
                 @click="removeItem(idx)"
               >
                 <template #icon><CloseOutlined /></template>
@@ -634,10 +634,23 @@
           </div>
           <div class="divide-y divide-gray-50">
             <div v-for="(item, idx) in selectedItem.items" :key="item.id || idx" class="py-3 flex justify-between items-start">
-              <div class="min-w-0 pr-4">
-                <div class="font-semibold text-gray-800 truncate">{{ item.name }}</div>
-                <div class="text-[10px] text-gray-400 font-mono mt-0.5 uppercase">
-                  Mã: {{ item.code || 'Tự sinh' }} • ĐVT: {{ item.unit || 'cái' }}
+              <div class="flex items-start gap-2 min-w-0 pr-4">
+                <a-popconfirm 
+                  v-if="((['draft', 'rejected'].includes(selectedItem.status)) || can('*')) && selectedItem.items?.length > 1"
+                  title="Xóa thiết bị này khỏi phiếu?"
+                  ok-text="Xóa"
+                  cancel-text="Hủy"
+                  @confirm="deletePurchaseItem(selectedItem.id, item.id)"
+                >
+                  <a-button type="text" danger size="small" class="p-0 h-auto flex items-center justify-center mt-1 text-gray-400 hover:text-red-500 transition-colors" title="Xóa thiết bị">
+                    <DeleteOutlined class="text-xs" />
+                  </a-button>
+                </a-popconfirm>
+                <div class="min-w-0">
+                  <div class="font-semibold text-gray-800 truncate">{{ item.name }}</div>
+                  <div class="text-[10px] text-gray-400 font-mono mt-0.5 uppercase">
+                    Mã: {{ item.code || 'Tự sinh' }} • ĐVT: {{ item.unit || 'cái' }}
+                  </div>
                 </div>
               </div>
               <div class="text-right shrink-0">
@@ -807,7 +820,7 @@
       <!-- Fixed action bar -->
       <div class="fixed bottom-0 right-0 w-[560px] p-4 bg-white/80 backdrop-blur-md border-t border-gray-100 flex justify-between items-center z-20">
         <div>
-          <a-popconfirm v-if="(selectedItem.status === 'draft' || filters.tab === 'assets') && filters.tab !== 'usages'" :title="filters.tab === 'approvals' ? 'Xóa phiếu mua này?' : 'Xóa tài sản này?'" @confirm="deleteItem(selectedItem); showDetailDrawer = false">
+          <a-popconfirm v-if="(selectedItem.status === 'draft' || filters.tab === 'assets' || (filters.tab === 'approvals' && can('*'))) && filters.tab !== 'usages'" :title="filters.tab === 'approvals' ? 'Xóa phiếu mua này?' : 'Xóa tài sản này?'" @confirm="deleteItem(selectedItem); showDetailDrawer = false">
             <a-button danger size="small"><DeleteOutlined /> Xóa</a-button>
           </a-popconfirm>
         </div>
@@ -1537,6 +1550,21 @@ const rejectItem = (e) => {
 }
 const revertItem = (e) => router.post(`/equipment/${e.id}/revert`, {}, { preserveScroll: true, onSuccess: () => { showDetailDrawer.value = false } })
 const deleteItem = (e) => router.delete(`/equipment/${e.id}?tab=${filters.value.tab}`)
+const deletePurchaseItem = (purchaseId, itemId) => {
+  router.delete(`/equipment/${purchaseId}/items/${itemId}`, {
+    preserveScroll: true,
+    onSuccess: (page) => {
+      const updatedPurchase = props.equipment.data.find(e => e.id === purchaseId)
+      if (updatedPurchase) {
+        selectedItem.value = updatedPurchase
+      }
+      message.success('Đã xóa thiết bị khỏi phiếu.')
+    },
+    onError: (err) => {
+      message.error(err.error || 'Có lỗi xảy ra khi xóa.')
+    }
+  })
+}
 
 const handleConfirmReturn = (record) => {
   router.post(`/projects/${record.project_id}/asset-usages/${record.id}/confirm-return`, {}, {

@@ -218,7 +218,9 @@ class MaterialBillService
      */
     public function delete(MaterialBill $bill): void
     {
-        if (!in_array($bill->status, ['draft'])) {
+        $user = auth('admin')->user();
+        $isSuperAdmin = $user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
+        if (!$isSuperAdmin && !in_array($bill->status, ['draft'])) {
             throw new \Exception('Chỉ có thể xóa phiếu ở trạng thái Nháp.');
         }
 

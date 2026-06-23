@@ -276,7 +276,9 @@ class CrmEquipmentController extends Controller
             if ($tab === 'approvals') {
                 $purchase = EquipmentPurchase::findOrFail($id);
                 $this->crmRequire($user, Permissions::EQUIPMENT_DELETE, $purchase->project);
-                if ($purchase->status !== 'draft') {
+                
+                $isSuperAdmin = $user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
+                if (!$isSuperAdmin && $purchase->status !== 'draft') {
                     throw new \Exception('Chỉ có thể xóa phiếu mua ở trạng thái Nháp.');
                 }
                 $purchase->items()->delete();
@@ -287,6 +289,33 @@ class CrmEquipmentController extends Controller
                 $this->equipmentService->delete($eq);
             }
             return back()->with('success', 'Đã xóa thành công.');
+        } catch (\Exception $e) {
+            return back()->with('error', $e->getMessage());
+        }
+    }
+
+    public function destroyItem(Request $request, $id, $itemId)
+    {
+        $user = auth('admin')->user();
+        try {
+            $purchase = EquipmentPurchase::findOrFail($id);
+            $this->crmRequire($user, Permissions::EQUIPMENT_DELETE, $purchase->project);
+            
+            $isSuperAdmin = $user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
+            if (!$isSuperAdmin && !in_array($purchase->status, ['draft', 'rejected'])) {
+                throw new \Exception('Chỉ có thể xóa thiết bị của phiếu ở trạng thái Nháp hoặc Từ chối.');
+            }
+            
+            if ($purchase->items()->count() <= 1) {
+                throw new \Exception('Phiếu mua phải có ít nhất 1 thiết bị. Không thể xóa dòng cuối cùng.');
+            }
+            
+            $item = $purchase->items()->findOrFail($itemId);
+            $item->delete();
+            
+            $purchase->recalculateTotal();
+            
+            return back()->with('success', 'Đã xóa thiết bị khỏi phiếu mua.');
         } catch (\Exception $e) {
             return back()->with('error', $e->getMessage());
         }
