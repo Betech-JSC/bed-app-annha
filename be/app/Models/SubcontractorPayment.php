@@ -273,6 +273,7 @@ class SubcontractorPayment extends Model
                 'cost_date'                => $this->payment_date ?: now(),
                 'category'                 => 'other',
                 'cost_group_id'            => $costGroupId,
+                'expense_category'         => 'opex',
                 'description'              => $this->description ?: "Đồng bộ từ phiếu chi thầu phụ " . $this->payment_number,
                 'status'                   => $costStatus,
                 'budget_item_id'           => $this->budget_item_id,

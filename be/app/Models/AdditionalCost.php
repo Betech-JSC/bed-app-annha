@@ -269,6 +269,7 @@ class AdditionalCost extends Model
                 'cost_date'                => $this->created_at ?: now(),
                 'category'                 => 'other',
                 'cost_group_id'            => $costGroupId,
+                'expense_category'         => 'opex',
                 'description'              => $this->description ?: "Đồng bộ từ phiếu chi phí phát sinh #" . ($this->uuid),
                 'status'                   => $costStatus,
                 'created_by'               => $this->proposed_by,

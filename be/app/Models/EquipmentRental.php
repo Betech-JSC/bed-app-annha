@@ -149,6 +149,7 @@ class EquipmentRental extends Model
                 'cost_date'                => $this->rental_start_date ?: now(),
                 'category'                 => 'other',
                 'cost_group_id'            => $costGroupId,
+                'expense_category'         => 'opex',
                 'supplier_id'              => $this->supplier_id,
                 'description'              => $this->notes ?: "Đồng bộ từ phiếu thuê thiết bị #" . ($this->uuid),
                 'status'                   => $costStatus,

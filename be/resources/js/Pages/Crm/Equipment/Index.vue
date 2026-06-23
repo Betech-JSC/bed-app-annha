@@ -27,12 +27,11 @@
   </div>
 
   <div class="crm-content-card">
-    <!-- Tabs Header -->
     <a-tabs v-model:activeKey="filters.tab" @change="handleTabChange" class="px-4 pt-2 border-b border-gray-100" :tabBarGutter="32">
       <a-tab-pane key="approvals" tab="Phiếu duyệt mua" />
       <a-tab-pane key="assets" tab="Danh sách tài sản" />
-      <a-tab-pane key="usages" tab="Mượn / Trả thiết bị" />
       <a-tab-pane key="catalog" tab="Danh mục thiết bị" />
+      <a-tab-pane key="usages" tab="Xuất chi phí" />
     </a-tabs>
 
     <div class="px-4 py-3 border-b border-gray-100 flex items-center gap-4 flex-wrap bg-gray-50/30">

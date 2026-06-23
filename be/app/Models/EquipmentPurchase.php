@@ -94,6 +94,7 @@ class EquipmentPurchase extends Model
                 'cost_date'                => $this->created_at ?: now(),
                 'category'                 => 'other',
                 'cost_group_id'            => $costGroupId,
+                'expense_category'         => 'capex',
                 'description'              => $this->notes ?: "Đồng bộ từ phiếu mua thiết bị #" . ($this->uuid),
                 'status'                   => $costStatus,
                 'created_by'               => $this->created_by,

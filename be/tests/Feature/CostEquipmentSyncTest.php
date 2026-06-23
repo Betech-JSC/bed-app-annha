@@ -51,6 +51,14 @@ class CostEquipmentSyncTest extends TestCase
             'name' => 'Thiết bị',
             'code' => 'equipment',
         ]);
+        \App\Models\CostGroup::firstOrCreate(['id' => 5], [
+            'name' => 'Nhà thầu phụ',
+            'code' => 'subcontractor',
+        ]);
+        \App\Models\CostGroup::firstOrCreate(['id' => 6], [
+            'name' => 'Thuê thiết bị',
+            'code' => 'equipment_rental',
+        ]);
     }
 
     public function test_deleting_cost_deletes_linked_equipment_purchase()
@@ -79,6 +87,7 @@ class CostEquipmentSyncTest extends TestCase
         // Verify Cost was created and linked
         $cost = Cost::where('equipment_purchase_id', $purchase->id)->first();
         $this->assertNotNull($cost);
+        $this->assertEquals('capex', $cost->expense_category);
 
         // 3. Delete the Cost
         $cost->delete();
@@ -169,5 +178,68 @@ class CostEquipmentSyncTest extends TestCase
 
         // Verify Cost is deleted
         $this->assertNull(Cost::where('equipment_id', $equipment->id)->first());
+    }
+
+    public function test_equipment_rental_sync_sets_opex()
+    {
+        $rental = \App\Models\EquipmentRental::create([
+            'project_id' => $this->project->id,
+            'equipment_name' => 'Máy xúc Komatsu',
+            'quantity' => 1,
+            'unit_price' => 5000000,
+            'total_cost' => 5000000,
+            'rental_start_date' => now()->toDateString(),
+            'rental_end_date' => now()->addDays(5)->toDateString(),
+            'status' => 'in_use',
+            'created_by' => $this->user->id,
+        ]);
+
+        $rental->syncToCostTable();
+
+        $cost = Cost::where('equipment_rental_id', $rental->id)->first();
+        $this->assertNotNull($cost);
+        $this->assertEquals('opex', $cost->expense_category);
+    }
+
+    public function test_subcontractor_payment_sync_sets_opex()
+    {
+        $subcontractor = \App\Models\Subcontractor::create([
+            'project_id' => $this->project->id,
+            'name' => 'NTP Xây dựng Toàn Cầu',
+            'total_quote' => 10000000,
+        ]);
+
+        $payment = \App\Models\SubcontractorPayment::create([
+            'project_id' => $this->project->id,
+            'subcontractor_id' => $subcontractor->id,
+            'payment_stage' => 'Đợt 1',
+            'amount' => 5000000,
+            'payment_date' => now()->toDateString(),
+            'status' => 'paid',
+            'created_by' => $this->user->id,
+        ]);
+
+        $payment->syncToCostTable();
+
+        $cost = Cost::where('subcontractor_payment_id', $payment->id)->first();
+        $this->assertNotNull($cost);
+        $this->assertEquals('opex', $cost->expense_category);
+    }
+
+    public function test_additional_cost_sync_sets_opex()
+    {
+        $additional = \App\Models\AdditionalCost::create([
+            'project_id' => $this->project->id,
+            'description' => 'Gia cố móng thêm thép',
+            'amount' => 3000000,
+            'status' => 'approved',
+            'proposed_by' => $this->user->id,
+        ]);
+
+        $additional->syncToCostTable();
+
+        $cost = Cost::where('additional_cost_id', $additional->id)->first();
+        $this->assertNotNull($cost);
+        $this->assertEquals('opex', $cost->expense_category);
     }
 }
