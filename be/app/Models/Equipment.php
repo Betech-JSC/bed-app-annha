@@ -214,6 +214,10 @@ class Equipment extends Model
                 $equipment->uuid = Str::uuid();
             }
         });
+
+        static::deleted(function ($model) {
+            Cost::where('equipment_id', $model->id)->delete();
+        });
     }
 
     // ==================================================================

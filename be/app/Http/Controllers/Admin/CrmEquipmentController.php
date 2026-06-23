@@ -48,6 +48,26 @@ class CrmEquipmentController extends Controller
                 });
             }
             $equipment = $query->orderByDesc('created_at')->paginate(20)->withQueryString();
+        } elseif ($tab === 'usages') {
+            $query = \App\Models\AssetUsage::with(['project:id,name', 'asset:id,name,code,purchase_price,unit', 'receiver:id,name', 'creator:id,name', 'attachments']);
+            if ($search) {
+                $query->where(function ($q) use ($search) {
+                    $q->whereHas('asset', function ($aq) use ($search) {
+                        $aq->where('name', 'like', "%{$search}%")
+                            ->orWhere('code', 'like', "%{$search}%");
+                    })->orWhereHas('project', function ($pq) use ($search) {
+                        $pq->where('name', 'like', "%{$search}%");
+                    })->orWhereHas('receiver', function ($uq) use ($search) {
+                        $uq->where('name', 'like', "%{$search}%");
+                    });
+                });
+            }
+            if ($status = $request->query('status')) {
+                $query->where('status', $status);
+            } else {
+                $query->whereIn('status', ['pending_accountant', 'in_use', 'pending_return', 'returned', 'rejected']);
+            }
+            $equipment = $query->orderByDesc('created_at')->paginate(20)->withQueryString();
         } else {
             if ($tab === 'approvals') {
                 $query = EquipmentPurchase::with(['creator:id,name', 'approver:id,name', 'confirmer:id,name', 'project:id,name', 'supplier:id,name', 'items', 'attachments']);
@@ -66,7 +86,7 @@ class CrmEquipmentController extends Controller
                 if ($status = $request->query('status')) {
                     $query->where('status', $status);
                 } else {
-                    $query->whereIn('status', ['draft', 'pending_management', 'pending_accountant', 'rejected']);
+                    $query->whereIn('status', ['draft', 'pending_management', 'pending_accountant', 'completed', 'rejected']);
                 }
                 $equipment = $query->orderByDesc('created_at')->paginate(20)->withQueryString();
             } else { // tab === 'assets'
@@ -89,6 +109,7 @@ class CrmEquipmentController extends Controller
 
         $stats = [
             'total'       => Equipment::count() + EquipmentPurchase::count(),
+            'total_value' => (float) Equipment::sum('current_value'),
             'draft'       => EquipmentPurchase::where('status', 'draft')->count(),
             'pending'     => EquipmentPurchase::whereIn('status', ['pending_management', 'pending_accountant'])->count(),
             'available'   => Equipment::where('status', 'available')->count(),

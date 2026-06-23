@@ -20,6 +20,7 @@
 
   <div class="crm-stats-grid">
     <StatCard label="Tổng tài sản" :value="stats.total" icon="ToolOutlined" variant="primary" />
+    <StatCard label="Tổng giá trị tài sản" :value="stats.total_value || 0" icon="DollarOutlined" variant="success" format="currency" />
     <StatCard label="Nháp / Chờ duyệt" :value="stats.draft + stats.pending" icon="ClockCircleOutlined" variant="warning" />
     <StatCard label="Trong kho" :value="stats.available" icon="CheckCircleOutlined" variant="success" />
     <StatCard label="Đang sử dụng" :value="stats.in_use" icon="ThunderboltOutlined" variant="primary" />
@@ -30,6 +31,7 @@
     <a-tabs v-model:activeKey="filters.tab" @change="handleTabChange" class="px-4 pt-2 border-b border-gray-100" :tabBarGutter="32">
       <a-tab-pane key="approvals" tab="Phiếu duyệt mua" />
       <a-tab-pane key="assets" tab="Danh sách tài sản" />
+      <a-tab-pane key="usages" tab="Mượn / Trả thiết bị" />
       <a-tab-pane key="catalog" tab="Danh mục thiết bị" />
     </a-tabs>
 
@@ -40,6 +42,14 @@
           <a-select-option value="draft">Nháp</a-select-option>
           <a-select-option value="pending_management">Chờ BĐH</a-select-option>
           <a-select-option value="pending_accountant">Chờ KT</a-select-option>
+          <a-select-option value="completed">Hoàn tất (Đã nhập kho)</a-select-option>
+          <a-select-option value="rejected">Từ chối</a-select-option>
+        </template>
+        <template v-else-if="filters.tab === 'usages'">
+          <a-select-option value="pending_accountant">Chờ KT</a-select-option>
+          <a-select-option value="in_use">Đang dùng</a-select-option>
+          <a-select-option value="pending_return">Chờ trả</a-select-option>
+          <a-select-option value="returned">Đã trả</a-select-option>
           <a-select-option value="rejected">Từ chối</a-select-option>
         </template>
         <template v-else>
@@ -155,6 +165,72 @@
             <span class="text-[10px] text-gray-500">{{ record.creator?.name || '—' }}</span>
           </div>
         </template>
+        <!-- Usage Columns (usages tab) -->
+        <template v-else-if="column.key === 'usage_code'">
+          <div class="flex flex-col cursor-pointer" @click="openDetail(record)">
+            <span class="font-bold text-blue-600 hover:underline">#MU-{{ record.id }}</span>
+            <span class="text-[10px] text-gray-400 font-mono" v-if="record.created_at">{{ fmtDate(record.created_at) }}</span>
+          </div>
+        </template>
+        <template v-else-if="column.key === 'usage_name'">
+          <div>
+            <div class="font-bold text-gray-800 hover:text-blue-600 cursor-pointer" @click="openDetail(record)">{{ record.asset?.name || 'Thiết bị kho' }}</div>
+            <div class="text-[10px] text-gray-400 font-mono uppercase tracking-wider">{{ record.asset?.code || 'NO-CODE' }}</div>
+          </div>
+        </template>
+        <template v-else-if="column.key === 'usage_project'">
+          <div class="text-xs font-semibold text-gray-700 max-w-[170px] truncate" :title="record.project?.name">
+            {{ record.project?.name || '—' }}
+          </div>
+        </template>
+        <template v-else-if="column.key === 'usage_receiver'">
+          <div class="flex flex-col items-center">
+            <a-avatar :size="20" class="bg-indigo-50 text-indigo-500 mb-0.5" style="border: 1px solid #E0E7FF">
+              {{ record.receiver?.name?.charAt(0) || '?' }}
+            </a-avatar>
+            <span class="text-[10px] text-gray-500">{{ record.receiver?.name || '—' }}</span>
+          </div>
+        </template>
+        <template v-else-if="column.key === 'usage_qty'">
+          <div class="text-right">
+            <span class="font-bold text-gray-700">{{ record.quantity || 1 }} <span class="text-[10px] text-gray-400 font-normal uppercase">{{ record.asset?.unit || 'cái' }}</span></span>
+          </div>
+        </template>
+        <template v-else-if="column.key === 'usage_dates'">
+          <div class="text-xs text-gray-600">
+            <div><span class="text-gray-400">Mượn:</span> {{ fmtDate(record.received_date) }}</div>
+            <div v-if="record.returned_date"><span class="text-green-600 font-medium">Trả:</span> {{ fmtDate(record.returned_date) }}</div>
+            <div v-else-if="record.status === 'in_use'" class="text-gray-400 italic">Chưa trả</div>
+          </div>
+        </template>
+        <template v-else-if="column.key === 'usage_status'">
+          <div class="flex justify-center">
+            <a-tag :color="statusColors[record.status]" class="rounded-full px-3 py-0.5 text-[11px] font-bold border-none">
+              {{ statusLabels[record.status] || record.status }}
+            </a-tag>
+          </div>
+        </template>
+        <template v-else-if="column.key === 'usage_actions'">
+          <div class="flex justify-center gap-1">
+            <a-button type="text" size="small" class="hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded-lg" @click="openDetail(record)" title="Xem chi tiết">
+              <EyeOutlined />
+            </a-button>
+            <a-button v-slot:icon v-if="record.status === 'pending_accountant' && can('cost.approve.accountant')" type="text" size="small" class="hover:bg-green-50 text-green-500 hover:text-green-700 rounded-lg" @click="confirmItem(record)" title="Xác nhận mượn">
+              <CheckOutlined />
+            </a-button>
+            <a-popconfirm v-if="record.status === 'pending_return' && can('cost.approve.accountant')" title="Xác nhận nhận lại thiết bị này?" @confirm="handleConfirmReturn(record)">
+              <a-button type="text" size="small" class="hover:bg-emerald-50 text-emerald-500 hover:text-emerald-700 rounded-lg" title="Xác nhận trả">
+                <CheckOutlined />
+              </a-button>
+            </a-popconfirm>
+            <a-popconfirm v-if="record.status === 'in_use'" title="Yêu cầu trả thiết bị này?" @confirm="handleRequestReturn(record)">
+              <a-button type="text" size="small" class="hover:bg-orange-50 text-orange-500 hover:text-orange-700 rounded-lg" title="Yêu cầu trả">
+                <RollbackOutlined />
+              </a-button>
+            </a-popconfirm>
+          </div>
+        </template>
+
         <template v-else-if="column.key === 'actions'">
           <div class="flex justify-center gap-1">
             <a-button type="text" size="small" class="hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded-lg" @click="openDetail(record)" title="Xem chi tiết">
@@ -469,18 +545,22 @@
     </div>
   </a-modal>
 
-  <a-drawer v-model:open="showDetailDrawer" :title="filters.tab === 'approvals' ? 'Chi tiết Phiếu mua thiết bị' : 'Chi tiết Tài sản'" :width="560" @close="selectedItem = null" destroy-on-close class="crm-drawer">
+  <a-drawer v-model:open="showDetailDrawer" :title="filters.tab === 'approvals' ? 'Chi tiết Phiếu mua thiết bị' : (filters.tab === 'usages' ? 'Chi tiết Phiếu mượn thiết bị' : 'Chi tiết Tài sản')" :width="560" @close="selectedItem = null" destroy-on-close class="crm-drawer">
     <div v-if="selectedItem" class="space-y-6 pb-24">
       <!-- Header -->
       <div class="bg-gray-50 p-5 rounded-2xl border border-gray-100 flex items-center justify-between">
         <div class="flex items-center gap-3">
           <div class="w-12 h-12 rounded-xl bg-blue-500 flex items-center justify-center text-white shrink-0 shadow-lg shadow-blue-100">
-            {{ filters.tab === 'approvals' ? '📋' : '🏗️' }}
+            {{ filters.tab === 'approvals' ? '📋' : (filters.tab === 'usages' ? '🔄' : '🏗️') }}
           </div>
           <div>
             <template v-if="filters.tab === 'approvals'">
               <div class="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-0.5">Mã phiếu: #EP-{{ selectedItem.id }}</div>
               <div class="text-lg font-bold text-gray-800">Phiếu mua thiết bị</div>
+            </template>
+            <template v-else-if="filters.tab === 'usages'">
+              <div class="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-0.5">Mã mượn: #MU-{{ selectedItem.id }}</div>
+              <div class="text-lg font-bold text-gray-800">{{ selectedItem.asset?.name || 'Mượn thiết bị' }}</div>
             </template>
             <template v-else>
               <div class="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-0.5">Mã: {{ selectedItem.code || `#${selectedItem.id}` }}</div>
@@ -545,6 +625,45 @@
         </div>
       </template>
 
+      <!-- Info for Usages tab -->
+      <template v-else-if="filters.tab === 'usages'">
+        <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm space-y-4">
+          <div class="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2 text-blue-500">
+            <InfoCircleOutlined /> Thông tin mượn thiết bị
+          </div>
+          <div class="grid grid-cols-1 gap-1 text-sm">
+            <div class="flex justify-between items-center py-2.5 border-b border-gray-50">
+              <span class="text-gray-400">Thiết bị mượn</span>
+              <span class="font-semibold text-gray-800">{{ selectedItem.asset?.name }} ({{ selectedItem.asset?.code || 'NO-CODE' }})</span>
+            </div>
+            <div class="flex justify-between items-center py-2.5 border-b border-gray-50">
+              <span class="text-gray-400">Dự án mượn</span>
+              <span class="font-semibold text-gray-800">{{ selectedItem.project?.name || '—' }}</span>
+            </div>
+            <div class="flex justify-between items-center py-2.5 border-b border-gray-50">
+              <span class="text-gray-400">Người mượn</span>
+              <span class="font-semibold text-gray-800">{{ selectedItem.receiver?.name || '—' }}</span>
+            </div>
+            <div class="flex justify-between items-center py-2.5 border-b border-gray-50">
+              <span class="text-gray-400">Số lượng mượn</span>
+              <span class="font-semibold text-gray-800">{{ selectedItem.quantity || 1 }} {{ selectedItem.asset?.unit || 'cái' }}</span>
+            </div>
+            <div class="flex justify-between items-center py-2.5 border-b border-gray-50">
+              <span class="text-gray-400">Ngày mượn</span>
+              <span class="font-semibold text-gray-800">{{ fmtDate(selectedItem.received_date) }}</span>
+            </div>
+            <div class="flex justify-between items-center py-2.5 border-b border-gray-50" v-if="selectedItem.returned_date">
+              <span class="text-gray-400">Ngày trả</span>
+              <span class="font-semibold text-green-600">{{ fmtDate(selectedItem.returned_date) }}</span>
+            </div>
+            <div class="flex justify-between items-start py-2.5">
+              <span class="text-gray-400">Ghi chú mượn</span>
+              <span class="text-gray-700 max-w-[300px] text-right whitespace-pre-wrap">{{ selectedItem.notes || '—' }}</span>
+            </div>
+          </div>
+        </div>
+      </template>
+
       <!-- Info for other tabs -->
       <template v-else>
         <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
@@ -579,11 +698,20 @@
       <!-- Approval stepper -->
       <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
         <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2 text-indigo-500"><SafetyCertificateOutlined /> Luồng duyệt</div>
-        <a-steps :current="stepperCurrent(selectedItem)" size="small" class="mb-2" direction="vertical">
-          <a-step title="Người lập tạo" :description="selectedItem.creator?.name || '—'" />
-          <a-step title="BĐH duyệt" :description="selectedItem.approver ? `${selectedItem.approver.name} — ${fmtDate(selectedItem.approved_at)}` : 'Chờ duyệt'" />
-          <a-step title="KT xác nhận chi & nhập kho" :description="selectedItem.confirmer ? `${selectedItem.confirmer.name} — ${fmtDate(selectedItem.confirmed_at)}` : 'Chờ xác nhận'" />
-        </a-steps>
+        <template v-if="filters.tab === 'usages'">
+          <a-steps :current="usageStepperCurrent(selectedItem)" size="small" class="mb-2" direction="vertical">
+            <a-step title="Người lập mượn" :description="selectedItem.creator?.name || '—'" />
+            <a-step title="Kế toán xác nhận mượn" :description="selectedItem.status === 'rejected' ? 'Đã từ chối' : (['in_use', 'pending_return', 'returned'].includes(selectedItem.status) ? 'Đã xác nhận' : 'Chờ KT xác nhận')" />
+            <a-step title="Kế toán xác nhận trả" :description="selectedItem.status === 'returned' ? 'Đã hoàn trả kho' : (selectedItem.status === 'pending_return' ? 'Chờ KT xác nhận trả' : 'Chưa hoàn trả')" />
+          </a-steps>
+        </template>
+        <template v-else>
+          <a-steps :current="stepperCurrent(selectedItem)" size="small" class="mb-2" direction="vertical">
+            <a-step title="Người lập tạo" :description="selectedItem.creator?.name || '—'" />
+            <a-step title="BĐH duyệt" :description="selectedItem.approver ? `${selectedItem.approver.name} — ${fmtDate(selectedItem.approved_at)}` : 'Chờ duyệt'" />
+            <a-step title="KT xác nhận chi & nhập kho" :description="selectedItem.confirmer ? `${selectedItem.confirmer.name} — ${fmtDate(selectedItem.confirmed_at)}` : 'Chờ xác nhận'" />
+          </a-steps>
+        </template>
       </div>
 
       <!-- Attachments -->
@@ -623,24 +751,45 @@
       <!-- Fixed action bar -->
       <div class="fixed bottom-0 right-0 w-[560px] p-4 bg-white/80 backdrop-blur-md border-t border-gray-100 flex justify-between items-center z-20">
         <div>
-          <a-popconfirm v-if="selectedItem.status === 'draft' || filters.tab === 'assets'" :title="filters.tab === 'approvals' ? 'Xóa phiếu mua này?' : 'Xóa tài sản này?'" @confirm="deleteItem(selectedItem); showDetailDrawer = false">
+          <a-popconfirm v-if="(selectedItem.status === 'draft' || filters.tab === 'assets') && filters.tab !== 'usages'" :title="filters.tab === 'approvals' ? 'Xóa phiếu mua này?' : 'Xóa tài sản này?'" @confirm="deleteItem(selectedItem); showDetailDrawer = false">
             <a-button danger size="small"><DeleteOutlined /> Xóa</a-button>
           </a-popconfirm>
         </div>
         <div class="flex gap-2">
           <a-button @click="showDetailDrawer = false">Đóng</a-button>
           <a-button v-if="filters.tab === 'assets' && selectedItem.status === 'available' && !selectedItem.project_id" type="primary" class="!bg-emerald-600 !border-emerald-600 hover:!bg-emerald-700" @click="openExportModal(selectedItem)"><ExportOutlined /> Xuất tài sản</a-button>
-          <a-button v-if="selectedItem.status === 'draft' || filters.tab === 'assets'" @click="openEditModal(selectedItem)"><EditOutlined /> Sửa</a-button>
-          <a-button v-if="selectedItem.status === 'draft'" type="primary" @click="submitItem(selectedItem)"><SendOutlined /> Gửi duyệt</a-button>
-          <a-button v-if="selectedItem.status === 'pending_management' && can('equipment.approve')" type="primary" class="!bg-green-500 !border-green-500 hover:!bg-green-600" @click="approveItem(selectedItem)"><CheckCircleOutlined /> BĐH Duyệt</a-button>
-          <a-button v-if="selectedItem.status === 'pending_accountant' && can('cost.approve.accountant')" type="primary" @click="confirmItem(selectedItem)"><CheckSquareOutlined /> KT Xác nhận & Nhập kho</a-button>
-          <a-popconfirm v-if="['pending_management','pending_accountant'].includes(selectedItem.status)" :title="filters.tab === 'approvals' ? 'Từ chối phiếu mua này?' : 'Từ chối tài sản này?'" @confirm="rejectItem(selectedItem)">
-            <template #description>
-              <a-input v-model:value="rejectReason" placeholder="Nhập lý do từ chối..." class="mt-2" />
-            </template>
-            <a-button danger>Từ chối</a-button>
-          </a-popconfirm>
-          <a-button v-if="['pending_management', 'pending_accountant', 'rejected'].includes(selectedItem.status) && can('equipment.revert')" danger ghost @click="revertItem(selectedItem)">Hoàn duyệt</a-button>
+          <a-button v-if="(selectedItem.status === 'draft' || filters.tab === 'assets') && filters.tab !== 'usages'" @click="openEditModal(selectedItem)"><EditOutlined /> Sửa</a-button>
+          <a-button v-if="selectedItem.status === 'draft' && filters.tab !== 'usages'" type="primary" @click="submitItem(selectedItem)"><SendOutlined /> Gửi duyệt</a-button>
+          <a-button v-if="selectedItem.status === 'pending_management' && can('equipment.approve') && filters.tab !== 'usages'" type="primary" class="!bg-green-500 !border-green-500 hover:!bg-green-600" @click="approveItem(selectedItem)"><CheckCircleOutlined /> BĐH Duyệt</a-button>
+          
+          <!-- Usages tab actions -->
+          <template v-if="filters.tab === 'usages'">
+            <a-button v-if="selectedItem.status === 'pending_accountant' && can('cost.approve.accountant')" type="primary" @click="confirmItem(selectedItem)"><CheckSquareOutlined /> KT Xác nhận mượn</a-button>
+            <a-popconfirm v-if="selectedItem.status === 'pending_return' && can('cost.approve.accountant')" title="Xác nhận nhận lại thiết bị này?" @confirm="handleConfirmReturn(selectedItem)">
+              <a-button type="primary" class="!bg-emerald-600 !border-emerald-600 hover:!bg-emerald-700"><CheckOutlined /> Xác nhận trả</a-button>
+            </a-popconfirm>
+            <a-popconfirm v-if="selectedItem.status === 'in_use'" title="Yêu cầu trả thiết bị này?" @confirm="handleRequestReturn(selectedItem)">
+              <a-button type="primary" class="!bg-orange-500 !border-orange-500 hover:!bg-orange-600"><RollbackOutlined /> Yêu cầu trả</a-button>
+            </a-popconfirm>
+            <a-popconfirm v-if="selectedItem.status === 'pending_accountant' && can('cost.approve.accountant')" title="Từ chối yêu cầu mượn này?" @confirm="rejectItem(selectedItem)">
+              <template #description>
+                <a-input v-model:value="rejectReason" placeholder="Nhập lý do từ chối..." class="mt-2" />
+              </template>
+              <a-button danger>Từ chối</a-button>
+            </a-popconfirm>
+          </template>
+          
+          <!-- Standard approvals & assets actions -->
+          <template v-else>
+            <a-button v-if="selectedItem.status === 'pending_accountant' && can('cost.approve.accountant')" type="primary" @click="confirmItem(selectedItem)"><CheckSquareOutlined /> KT Xác nhận & Nhập kho</a-button>
+            <a-popconfirm v-if="['pending_management','pending_accountant'].includes(selectedItem.status)" :title="filters.tab === 'approvals' ? 'Từ chối phiếu mua này?' : 'Từ chối tài sản này?'" @confirm="rejectItem(selectedItem)">
+              <template #description>
+                <a-input v-model:value="rejectReason" placeholder="Nhập lý do từ chối..." class="mt-2" />
+              </template>
+              <a-button danger>Từ chối</a-button>
+            </a-popconfirm>
+            <a-button v-if="['pending_management', 'pending_accountant', 'rejected'].includes(selectedItem.status) && can('equipment.revert')" danger ghost @click="revertItem(selectedItem)">Hoàn duyệt</a-button>
+          </template>
         </div>
       </div>
     </div>
@@ -668,6 +817,29 @@
             <div class="flex justify-between mt-2 pt-2 border-t border-gray-200">
                <span class="text-gray-500 font-bold">Tổng thanh toán:</span>
                <span class="font-bold text-red-600 text-sm">{{ formatCurrency(confirmEquipmentTarget.total_amount) }}</span>
+            </div>
+         </template>
+         <template v-else-if="filters.tab === 'usages'">
+            <div class="font-bold text-gray-700 mb-2">Thông tin mượn thiết bị #MU-{{ confirmEquipmentTarget.id }}</div>
+            <div class="flex justify-between">
+               <span class="text-gray-400">Thiết bị:</span>
+               <span class="font-bold text-gray-700">{{ confirmEquipmentTarget.asset?.name }}</span>
+            </div>
+            <div class="flex justify-between mt-1">
+               <span class="text-gray-400">Mã thiết bị:</span>
+               <span class="font-medium text-gray-700">{{ confirmEquipmentTarget.asset?.code || 'NO-CODE' }}</span>
+            </div>
+            <div class="flex justify-between mt-1">
+               <span class="text-gray-400">Dự án mượn:</span>
+               <span class="font-bold text-gray-700">{{ confirmEquipmentTarget.project?.name || '—' }}</span>
+            </div>
+            <div class="flex justify-between mt-1">
+               <span class="text-gray-400">Người mượn:</span>
+               <span class="font-medium text-gray-700">{{ confirmEquipmentTarget.receiver?.name || '—' }}</span>
+            </div>
+            <div class="flex justify-between mt-1">
+               <span class="text-gray-400">Số lượng:</span>
+               <span class="font-bold text-gray-700">{{ confirmEquipmentTarget.quantity || 1 }} {{ confirmEquipmentTarget.asset?.unit || 'cái' }}</span>
             </div>
          </template>
          <template v-else>
@@ -823,7 +995,7 @@ import { Head, useForm, router, usePage } from '@inertiajs/vue3'
 import CrmLayout from '@/Layouts/CrmLayout.vue'
 import PageHeader from '@/Components/Crm/PageHeader.vue'
 import StatCard from '@/Components/Crm/StatCard.vue'
-import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined, UploadOutlined, SendOutlined, CheckCircleOutlined, CheckSquareOutlined, InfoCircleOutlined, SafetyCertificateOutlined, FileOutlined, DownloadOutlined, CloseOutlined, PaperClipOutlined, ExportOutlined } from '@ant-design/icons-vue'
+import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined, UploadOutlined, SendOutlined, CheckCircleOutlined, CheckSquareOutlined, InfoCircleOutlined, SafetyCertificateOutlined, FileOutlined, DownloadOutlined, CloseOutlined, PaperClipOutlined, ExportOutlined, CheckOutlined, RollbackOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 
 defineOptions({ layout: CrmLayout })
@@ -931,6 +1103,18 @@ const columns = computed(() => {
       { title: '', key: 'actions', width: 60, align: 'center' },
     ]
   }
+  if (filters.value.tab === 'usages') {
+    return [
+      { title: 'Mã mượn', key: 'usage_code', width: 100 },
+      { title: 'Tên thiết bị', key: 'usage_name', width: 220 },
+      { title: 'Dự án', key: 'usage_project', width: 180 },
+      { title: 'Người mượn', key: 'usage_receiver', width: 130 },
+      { title: 'Số lượng', key: 'usage_qty', width: 110 },
+      { title: 'Ngày mượn/trả', key: 'usage_dates', width: 180 },
+      { title: 'Trạng thái', key: 'usage_status', width: 140, align: 'center' },
+      { title: 'Thao tác', key: 'usage_actions', width: 100, align: 'center' },
+    ]
+  }
   return [
     { title: 'Tài sản', key: 'name', width: 260 },
     { title: 'Loại', key: 'category', dataIndex: 'category', width: 100 },
@@ -946,11 +1130,13 @@ const statusLabels = {
   draft: 'Nháp', pending_management: 'Chờ BĐH', pending_accountant: 'Chờ KT',
   completed: 'Hoàn tất', available: 'Trong kho', in_use: 'Đang dùng',
   maintenance: 'Bảo trì', retired: 'Thanh lý', rejected: 'Từ chối',
+  pending_return: 'Chờ xác nhận trả', returned: 'Đã trả',
 }
 const statusColors = {
   draft: 'default', pending_management: 'orange', pending_accountant: 'blue',
   completed: 'green', available: 'green', in_use: 'geekblue',
   maintenance: 'volcano', retired: 'default', rejected: 'red',
+  pending_return: 'orange', returned: 'green',
 }
 const categoryLabels = { computer: 'Máy tính / CNTT', machinery: 'Máy móc thi công', vehicle: 'Xe công ty', furniture: 'Nội thất VP', other: 'Khác' }
 const categoryIcons = { computer: '💻', machinery: '🏗️', vehicle: '🚗', furniture: '🪑', other: '📦' }
@@ -1245,7 +1431,10 @@ const confirmApproveEquipment = () => {
   confirmEquipmentFiles.value.forEach(f => {
     formData.append('files[]', f)
   })
-  router.post(`/equipment/${confirmEquipmentTarget.value.id}/confirm-accountant`, formData, {
+  const url = filters.value.tab === 'usages'
+    ? `/projects/${confirmEquipmentTarget.value.project_id}/asset-usages/${confirmEquipmentTarget.value.id}/confirm-accountant`
+    : `/equipment/${confirmEquipmentTarget.value.id}/confirm-accountant`
+  router.post(url, formData, {
     forceFormData: true,
     preserveScroll: true,
     onSuccess: () => {
@@ -1253,16 +1442,60 @@ const confirmApproveEquipment = () => {
       confirmEquipmentTarget.value = null
       confirmEquipmentFiles.value = []
       showDetailDrawer.value = false
-      message.success('Xác nhận chi & nhập kho thiết bị thành công.')
+      message.success(filters.value.tab === 'usages' ? 'Đã xác nhận mượn thiết bị thành công.' : 'Xác nhận chi & nhập kho thiết bị thành công.')
     },
     onFinish: () => {
       confirmEquipmentLoading.value = false
     }
   })
 }
-const rejectItem = (e) => router.post(`/equipment/${e.id}/reject`, { reason: rejectReason.value }, { preserveScroll: true, onSuccess: () => { rejectReason.value = ''; showDetailDrawer.value = false } })
+const rejectItem = (e) => {
+  const url = filters.value.tab === 'usages'
+    ? `/projects/${e.project_id}/asset-usages/${e.id}/reject`
+    : `/equipment/${e.id}/reject`
+  const data = filters.value.tab === 'usages'
+    ? { rejection_reason: rejectReason.value }
+    : { reason: rejectReason.value }
+  router.post(url, data, {
+    preserveScroll: true,
+    onSuccess: () => {
+      rejectReason.value = ''
+      showDetailDrawer.value = false
+      message.success('Đã từ chối thành công.')
+    }
+  })
+}
 const revertItem = (e) => router.post(`/equipment/${e.id}/revert`, {}, { preserveScroll: true, onSuccess: () => { showDetailDrawer.value = false } })
 const deleteItem = (e) => router.delete(`/equipment/${e.id}?tab=${filters.value.tab}`)
+
+const handleConfirmReturn = (record) => {
+  router.post(`/projects/${record.project_id}/asset-usages/${record.id}/confirm-return`, {}, {
+    preserveScroll: true,
+    onSuccess: () => {
+      if (selectedItem.value?.id === record.id) {
+        showDetailDrawer.value = false
+      }
+      message.success('Đã xác nhận nhận lại thiết bị.')
+    }
+  })
+}
+
+const handleRequestReturn = (record) => {
+  router.post(`/projects/${record.project_id}/asset-usages/${record.id}/request-return`, {}, {
+    preserveScroll: true,
+    onSuccess: () => {
+      if (selectedItem.value?.id === record.id) {
+        showDetailDrawer.value = false
+      }
+      message.success('Đã gửi yêu cầu trả thiết bị.')
+    }
+  })
+}
+
+const usageStepperCurrent = (item) => {
+  const map = { pending_accountant: 0, in_use: 1, pending_return: 2, returned: 3, rejected: 0 }
+  return map[item.status] ?? 0
+}
 
 const formatCurrency = (v) => v ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(v) : '—'
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('vi-VN') : ''
@@ -1289,10 +1522,11 @@ const formatFileSize = (bytes) => {
 </script>
 
 <style scoped>
-.crm-stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.5rem; margin-bottom: 2rem; }
+.crm-stats-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 1.5rem; margin-bottom: 2rem; }
 .crm-content-card { background: white; border-radius: 16px; border: 1px solid #E8ECF1; overflow: hidden; }
 .crm-table :deep(.ant-table-thead > tr > th) { background: #FAFBFC; font-weight: 600; font-size: 13px; color: #5D6B82; }
 .crm-modal :deep(.ant-modal-content) { border-radius: 16px; }
 .crm-drawer :deep(.ant-drawer-body) { padding: 16px; }
+@media (max-width: 1024px) { .crm-stats-grid { grid-template-columns: repeat(3, 1fr); } }
 @media (max-width: 768px) { .crm-stats-grid { grid-template-columns: repeat(2, 1fr); } }
 </style>

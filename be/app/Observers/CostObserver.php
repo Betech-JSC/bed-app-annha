@@ -225,4 +225,38 @@ class CostObserver
             }
         }
     }
+
+    /**
+     * Handle the Cost "deleted" event.
+     */
+    public function deleted(Cost $cost): void
+    {
+        if ($cost->equipment_purchase_id) {
+            $purchase = \App\Models\EquipmentPurchase::find($cost->equipment_purchase_id);
+            if ($purchase) {
+                $purchase->delete();
+            }
+        }
+
+        if ($cost->equipment_id) {
+            $equipment = \App\Models\Equipment::find($cost->equipment_id);
+            if ($equipment) {
+                $equipment->delete();
+            }
+        }
+
+        if ($cost->equipment_rental_id) {
+            $rental = \App\Models\EquipmentRental::find($cost->equipment_rental_id);
+            if ($rental) {
+                $rental->delete();
+            }
+        }
+
+        if ($cost->equipment_allocation_id) {
+            $allocation = \App\Models\EquipmentAllocation::find($cost->equipment_allocation_id);
+            if ($allocation) {
+                $allocation->delete();
+            }
+        }
+    }
 }

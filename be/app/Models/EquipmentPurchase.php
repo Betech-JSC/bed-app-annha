@@ -119,6 +119,7 @@ class EquipmentPurchase extends Model
 
         static::deleted(function ($model) {
             Cost::where('equipment_purchase_id', $model->id)->delete();
+            Equipment::where('notes', 'like', "Nhập từ phiếu mua #{$model->id}%")->delete();
         });
     }
 
