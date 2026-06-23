@@ -404,10 +404,20 @@ class CrmEquipmentController extends Controller
 
         $this->crmRequire($user, Permissions::EQUIPMENT_REVERT, $purchase->project);
 
-        $purchase->update([
-            'status' => 'draft',
-            'rejection_reason' => null,
-        ]);
+        DB::transaction(function () use ($purchase) {
+            if ($purchase->status === 'completed') {
+                \App\Models\Equipment::where('notes', 'like', "Nhập từ phiếu mua #{$purchase->id}%")->delete();
+            }
+
+            $purchase->update([
+                'status'           => 'draft',
+                'rejection_reason' => null,
+                'approved_by'      => null,
+                'approved_at'      => null,
+                'confirmed_by'     => null,
+                'confirmed_at'     => null,
+            ]);
+        });
 
         return back()->with('success', 'Đã hoàn duyệt phiếu mua thiết bị về Nháp.');
     }

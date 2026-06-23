@@ -738,10 +738,12 @@
         </template>
       </div>
 
-      <!-- Attachments -->
+      <!-- Initial Attachments (Chứng từ đính kèm) -->
       <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
-        <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2 text-gray-400"><FileOutlined /> Chứng từ đính kèm ({{ selectedItem.attachments?.length || 0 }})</div>
-        <div v-if="selectedItem.attachments?.length" class="space-y-2">
+        <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2 text-gray-400">
+          <FileOutlined /> Chứng từ đính kèm ({{ imageAttachments.length + nonImageAttachments.length }})
+        </div>
+        <div v-if="imageAttachments.length || nonImageAttachments.length" class="space-y-2">
           <!-- Image previews -->
           <div v-if="imageAttachments.length" class="grid grid-cols-3 gap-2 mb-3">
             <div v-for="file in imageAttachments" :key="file.id" class="relative group cursor-pointer rounded-xl overflow-hidden border border-gray-100 aspect-square" @click="previewImage(file)">
@@ -765,6 +767,36 @@
           </a>
         </div>
         <a-empty v-else :image="null" description="Không có chứng từ" class="my-0" />
+      </div>
+
+      <!-- Payment / Confirmation Proof (Chứng từ thanh toán / xác nhận) -->
+      <div v-if="afterImageAttachments.length || afterNonImageAttachments.length" class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm animate-fade-in">
+        <div class="text-xs font-bold text-emerald-600 uppercase tracking-wider mb-4 flex items-center gap-2">
+          <SafetyCertificateOutlined class="text-emerald-500" /> Chứng từ thanh toán / Ủy nhiệm chi ({{ afterImageAttachments.length + afterNonImageAttachments.length }})
+        </div>
+        <div class="space-y-2">
+          <!-- Image previews -->
+          <div v-if="afterImageAttachments.length" class="grid grid-cols-3 gap-2 mb-3">
+            <div v-for="file in afterImageAttachments" :key="file.id" class="relative group cursor-pointer rounded-xl overflow-hidden border border-gray-100 aspect-square" @click="previewImage(file)">
+              <img :src="`/storage/${file.file_path}`" :alt="file.original_name" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+              <div class="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
+                <EyeOutlined class="text-white text-lg opacity-0 group-hover:opacity-100 transition-opacity" />
+              </div>
+            </div>
+          </div>
+          <!-- Non-image files -->
+          <a v-for="file in afterNonImageAttachments" :key="file.id" :href="`/storage/${file.file_path}`" target="_blank" class="flex items-center justify-between p-3 rounded-xl bg-gray-50 border border-gray-100 group hover:border-emerald-200 transition-colors cursor-pointer">
+            <div class="flex items-center gap-3">
+              <div class="w-9 h-9 rounded-lg flex items-center justify-center text-lg bg-emerald-50 text-emerald-500">
+                <FileOutlined />
+              </div>
+              <div>
+                <div class="text-xs font-medium text-gray-700 truncate max-w-[260px]">{{ file.original_name }}</div>
+              </div>
+            </div>
+            <DownloadOutlined class="text-gray-300 group-hover:text-emerald-500 transition-colors" />
+          </a>
+        </div>
       </div>
 
       <!-- Image Preview Modal -->
@@ -812,7 +844,7 @@
               </template>
               <a-button danger>Từ chối</a-button>
             </a-popconfirm>
-            <a-button v-if="['pending_management', 'pending_accountant', 'rejected'].includes(selectedItem.status) && can('equipment.revert')" danger ghost @click="revertItem(selectedItem)">Hoàn duyệt</a-button>
+            <a-button v-if="['pending_management', 'pending_accountant', 'completed', 'rejected'].includes(selectedItem.status) && can('equipment.revert')" danger ghost @click="revertItem(selectedItem)">Hoàn duyệt</a-button>
           </template>
         </div>
       </div>
@@ -1541,11 +1573,19 @@ const fmtDate = (d) => d ? new Date(d).toLocaleDateString('vi-VN') : ''
 // Attachment helpers
 const imageAttachments = computed(() => {
   if (!selectedItem.value?.attachments) return []
-  return selectedItem.value.attachments.filter(f => f.mime_type && f.mime_type.startsWith('image/'))
+  return selectedItem.value.attachments.filter(f => f.description !== 'after' && f.mime_type && f.mime_type.startsWith('image/'))
 })
 const nonImageAttachments = computed(() => {
   if (!selectedItem.value?.attachments) return []
-  return selectedItem.value.attachments.filter(f => !f.mime_type || !f.mime_type.startsWith('image/'))
+  return selectedItem.value.attachments.filter(f => f.description !== 'after' && (!f.mime_type || !f.mime_type.startsWith('image/')))
+})
+const afterImageAttachments = computed(() => {
+  if (!selectedItem.value?.attachments) return []
+  return selectedItem.value.attachments.filter(f => f.description === 'after' && f.mime_type && f.mime_type.startsWith('image/'))
+})
+const afterNonImageAttachments = computed(() => {
+  if (!selectedItem.value?.attachments) return []
+  return selectedItem.value.attachments.filter(f => f.description === 'after' && (!f.mime_type || !f.mime_type.startsWith('image/')))
 })
 const previewImage = (file) => {
   imagePreviewUrl.value = `/storage/${file.file_path}`

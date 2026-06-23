@@ -324,4 +324,64 @@ class CostEquipmentSyncTest extends TestCase
         $this->assertNotNull($cost);
         $this->assertEquals('opex', $cost->expense_category);
     }
+
+    public function test_reverting_completed_purchase_reverts_cost_and_deletes_imported_equipment()
+    {
+        $this->actingAs($this->user, 'admin');
+
+        // Create completed purchase
+        $purchase = EquipmentPurchase::create([
+            'project_id'    => $this->project->id,
+            'supplier_id'   => \App\Models\Supplier::create(['name' => 'Supplier Test'])->id,
+            'purchase_date' => now()->toDateString(),
+            'total_amount'  => 500000,
+            'expense_category' => 'capex',
+            'status'        => 'completed',
+            'created_by'    => $this->user->id,
+        ]);
+
+        $item = EquipmentPurchaseItem::create([
+            'purchase_id' => $purchase->id,
+            'name' => 'Bóng đèn Philips',
+            'quantity' => 10,
+            'unit_price' => 50000,
+            'total_price' => 500000,
+        ]);
+
+        $purchase->syncToCostTable();
+
+        // Create imported inventory Equipment record
+        $equipment = Equipment::create([
+            'name'            => $item->name,
+            'code'            => 'EP-TEST-REVERT',
+            'category'        => 'purchased',
+            'quantity'        => $item->quantity,
+            'purchase_price'  => $item->unit_price,
+            'current_value'   => $item->unit_price * $item->quantity,
+            'status'          => 'available',
+            'notes'           => "Nhập từ phiếu mua #{$purchase->id} - DA: " . $this->project->name,
+            'project_id'      => $this->project->id,
+            'supplier_id'     => $purchase->supplier_id,
+            'purchase_date'   => $purchase->purchase_date,
+        ]);
+
+        // Verify cost and equipment exist
+        $this->assertNotNull(Cost::where('equipment_purchase_id', $purchase->id)->first());
+        $this->assertNotNull(Equipment::find($equipment->id));
+
+        // Revert it
+        $response = $this->post("/equipment/{$purchase->id}/revert");
+        $response->assertStatus(302);
+
+        $purchase->refresh();
+        $this->assertEquals('draft', $purchase->status);
+        
+        // Synced cost must be draft
+        $cost = Cost::where('equipment_purchase_id', $purchase->id)->first();
+        $this->assertNotNull($cost);
+        $this->assertEquals('draft', $cost->status);
+
+        // Imported equipment must be deleted
+        $this->assertNull(Equipment::find($equipment->id));
+    }
 }
