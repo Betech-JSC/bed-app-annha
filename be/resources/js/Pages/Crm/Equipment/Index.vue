@@ -123,6 +123,13 @@
             <span class="font-bold text-emerald-600 text-xs">{{ formatCurrency(record.total_amount) }}</span>
           </div>
         </template>
+        <template v-else-if="column.key === 'expense_category'">
+          <div class="flex justify-center">
+            <a-tag v-if="record.expense_category === 'capex'" color="green" class="rounded-lg border-none bg-green-50 text-green-600 font-medium px-2 py-0.5 text-[11px]">CAPEX</a-tag>
+            <a-tag v-else-if="record.expense_category === 'opex'" color="orange" class="rounded-lg border-none bg-orange-50 text-orange-600 font-medium px-2 py-0.5 text-[11px]">OPEX</a-tag>
+            <span v-else class="text-gray-400 text-xs">—</span>
+          </div>
+        </template>
 
         <!-- Equipment Columns -->
         <template v-else-if="column.key === 'name'">
@@ -276,6 +283,15 @@
             <a-form-item label="Ngày mua" required>
               <a-input v-model:value="form.purchase_date" type="date" size="large" />
               <span class="text-red-500 text-xs" v-if="form.errors.purchase_date">{{ form.errors.purchase_date }}</span>
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="Phân loại phí" required>
+              <a-select v-model:value="form.expense_category" placeholder="Chọn phân loại..." size="large">
+                <a-select-option value="capex">CAPEX — Mua sắm tài sản</a-select-option>
+                <a-select-option value="opex">OPEX — Chi phí vận hành</a-select-option>
+              </a-select>
+              <span class="text-red-500 text-xs" v-if="form.errors.expense_category">{{ form.errors.expense_category }}</span>
             </a-form-item>
           </a-col>
         </a-row>
@@ -595,6 +611,14 @@
             <div class="flex justify-between items-center py-2.5 border-b border-gray-50">
               <span class="text-gray-400">Ngày mua</span>
               <span class="font-semibold text-gray-800">{{ fmtDate(selectedItem.purchase_date) }}</span>
+            </div>
+            <div class="flex justify-between items-center py-2.5 border-b border-gray-50">
+              <span class="text-gray-400">Phân loại phí</span>
+              <span class="font-semibold text-gray-800">
+                <a-tag v-if="selectedItem.expense_category === 'capex'" color="green" class="rounded-lg border-none bg-green-50 text-green-600 font-medium px-2 py-0.5 text-[11px]">CAPEX</a-tag>
+                <a-tag v-else-if="selectedItem.expense_category === 'opex'" color="orange" class="rounded-lg border-none bg-orange-50 text-orange-600 font-medium px-2 py-0.5 text-[11px]">OPEX</a-tag>
+                <span v-else class="text-gray-400">—</span>
+              </span>
             </div>
             <div class="flex justify-between items-center py-2.5">
               <span class="text-gray-400">Tổng giá trị</span>
@@ -1096,6 +1120,7 @@ const columns = computed(() => {
       { title: 'Phiếu mua', key: 'purchase_code', width: 140 },
       { title: 'Dự án', key: 'project', width: 180 },
       { title: 'Nhà cung cấp', key: 'supplier', width: 180 },
+      { title: 'Phân loại', key: 'expense_category', width: 110, align: 'center' },
       { title: 'Nội dung mua sắm', key: 'purchase_items', width: 260 },
       { title: 'Tổng tiền', key: 'purchase_total', align: 'right', width: 140 },
       { title: 'Trạng thái', key: 'status', width: 140, align: 'center' },
@@ -1181,6 +1206,7 @@ const form = useForm({
   project_id: null,
   supplier_id: null,
   purchase_date: new Date().toISOString().split('T')[0],
+  expense_category: 'capex',
   items: [{ name: '', code: '', quantity: 1, unit_price: 0, unit: 'cái', global_equipment_id: null }],
   status: 'available',
   serial_number: ''
@@ -1229,6 +1255,7 @@ const openCreateModal = () => {
   form.transform((data) => data)
   form.items = [{ name: '', code: '', quantity: 1, unit_price: 0, unit: 'cái', global_equipment_id: null }]
   form.purchase_date = new Date().toISOString().split('T')[0]
+  form.expense_category = 'capex'
   fileList.value = []
   showModal.value = true
 }
@@ -1241,6 +1268,7 @@ const openEditModal = (e) => {
       project_id: e.project_id || null,
       supplier_id: e.supplier_id || null,
       purchase_date: e.purchase_date || new Date().toISOString().split('T')[0],
+      expense_category: e.expense_category || 'capex',
       notes: e.notes || '',
       items: e.items ? e.items.map(item => ({
         id: item.id,

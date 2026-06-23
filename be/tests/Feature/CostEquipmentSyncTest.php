@@ -242,4 +242,86 @@ class CostEquipmentSyncTest extends TestCase
         $this->assertNotNull($cost);
         $this->assertEquals('opex', $cost->expense_category);
     }
+
+    public function test_creating_equipment_purchase_with_expense_category_syncs_to_cost()
+    {
+        $this->actingAs($this->user, 'admin');
+
+        $payload = [
+            'project_id' => $this->project->id,
+            'supplier_id' => \App\Models\Supplier::create(['name' => 'Supplier Test'])->id,
+            'purchase_date' => now()->toDateString(),
+            'expense_category' => 'opex',
+            'notes' => 'Test purchasing with opex',
+            'items' => [
+                [
+                    'name' => 'Bóng đèn Philips',
+                    'code' => 'BD-01',
+                    'quantity' => 10,
+                    'unit_price' => 50000,
+                ]
+            ]
+        ];
+
+        $response = $this->post('/equipment?tab=approvals', $payload);
+        $response->assertStatus(302);
+
+        $purchase = EquipmentPurchase::latest('id')->first();
+        $this->assertNotNull($purchase);
+        $this->assertEquals('opex', $purchase->expense_category);
+
+        $cost = Cost::where('equipment_purchase_id', $purchase->id)->first();
+        $this->assertNotNull($cost);
+        $this->assertEquals('opex', $cost->expense_category);
+    }
+
+    public function test_updating_equipment_purchase_with_expense_category_syncs_to_cost()
+    {
+        $this->actingAs($this->user, 'admin');
+
+        $purchase = EquipmentPurchase::create([
+            'project_id'    => $this->project->id,
+            'supplier_id'   => \App\Models\Supplier::create(['name' => 'Supplier Test'])->id,
+            'purchase_date' => now()->toDateString(),
+            'total_amount'  => 500000,
+            'expense_category' => 'capex',
+            'status'        => 'draft',
+            'created_by'    => $this->user->id,
+        ]);
+
+        $item = EquipmentPurchaseItem::create([
+            'purchase_id' => $purchase->id,
+            'name' => 'Bóng đèn Philips',
+            'quantity' => 10,
+            'unit_price' => 50000,
+            'total_price' => 500000,
+        ]);
+
+        $payload = [
+            'project_id' => $this->project->id,
+            'supplier_id' => $purchase->supplier_id,
+            'purchase_date' => now()->toDateString(),
+            'expense_category' => 'opex',
+            'notes' => 'Updated notes',
+            'items' => [
+                [
+                    'id' => $item->id,
+                    'name' => 'Bóng đèn Philips',
+                    'code' => 'BD-01',
+                    'quantity' => 10,
+                    'unit_price' => 50000,
+                ]
+            ]
+        ];
+
+        $response = $this->put("/equipment/{$purchase->id}?tab=approvals", $payload);
+        $response->assertStatus(302);
+
+        $purchase->refresh();
+        $this->assertEquals('opex', $purchase->expense_category);
+
+        $cost = Cost::where('equipment_purchase_id', $purchase->id)->first();
+        $this->assertNotNull($cost);
+        $this->assertEquals('opex', $cost->expense_category);
+    }
 }

@@ -254,7 +254,7 @@ class EquipmentService
     {
         return DB::transaction(function () use ($data, $purchase, $user) {
             $fillable = collect($data)->only([
-                'uuid', 'project_id', 'supplier_id', 'purchase_date', 'total_amount', 'status', 
+                'uuid', 'project_id', 'supplier_id', 'purchase_date', 'total_amount', 'expense_category', 'status', 
                 'rejection_reason', 'notes', 'created_by'
             ])->toArray();
 

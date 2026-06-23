@@ -13,7 +13,7 @@ class EquipmentPurchase extends Model
     use \App\Traits\Approvable, \App\Traits\NotifiesUsers;
 
     protected $fillable = [
-        'uuid', 'project_id', 'supplier_id', 'purchase_date', 'total_amount', 'status', 'rejection_reason',
+        'uuid', 'project_id', 'supplier_id', 'purchase_date', 'total_amount', 'expense_category', 'status', 'rejection_reason',
         'notes', 'created_by', 'approved_by', 'approved_at',
         'confirmed_by', 'confirmed_at',
     ];
@@ -94,7 +94,7 @@ class EquipmentPurchase extends Model
                 'cost_date'                => $this->created_at ?: now(),
                 'category'                 => 'other',
                 'cost_group_id'            => $costGroupId,
-                'expense_category'         => 'capex',
+                'expense_category'         => $this->expense_category ?: 'capex',
                 'description'              => $this->notes ?: "Đồng bộ từ phiếu mua thiết bị #" . ($this->uuid),
                 'status'                   => $costStatus,
                 'created_by'               => $this->created_by,
