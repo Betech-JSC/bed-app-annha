@@ -8,8 +8,8 @@ import 'ant-design-vue/dist/reset.css'
 
 createInertiaApp({
   resolve: name => {
-    const pages = import.meta.glob('./Pages/**/*.vue', { eager: true })
-    return pages[`./Pages/${name}.vue`]
+    const pages = import.meta.glob('./Pages/**/*.vue')
+    return pages[`./Pages/${name}.vue`]()
   },
   title: title => title ? `${title} - BED CRM` : 'BED CRM',
   setup({ el, App, props, plugin }) {
