@@ -535,7 +535,7 @@ class Cost extends Model
 
         static::saved(function ($cost) {
             // Cập nhật budget và side effects khi trạng thái thay đổi
-            if ($cost->wasChanged('status')) {
+            if ($cost->wasChanged('status') || ($cost->wasRecentlyCreated && $cost->status === 'approved')) {
                 if ($cost->status === 'approved') {
                     $cost->triggerApprovalSideEffects();
                 } elseif ($cost->getOriginal('status') === 'approved') {

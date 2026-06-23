@@ -68,6 +68,18 @@ class CrmEquipmentController extends Controller
                 $query->whereIn('status', ['pending_accountant', 'in_use', 'pending_return', 'returned', 'rejected']);
             }
             $equipment = $query->orderByDesc('created_at')->paginate(20)->withQueryString();
+        } elseif ($tab === 'exports') {
+            $query = Equipment::with(['creator:id,name', 'approver:id,name', 'confirmer:id,name', 'supplier:id,name', 'attachments'])
+                ->whereNull('project_id')
+                ->where('status', 'available');
+            if ($search) {
+                $query->where(function ($q) use ($search) {
+                    $q->where('name', 'like', "%{$search}%")
+                        ->orWhere('code', 'like', "%{$search}%")
+                        ->orWhere('serial_number', 'like', "%{$search}%");
+                });
+            }
+            $equipment = $query->orderByDesc('created_at')->paginate(20)->withQueryString();
         } else {
             if ($tab === 'approvals') {
                 $query = EquipmentPurchase::with(['creator:id,name', 'approver:id,name', 'confirmer:id,name', 'project:id,name', 'supplier:id,name', 'items', 'attachments']);
@@ -420,7 +432,11 @@ class CrmEquipmentController extends Controller
         $project = Project::findOrFail($targetProjectId);
         $totalPrice = $equipment->purchase_price * $exportQuantity;
 
-        DB::transaction(function () use ($equipment, $project, $targetProjectId, $exportQuantity, $exportDate, $notes, $totalPrice, $user) {
+        $costGroupId = \App\Models\CostGroup::where('code', 'equipment')
+            ->orWhere('name', 'LIKE', '%Thiết bị%')
+            ->value('id') ?: 4;
+
+        DB::transaction(function () use ($equipment, $project, $targetProjectId, $exportQuantity, $exportDate, $notes, $totalPrice, $user, $costGroupId) {
             // 1. Update/Split equipment
             if ($equipment->quantity == $exportQuantity) {
                 $equipment->update([
@@ -455,6 +471,7 @@ class CrmEquipmentController extends Controller
                 'quantity' => $exportQuantity,
                 'unit' => $equipment->unit ?: 'cái',
                 'cost_date' => $exportDate,
+                'cost_group_id' => $costGroupId,
                 'expense_category' => 'capex',
                 'status' => 'approved',
                 'description' => "Xuất tài sản sang dự án " . $project->name . ". " . $notes,
@@ -473,6 +490,7 @@ class CrmEquipmentController extends Controller
                 'quantity' => $exportQuantity,
                 'unit' => $equipment->unit ?: 'cái',
                 'cost_date' => $exportDate,
+                'cost_group_id' => $costGroupId,
                 'expense_category' => 'capex',
                 'status' => 'approved',
                 'description' => "Nhận bàn giao tài sản từ công ty. " . $notes,

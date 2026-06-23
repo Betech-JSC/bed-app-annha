@@ -31,12 +31,13 @@
       <a-tab-pane key="approvals" tab="Phiếu duyệt mua" />
       <a-tab-pane key="assets" tab="Danh sách tài sản" />
       <a-tab-pane key="catalog" tab="Danh mục thiết bị" />
+      <a-tab-pane key="exports" tab="Xuất tài sản cty" />
       <a-tab-pane key="usages" tab="Xuất chi phí" />
     </a-tabs>
 
     <div class="px-4 py-3 border-b border-gray-100 flex items-center gap-4 flex-wrap bg-gray-50/30">
       <a-input-search v-model:value="filters.search" placeholder="Tìm thiết bị..." class="max-w-xs" allow-clear @search="applyFilters" @change="debounceSearch" />
-      <a-select v-if="filters.tab !== 'catalog'" v-model:value="filters.status" placeholder="Tất cả trạng thái" allow-clear style="width: 180px" @change="applyFilters">
+      <a-select v-if="filters.tab !== 'catalog' && filters.tab !== 'exports'" v-model:value="filters.status" placeholder="Tất cả trạng thái" allow-clear style="width: 180px" @change="applyFilters">
         <template v-if="filters.tab === 'approvals'">
           <a-select-option value="draft">Nháp</a-select-option>
           <a-select-option value="pending_management">Chờ BĐH</a-select-option>
@@ -235,7 +236,7 @@
             <a-button type="text" size="small" class="hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded-lg" @click="openDetail(record)" title="Xem chi tiết">
               <EyeOutlined />
             </a-button>
-            <a-button v-if="filters.tab === 'assets' && record.status === 'available' && !record.project_id" type="text" size="small" class="hover:bg-emerald-50 text-emerald-500 hover:text-emerald-700 rounded-lg" @click="openExportModal(record)" title="Xuất tài sản cty">
+            <a-button v-if="(filters.tab === 'assets' || filters.tab === 'exports') && record.status === 'available' && !record.project_id" type="text" size="small" class="hover:bg-emerald-50 text-emerald-500 hover:text-emerald-700 rounded-lg" @click="openExportModal(record)" title="Xuất tài sản cty">
               <ExportOutlined />
             </a-button>
           </div>
@@ -1112,6 +1113,16 @@ const columns = computed(() => {
       { title: 'Ngày mượn/trả', key: 'usage_dates', width: 180 },
       { title: 'Trạng thái', key: 'usage_status', width: 140, align: 'center' },
       { title: 'Thao tác', key: 'usage_actions', width: 100, align: 'center' },
+    ]
+  }
+  if (filters.value.tab === 'exports') {
+    return [
+      { title: 'Tài sản', key: 'name', width: 260 },
+      { title: 'Loại', key: 'category', dataIndex: 'category', width: 100 },
+      { title: 'SL Khả dụng', key: 'qty_price', align: 'right', width: 140 },
+      { title: 'Giá trị', key: 'total', align: 'right', width: 150 },
+      { title: 'Người nhập', key: 'creator', width: 130 },
+      { title: 'Thao tác', key: 'actions', width: 100, align: 'center' },
     ]
   }
   return [
