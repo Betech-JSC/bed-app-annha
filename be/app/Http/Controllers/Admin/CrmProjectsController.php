@@ -3753,7 +3753,7 @@ class CrmProjectsController extends Controller
 
         try {
             $this->equipmentService->submitUsage($usage);
-            return back()->with('success', 'Đã gửi phiếu để BĐH duyệt.');
+            return back()->with('success', 'Đã gửi phiếu yêu cầu sử dụng thiết bị (chờ Kế toán xác nhận).');
         } catch (\Exception $e) {
             return back()->with('error', $e->getMessage());
         }

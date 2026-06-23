@@ -376,4 +376,93 @@ class CrmEquipmentController extends Controller
 
         return back()->with('success', 'Đã hoàn duyệt phiếu mua thiết bị về Nháp.');
     }
+
+    public function export(Request $request, $id)
+    {
+        $user = auth('admin')->user();
+        $equipment = Equipment::findOrFail($id);
+
+        $this->crmRequire($user, Permissions::EQUIPMENT_UPDATE);
+
+        $request->validate([
+            'project_id' => 'required|exists:projects,id',
+            'quantity' => 'required|integer|min:1|max:' . $equipment->quantity,
+            'export_date' => 'nullable|date',
+            'notes' => 'nullable|string',
+        ]);
+
+        $targetProjectId = $request->project_id;
+        $exportQuantity = $request->quantity;
+        $exportDate = $request->export_date ?: now()->toDateString();
+        $notes = $request->notes;
+
+        $project = Project::findOrFail($targetProjectId);
+        $totalPrice = $equipment->purchase_price * $exportQuantity;
+
+        DB::transaction(function () use ($equipment, $project, $targetProjectId, $exportQuantity, $exportDate, $notes, $totalPrice, $user) {
+            // 1. Update/Split equipment
+            if ($equipment->quantity == $exportQuantity) {
+                $equipment->update([
+                    'project_id' => $targetProjectId,
+                    'status' => 'available',
+                ]);
+            } else {
+                $newEquipment = $equipment->replicate();
+                $newEquipment->uuid = (string) \Illuminate\Support\Str::uuid();
+                if ($newEquipment->code) {
+                    $newEquipment->code = $newEquipment->code . '-' . strtoupper(\Illuminate\Support\Str::random(4));
+                } else {
+                    $newEquipment->code = 'EP-' . strtoupper(\Illuminate\Support\Str::random(6));
+                }
+                $newEquipment->quantity = $exportQuantity;
+                $newEquipment->project_id = $targetProjectId;
+                $newEquipment->status = 'available';
+                $newEquipment->current_value = $equipment->purchase_price * $exportQuantity;
+                $newEquipment->save();
+
+                $equipment->decrement('quantity', $exportQuantity);
+                $equipment->update([
+                    'current_value' => $equipment->purchase_price * $equipment->quantity,
+                ]);
+            }
+
+            // 2. Create Negative Cost for Company
+            \App\Models\Cost::create([
+                'name' => "Xuất tài sản cty: " . $equipment->name . " -> Dự án: " . $project->name,
+                'project_id' => null,
+                'amount' => -$totalPrice,
+                'quantity' => $exportQuantity,
+                'unit' => $equipment->unit ?: 'cái',
+                'cost_date' => $exportDate,
+                'expense_category' => 'capex',
+                'status' => 'approved',
+                'description' => "Xuất tài sản sang dự án " . $project->name . ". " . $notes,
+                'created_by' => $user->id ?? 1,
+                'management_approved_by' => $user->id ?? 1,
+                'management_approved_at' => now(),
+                'accountant_approved_by' => $user->id ?? 1,
+                'accountant_approved_at' => now(),
+            ]);
+
+            // 3. Create Positive Cost for Project
+            \App\Models\Cost::create([
+                'name' => "Nhận tài sản từ cty: " . $equipment->name,
+                'project_id' => $targetProjectId,
+                'amount' => $totalPrice,
+                'quantity' => $exportQuantity,
+                'unit' => $equipment->unit ?: 'cái',
+                'cost_date' => $exportDate,
+                'expense_category' => 'capex',
+                'status' => 'approved',
+                'description' => "Nhận bàn giao tài sản từ công ty. " . $notes,
+                'created_by' => $user->id ?? 1,
+                'management_approved_by' => $user->id ?? 1,
+                'management_approved_at' => now(),
+                'accountant_approved_by' => $user->id ?? 1,
+                'accountant_approved_at' => now(),
+            ]);
+        });
+
+        return back()->with('success', 'Xuất tài sản công ty sang dự án thành công.');
+    }
 }

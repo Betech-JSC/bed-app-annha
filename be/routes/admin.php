@@ -655,6 +655,7 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         Route::post('/{id}/confirm-accountant', [CrmEquipmentController::class, 'confirmAccountant'])->name('confirm.accountant');
         Route::post('/{id}/reject', [CrmEquipmentController::class, 'reject'])->name('reject');
         Route::post('/{id}/revert', [CrmEquipmentController::class, 'revertToDraft'])->name('revert');
+        Route::post('/{id}/export', [CrmEquipmentController::class, 'export'])->name('export');
     });
 
     // Settings

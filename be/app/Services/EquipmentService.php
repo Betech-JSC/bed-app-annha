@@ -459,7 +459,7 @@ class EquipmentService
         }
 
         return $usage->update([
-            'status' => 'pending_management',
+            'status' => 'pending_accountant',
             'rejection_reason' => null
         ]);
     }

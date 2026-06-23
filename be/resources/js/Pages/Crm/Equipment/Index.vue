@@ -156,9 +156,12 @@
           </div>
         </template>
         <template v-else-if="column.key === 'actions'">
-          <div class="flex justify-center">
-            <a-button type="text" size="small" class="hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded-lg" @click="openDetail(record)">
+          <div class="flex justify-center gap-1">
+            <a-button type="text" size="small" class="hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded-lg" @click="openDetail(record)" title="Xem chi tiết">
               <EyeOutlined />
+            </a-button>
+            <a-button v-if="filters.tab === 'assets' && record.status === 'available' && !record.project_id" type="text" size="small" class="hover:bg-emerald-50 text-emerald-500 hover:text-emerald-700 rounded-lg" @click="openExportModal(record)" title="Xuất tài sản cty">
+              <ExportOutlined />
             </a-button>
           </div>
         </template>
@@ -626,6 +629,7 @@
         </div>
         <div class="flex gap-2">
           <a-button @click="showDetailDrawer = false">Đóng</a-button>
+          <a-button v-if="filters.tab === 'assets' && selectedItem.status === 'available' && !selectedItem.project_id" type="primary" class="!bg-emerald-600 !border-emerald-600 hover:!bg-emerald-700" @click="openExportModal(selectedItem)"><ExportOutlined /> Xuất tài sản</a-button>
           <a-button v-if="selectedItem.status === 'draft' || filters.tab === 'assets'" @click="openEditModal(selectedItem)"><EditOutlined /> Sửa</a-button>
           <a-button v-if="selectedItem.status === 'draft'" type="primary" @click="submitItem(selectedItem)"><SendOutlined /> Gửi duyệt</a-button>
           <a-button v-if="selectedItem.status === 'pending_management' && can('equipment.approve')" type="primary" class="!bg-green-500 !border-green-500 hover:!bg-green-600" @click="approveItem(selectedItem)"><CheckCircleOutlined /> BĐH Duyệt</a-button>
@@ -748,6 +752,69 @@
       </div>
     </div>
   </a-modal>
+
+  <!-- Export Equipment Modal -->
+  <a-modal v-model:open="showExportModal" title="Xuất tài sản công ty sang dự án" @ok="handleExportSubmit" ok-text="Xác nhận xuất" cancel-text="Hủy" centered class="crm-modal" :confirm-loading="exportForm.processing">
+    <a-form layout="vertical" class="mt-4" v-if="exportTarget">
+      <div class="bg-emerald-50 p-3 rounded-xl border border-emerald-100 flex items-center gap-3 mb-4">
+        <div class="w-10 h-10 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-lg"><InfoCircleOutlined /></div>
+        <div class="text-[11px] text-emerald-700 leading-tight">
+          Giao dịch này sẽ cập nhật địa điểm tài sản, ghi nhận chi phí âm (hoàn trả) cho văn phòng công ty và ghi nhận chi phí dương cho dự án nhận.
+        </div>
+      </div>
+
+      <div class="bg-gray-50 p-3 rounded-lg border border-gray-100 text-xs mb-4">
+        <div class="flex justify-between">
+          <span class="text-gray-400">Tài sản:</span>
+          <span class="font-bold text-gray-700">{{ exportTarget.name }}</span>
+        </div>
+        <div class="flex justify-between mt-1">
+          <span class="text-gray-400">Mã tài sản:</span>
+          <span class="font-medium text-gray-700 font-mono">{{ exportTarget.code || 'NO-CODE' }}</span>
+        </div>
+        <div class="flex justify-between mt-1">
+          <span class="text-gray-400">Tồn kho công ty:</span>
+          <span class="font-bold text-gray-700">{{ exportTarget.quantity }} {{ exportTarget.unit || 'cái' }}</span>
+        </div>
+        <div class="flex justify-between mt-1">
+          <span class="text-gray-400">Đơn giá:</span>
+          <span class="font-bold text-gray-700">{{ formatCurrency(exportTarget.purchase_price) }}</span>
+        </div>
+      </div>
+
+      <a-form-item label="Dự án nhận" required>
+        <a-select v-model:value="exportForm.project_id" placeholder="Chọn dự án nhận..." size="large" show-search option-filter-prop="label">
+          <a-select-option v-for="p in props.projects" :key="p.id" :value="p.id" :label="p.name">
+            {{ p.name }} <span class="text-gray-400 font-mono text-xs">({{ p.code }})</span>
+          </a-select-option>
+        </a-select>
+      </a-form-item>
+
+      <a-row :gutter="16">
+        <a-col :span="12">
+          <a-form-item label="Số lượng xuất" required>
+            <a-input-number v-model:value="exportForm.quantity" :min="1" :max="exportTarget.quantity" class="w-full" size="large" />
+          </a-form-item>
+        </a-col>
+        <a-col :span="12">
+          <a-form-item label="Ngày xuất" required>
+            <a-input v-model:value="exportForm.export_date" type="date" size="large" />
+          </a-form-item>
+        </a-col>
+      </a-row>
+
+      <div class="mt-2 mb-4 flex justify-between items-center bg-blue-50/50 p-3 rounded-xl border border-blue-100">
+        <span class="text-xs font-bold text-gray-500 uppercase tracking-wider">Tổng giá trị luân chuyển:</span>
+        <span class="font-extra-bold text-blue-600 text-base">
+          {{ formatCurrency((exportForm.quantity || 1) * (exportTarget.purchase_price || 0)) }}
+        </span>
+      </div>
+
+      <a-form-item label="Ghi chú xuất">
+        <a-textarea v-model:value="exportForm.notes" :rows="2" placeholder="Nhập lý do xuất, người nhận..." />
+      </a-form-item>
+    </a-form>
+  </a-modal>
 </template>
 
 <script setup>
@@ -756,7 +823,7 @@ import { Head, useForm, router, usePage } from '@inertiajs/vue3'
 import CrmLayout from '@/Layouts/CrmLayout.vue'
 import PageHeader from '@/Components/Crm/PageHeader.vue'
 import StatCard from '@/Components/Crm/StatCard.vue'
-import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined, UploadOutlined, SendOutlined, CheckCircleOutlined, CheckSquareOutlined, InfoCircleOutlined, SafetyCertificateOutlined, FileOutlined, DownloadOutlined, CloseOutlined, PaperClipOutlined } from '@ant-design/icons-vue'
+import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined, UploadOutlined, SendOutlined, CheckCircleOutlined, CheckSquareOutlined, InfoCircleOutlined, SafetyCertificateOutlined, FileOutlined, DownloadOutlined, CloseOutlined, PaperClipOutlined, ExportOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 
 defineOptions({ layout: CrmLayout })
@@ -794,6 +861,42 @@ const confirmEquipmentTarget = ref(null)
 const confirmEquipmentFiles = ref([])
 const confirmEquipmentLoading = ref(false)
 const rejectReason = ref('')
+const showExportModal = ref(false)
+const exportTarget = ref(null)
+const exportForm = useForm({
+  project_id: undefined,
+  quantity: 1,
+  export_date: new Date().toISOString().split('T')[0],
+  notes: ''
+})
+
+const openExportModal = (item) => {
+  exportTarget.value = item
+  exportForm.reset()
+  exportForm.quantity = 1
+  exportForm.project_id = undefined
+  exportForm.notes = ''
+  exportForm.export_date = new Date().toISOString().split('T')[0]
+  showExportModal.value = true
+}
+
+const handleExportSubmit = () => {
+  if (!exportForm.project_id) {
+    message.error('Vui lòng chọn dự án nhận.')
+    return
+  }
+  exportForm.post(`/equipment/${exportTarget.value.id}/export`, {
+    onSuccess: () => {
+      showExportModal.value = false
+      exportTarget.value = null
+      showDetailDrawer.value = false
+      message.success('Xuất tài sản công ty sang dự án thành công.')
+    },
+    onError: () => {
+      message.error('Vui lòng kiểm tra lại thông tin.')
+    }
+  })
+}
 const fileList = ref([])
 const imagePreviewVisible = ref(false)
 const imagePreviewUrl = ref('')
