@@ -112,7 +112,7 @@ trait Approvable
     public function syncApproval(array $options = []): Approval
     {
         \Illuminate\Support\Facades\Log::info("Approvable: Syncing approval for " . get_class($this) . " #{$this->id}");
-        $userId = $options['user_id'] ?? (auth()->id() ?? $this->user_id ?? $this->creator_id ?? $this->created_by ?? 71);
+        $userId = $options['user_id'] ?? (auth()->id() ?? $this->user_id ?? $this->creator_id ?? $this->created_by ?? (\App\Models\User::first()?->id ?? 1));
         $projectId = $options['project_id'] ?? $this->project_id;
         $status = $options['status'] ?? 'pending';
         $summary = $options['summary'] ?? $this->getApprovalSummary();

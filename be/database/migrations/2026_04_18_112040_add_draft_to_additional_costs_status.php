@@ -12,7 +12,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        DB::statement("ALTER TABLE additional_costs CHANGE COLUMN status status ENUM('draft', 'pending_approval', 'approved', 'rejected') DEFAULT 'draft'");
+        DB::statement("ALTER TABLE additional_costs CHANGE COLUMN status status ENUM('draft', 'pending', 'pending_approval', 'customer_paid', 'approved', 'confirmed', 'rejected') DEFAULT 'draft'");
     }
 
     /**
@@ -20,6 +20,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        DB::statement("ALTER TABLE additional_costs CHANGE COLUMN status status ENUM('pending_approval', 'approved', 'rejected') DEFAULT 'pending_approval'");
+        DB::statement("ALTER TABLE additional_costs CHANGE COLUMN status status ENUM('pending', 'pending_approval', 'customer_paid', 'approved', 'confirmed', 'rejected') DEFAULT 'pending_approval'");
     }
 };
