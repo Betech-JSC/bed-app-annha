@@ -66,7 +66,7 @@
                   'Môi trường': 'Production',
                   'Database Type': 'MySQL / MariaDB',
                   'Database Name': stats.database,
-                  'App URL': window.location.origin,
+                  'App URL': appUrl,
                   'Caching': 'Redis / File',
                   'Storage': 'Local / Public S3'
                 }" :key="key">
@@ -505,6 +505,8 @@ const props = defineProps({
   smtp: Object,
   aiConfig: Object,
 })
+
+const appUrl = typeof window !== 'undefined' ? window.location.origin : ''
 
 const activeTab = ref(new URLSearchParams(window.location.search).get('tab') || 'system')
 
