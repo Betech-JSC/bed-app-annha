@@ -1,5 +1,5 @@
 <template>
-  <Head title="Nhóm chi phí | Annha CRM" />
+  <Head :title="`Nhóm chi phí | ${$page.props.appName || 'BED CRM'}`" />
 
   <PageHeader title="Nhóm chi phí" subtitle="Quản lý danh mục & phân nhóm chi phí cho dự án">
     <template #actions>

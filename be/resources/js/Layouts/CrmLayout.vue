@@ -17,7 +17,7 @@
           </svg>
         </div>
         <div v-if="!collapsed" class="overflow-hidden">
-          <div class="text-white font-bold text-base leading-tight">Annha CRM</div>
+          <div class="text-white font-bold text-base leading-tight">{{ $page.props.appName || 'BED CRM' }}</div>
           <div class="text-white/40 text-xs">Construction ERP</div>
         </div>
       </div>

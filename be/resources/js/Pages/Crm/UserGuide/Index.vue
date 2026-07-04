@@ -1,7 +1,7 @@
 <template>
   <Head title="Hướng dẫn sử dụng CRM" />
 
-  <PageHeader title="Hướng dẫn sử dụng" subtitle="Tài liệu hướng dẫn chi tiết các tính năng của Annha CRM">
+  <PageHeader title="Hướng dẫn sử dụng" subtitle="Tài liệu hướng dẫn chi tiết các tính năng của hệ thống">
     <template #actions>
       <a-input-search
         v-model:value="searchQuery"
@@ -21,7 +21,7 @@
         <RocketOutlined style="font-size: 36px; color: white;" />
       </div>
       <div>
-        <h2 class="guide-banner__title">Chào mừng đến với Annha CRM!</h2>
+        <h2 class="guide-banner__title">Chào mừng đến với {{ $page.props.appName || 'BED CRM' }}!</h2>
         <p class="guide-banner__desc">Hệ thống quản lý dự án xây dựng toàn diện. Hãy bắt đầu với các bước nhanh bên dưới.</p>
       </div>
     </div>
@@ -108,13 +108,13 @@
       <CustomerServiceOutlined style="font-size: 28px; color: #1B4F72;" />
       <div>
         <h4 class="font-bold text-gray-800 m-0">Cần hỗ trợ thêm?</h4>
-        <p class="text-sm text-gray-500 m-0 mt-1">Liên hệ đội ngũ kỹ thuật Annha qua email hoặc hotline để được hỗ trợ trực tiếp.</p>
+        <p class="text-sm text-gray-500 m-0 mt-1">Liên hệ đội ngũ kỹ thuật qua email hoặc hotline để được hỗ trợ trực tiếp.</p>
       </div>
     </div>
     <div class="flex gap-3">
       <a-button size="large" class="rounded-xl">
         <template #icon><MailOutlined /></template>
-        support@annha.vn
+        support@bedcrm.vn
       </a-button>
       <a-button type="primary" size="large" class="rounded-xl" style="background: linear-gradient(135deg, #1B4F72, #2E86C1);">
         <template #icon><PhoneOutlined /></template>

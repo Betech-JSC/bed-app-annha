@@ -1,5 +1,5 @@
 <template>
-  <Head title="Cấu hình hệ thống | Annha CRM" />
+  <Head :title="`Cấu hình hệ thống | ${$page.props.appName || 'BED CRM'}`" />
 
   <PageHeader title="Cấu hình & Hệ thống" subtitle="Quản lý toàn diện vận hành, phân quyền và hạ tầng hệ thống">
     <template #actions>
@@ -66,7 +66,7 @@
                   'Môi trường': 'Production',
                   'Database Type': 'MySQL / MariaDB',
                   'Database Name': stats.database,
-                  'App URL': 'https://bed-app-annha.betech.jsc',
+                  'App URL': window.location.origin,
                   'Caching': 'Redis / File',
                   'Storage': 'Local / Public S3'
                 }" :key="key">
@@ -115,8 +115,8 @@
                 <div class="w-16 h-16 rounded-full bg-crm-primary/10 flex items-center justify-center mx-auto mb-4">
                   <SafetyCertificateOutlined class="text-2xl text-crm-primary" />
                 </div>
-                <div class="font-bold">Annha CRM Enterprise</div>
-                <div class="text-xs text-gray-400">License: ANNHA-JSC-2026-X1</div>
+                <div class="font-bold">{{ $page.props.appName || 'BED CRM' }} Enterprise</div>
+                <div class="text-xs text-gray-400">Licensed</div>
               </div>
             </div>
           </div>
@@ -182,7 +182,7 @@
 
             <a-form layout="vertical">
               <a-form-item label="Tên ứng dụng">
-                <a-input v-model:value="brandingForm.app_name" size="large" placeholder="VD: Annha CRM" />
+                <a-input v-model:value="brandingForm.app_name" size="large" placeholder="VD: BED CRM" />
               </a-form-item>
               <a-form-item label="Tagline / Mô tả ngắn">
                 <a-input v-model:value="brandingForm.app_tagline" size="large" placeholder="VD: Construction ERP" />
@@ -250,7 +250,7 @@
                   </a-col>
                   <a-col :span="12">
                     <a-form-item label="Tên hiển thị">
-                      <a-input v-model:value="smtpForm.from_name" size="large" placeholder="Annha CRM System" />
+                      <a-input v-model:value="smtpForm.from_name" size="large" placeholder="CRM System" />
                     </a-form-item>
                   </a-col>
                 </a-row>
@@ -302,7 +302,7 @@
                 <a-row :gutter="16">
                   <a-col :span="12">
                     <a-form-item label="Project ID">
-                      <a-input v-model:value="firebaseForm.project_id" size="large" placeholder="bed-app-annha-123" />
+                      <a-input v-model:value="firebaseForm.project_id" size="large" placeholder="my-project-123" />
                     </a-form-item>
                   </a-col>
                   <a-col :span="12">
@@ -576,7 +576,7 @@ const logoUploading = ref(false)
 const brandingSaving = ref(false)
 
 const brandingForm = ref({
-  app_name: props.branding?.app_name || 'Annha CRM',
+  app_name: props.branding?.app_name || 'BED CRM',
   app_tagline: props.branding?.app_tagline || 'Construction ERP',
 })
 

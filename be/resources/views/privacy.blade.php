@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chính sách bảo mật - Annha JSC</title>
+    <title>Chính sách bảo mật - {{ config('app.name', 'BED CRM') }}</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -44,7 +44,7 @@
 <body>
     <div class="container">
         <h1>Chính sách bảo mật</h1>
-        <p>Chào mừng bạn đến với ứng dụng di động của <strong>Annha JSC</strong>. Chúng tôi cam kết bảo vệ quyền riêng tư và dữ liệu cá nhân của bạn. Chính sách này giải thích cách chúng tôi thu thập, sử dụng và bảo vệ thông tin của bạn khi sử dụng ứng dụng.</p>
+        <p>Chào mừng bạn đến với ứng dụng di động của <strong>{{ config('app.name', 'BED CRM') }}</strong>. Chúng tôi cam kết bảo vệ quyền riêng tư và dữ liệu cá nhân của bạn. Chính sách này giải thích cách chúng tôi thu thập, sử dụng và bảo vệ thông tin của bạn khi sử dụng ứng dụng.</p>
 
         <h2>1. Thông tin chúng tôi thu thập</h2>
         <p>Để cung cấp dịch vụ tốt nhất cho các hoạt động quản lý công trình và nhân sự, chúng tôi có thể yêu cầu quyền truy cập vào:</p>
@@ -64,7 +64,7 @@
         </ul>
 
         <h2>3. Chia sẻ thông tin</h2>
-        <p>Chúng tôi không chia sẻ, bán hoặc cho thuê dữ liệu cá nhân của bạn cho bất kỳ bên thứ ba nào vì mục đích quảng cáo. Dữ liệu chỉ được lưu trữ và sử dụng nội bộ trong hệ thống quản trị của Annha JSC.</p>
+        <p>Chúng tôi không chia sẻ, bán hoặc cho thuê dữ liệu cá nhân của bạn cho bất kỳ bên thứ ba nào vì mục đích quảng cáo. Dữ liệu chỉ được lưu trữ và sử dụng nội bộ trong hệ thống quản trị của {{ config('app.name', 'BED CRM') }}.</p>
 
         <h2>4. Quyền của người dùng</h2>
         <p>Bạn có quyền:</p>
@@ -75,12 +75,12 @@
 
         <h2>5. Liên hệ</h2>
         <p>Nếu bạn có bất kỳ câu hỏi nào về chính sách này, vui lòng liên hệ:</p>
-        <p><strong>Annha JSC</strong><br>
-        Email: support@annha.betech-digital.com<br>
-        Website: https://annha.betech-digital.com</p>
+        <p><strong>{{ config('app.name', 'BED CRM') }}</strong><br>
+        Email: support@bedcrm.vn<br>
+        Website: {{ config('app.url') }}</p>
 
         <div class="footer">
-            &copy; 2026 Annha JSC. Cập nhật lần cuối: 27/04/2026
+            &copy; {{ date('Y') }} {{ config('app.name', 'BED CRM') }}. Cập nhật lần cuối: {{ date('d/m/Y') }}
         </div>
     </div>
 </body>

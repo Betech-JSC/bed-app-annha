@@ -110,7 +110,7 @@ class AiChatService
      */
     private function buildSystemInstruction(array $context): string
     {
-        $companyName = config('app.name', 'Annha CRM');
+        $companyName = config('app.name', 'BED CRM');
 
         $instruction = <<<EOT
 Bạn là trợ lý AI thông minh của hệ thống {$companyName} — một nền tảng quản lý xây dựng (Construction ERP).

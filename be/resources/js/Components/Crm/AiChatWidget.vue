@@ -21,7 +21,7 @@
             <div class="ai-chat-header__title">Trợ lý AI</div>
             <div class="ai-chat-header__sub">
               <span class="ai-chat-header__dot"></span>
-              Annha CRM Assistant
+              CRM Assistant
             </div>
           </div>
         </div>
@@ -45,7 +45,7 @@
             <RobotOutlined style="font-size: 32px;" />
           </div>
           <h4 class="ai-chat-welcome__title">Xin chào! 👋</h4>
-          <p class="ai-chat-welcome__text">Tôi là trợ lý AI của Annha CRM. Hãy hỏi tôi về dự án, tài chính, nhân sự hoặc bất kỳ thông tin nào trong hệ thống.</p>
+          <p class="ai-chat-welcome__text">Tôi là trợ lý AI của hệ thống CRM. Hãy hỏi tôi về dự án, tài chính, nhân sự hoặc bất kỳ thông tin nào trong hệ thống.</p>
           <div class="ai-chat-suggestions">
             <button v-for="s in suggestions" :key="s" class="ai-chat-suggestion" @click="sendSuggestion(s)">
               {{ s }}

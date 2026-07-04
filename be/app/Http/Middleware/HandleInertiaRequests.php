@@ -35,6 +35,7 @@ class HandleInertiaRequests extends Middleware
     public function share(Request $request): array
     {
         return array_merge(parent::share($request), [
+            'appName' => config('app.name', 'BED CRM'),
             'auth' => function () use ($request) {
                 // CRM uses 'admin' guard which now points to users table
                 $user = $request->user('admin') ?? $request->user();

@@ -1,7 +1,7 @@
 <template>
   <Head title="Sơ đồ tổ chức" />
 
-  <PageHeader title="Sơ đồ tổ chức công ty" subtitle="Cấu trúc phòng ban và nhân sự của Annha JSC">
+  <PageHeader title="Sơ đồ tổ chức công ty" subtitle="Cấu trúc phòng ban và nhân sự">
     <template #actions>
       <div class="flex items-center gap-3">
         <a-segmented v-model:value="viewMode" :options="viewOptions" size="large" />
@@ -63,7 +63,7 @@
           <div class="org-node__logo">
             <ApartmentOutlined style="font-size: 28px; color: white;" />
           </div>
-          <div class="org-node__company-name">Annha JSC</div>
+          <div class="org-node__company-name">{{ $page.props.appName || 'BED CRM' }}</div>
           <div class="org-node__company-info">{{ stats.totalDepartments }} phòng ban · {{ stats.totalEmployees }} nhân viên</div>
         </div>
 
