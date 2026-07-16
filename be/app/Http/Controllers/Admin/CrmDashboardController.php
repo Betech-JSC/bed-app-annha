@@ -269,17 +269,21 @@ class CrmDashboardController extends Controller
             $query->where('project_id', $projectId);
         }
 
-        $subs = $query->having(DB::raw('total_quote - COALESCE(payments_sum_amount, 0)'), '>', 0)
-            ->orderByDesc(DB::raw('total_quote - COALESCE(payments_sum_amount, 0)'))
-            ->limit(8)
-            ->get();
+        $subs = $query->get()
+            ->map(function ($s) {
+                $s->debt = (float) ($s->total_quote - ($s->payments_sum_amount ?? 0));
+                return $s;
+            })
+            ->filter(fn($s) => $s->debt > 0)
+            ->sortByDesc('debt')
+            ->take(8);
 
         $details = $subs->map(fn($s) => [
             'id' => $s->id,
             'name' => mb_strlen($s->name) > 25 ? mb_substr($s->name, 0, 25) . '...' : $s->name,
             'total_quote' => (float) $s->total_quote,
             'paid' => (float) ($s->payments_sum_amount ?? 0),
-            'debt' => (float) ($s->total_quote - ($s->payments_sum_amount ?? 0)),
+            'debt' => $s->debt,
         ]);
 
         return [
@@ -403,9 +407,14 @@ class CrmDashboardController extends Controller
             $query->where('id', $projectId);
         }
 
-        $top = $query->having('costs_sum_amount', '>', 0)
-            ->orderByDesc('costs_sum_amount')
-            ->limit(5)->get();
+        $top = $query->get()
+            ->map(function ($p) {
+                $p->costs_sum_amount = (float) ($p->costs_sum_amount ?? 0);
+                return $p;
+            })
+            ->filter(fn($p) => $p->costs_sum_amount > 0)
+            ->sortByDesc('costs_sum_amount')
+            ->take(5);
 
         return [
             'labels' => $top->pluck('name')->map(fn($n) => mb_strlen($n) > 20 ? mb_substr($n, 0, 20) . '...' : $n)->toArray(),

@@ -593,6 +593,11 @@
                 <div class="flex items-center gap-1.5 min-w-0">
                   <span class="truncate">{{ record.name }}</span>
                   <a-tag v-if="record.attendance_id" color="teal" class="rounded-full text-[10px] shrink-0" style="font-size:10px;padding:0 5px;line-height:18px;">Nhân công</a-tag>
+                  <a-tooltip v-if="record.attachments?.length" :title="`Có ${record.attachments.length} tài liệu/chứng từ đính kèm`" @click.stop>
+                    <span class="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-blue-50 text-blue-600 border border-blue-100 shrink-0">
+                      <PaperClipOutlined class="mr-0.5" /> {{ record.attachments.length }}
+                    </span>
+                  </a-tooltip>
                 </div>
               </template>
               <template v-else-if="column.key === 'amount'"><span class="font-semibold text-red-500">{{ fmt(record.amount) }}</span></template>
@@ -2037,11 +2042,11 @@
 
       <!-- ============ MATERIALS TAB — Bill-based tracking (Giống APP) ============ -->
       <a-tab-pane key="materials" v-if="isTabVisible('materials')">
-        <template #tab><a-tooltip title="Quản lý chi phí vật liệu theo bill nhập: theo dõi từng phiếu, duyệt thanh toán" placement="bottom">Vật liệu ({{ counts.material_bills || 0 }})</a-tooltip></template>
+        <template #tab><a-tooltip title="Quản lý chi phí vật liệu theo bill nhập: theo dõi từng phiếu, duyệt thanh toán" placement="bottom">Vật liệu ({{ vlxdBills.length }})</a-tooltip></template>
         <div class="p-4">
           <!-- Sub-tab switcher -->
           <div class="flex items-center gap-2 mb-4">
-            <a-button :type="matSubTab === 'bills' ? 'primary' : 'default'" size="small" @click="switchMatSubTab('bills')">📄 Phiếu nhập ({{ materialBills?.length || 0 }})</a-button>
+            <a-button :type="matSubTab === 'bills' ? 'primary' : 'default'" size="small" @click="switchMatSubTab('bills')">📄 Phiếu nhập ({{ vlxdBills.length }})</a-button>
             <a-button :type="matSubTab === 'summary' ? 'primary' : 'default'" size="small" @click="switchMatSubTab('summary')">📊 Tổng hợp vật tư</a-button>
           </div>
 
@@ -2054,7 +2059,7 @@
                   <div class="w-7 h-7 rounded-lg bg-blue-500/10 flex items-center justify-center"><span class="text-blue-600 text-xs">📄</span></div>
                   <span class="text-[11px] text-gray-400">Tổng phiếu</span>
                 </div>
-                <div class="text-lg font-bold text-gray-800">{{ materialBills?.length || 0 }}</div>
+                <div class="text-lg font-bold text-gray-800">{{ vlxdBills.length }}</div>
               </div>
               <div class="bg-gradient-to-br from-emerald-50 to-green-50 rounded-xl p-3 border border-emerald-100/60">
                 <div class="flex items-center gap-2 mb-1">
@@ -2068,14 +2073,14 @@
                   <div class="w-7 h-7 rounded-lg bg-green-500/10 flex items-center justify-center"><CheckCircleOutlined class="text-green-600 text-xs" /></div>
                   <span class="text-[11px] text-gray-400">Đã duyệt</span>
                 </div>
-                <div class="text-lg font-bold text-green-600">{{ (materialBills || []).filter(b => b.status === 'approved').length }}</div>
+                <div class="text-lg font-bold text-green-600">{{ vlxdBills.filter(b => b.status === 'approved').length }}</div>
               </div>
               <div class="bg-gradient-to-br from-amber-50 to-yellow-50 rounded-xl p-3 border border-amber-100/60">
                 <div class="flex items-center gap-2 mb-1">
                   <div class="w-7 h-7 rounded-lg bg-amber-500/10 flex items-center justify-center"><ClockCircleOutlined class="text-amber-600 text-xs" /></div>
                   <span class="text-[11px] text-gray-400">Chờ duyệt</span>
                 </div>
-                <div class="text-lg font-bold text-amber-600">{{ (materialBills || []).filter(b => ['pending_management','pending_accountant'].includes(b.status)).length }}</div>
+                <div class="text-lg font-bold text-amber-600">{{ vlxdBills.filter(b => ['pending_management','pending_accountant'].includes(b.status)).length }}</div>
               </div>
             </div>
 
@@ -2086,7 +2091,7 @@
             </div>
 
             <!-- Bill Table -->
-            <a-table :columns="billCols" :data-source="materialBills || []" :pagination="{ pageSize: 10 }" row-key="id" size="small" class="crm-table hover-row"
+            <a-table :columns="billCols" :data-source="vlxdBills" :pagination="{ pageSize: 10 }" row-key="id" size="small" class="crm-table hover-row"
               :custom-row="(record) => ({ onClick: () => openMaterialDetail(record), style: 'cursor: pointer' })">
               <template #bodyCell="{ column, record }">
                 <template v-if="column.key === 'bill_number'">
@@ -2111,7 +2116,7 @@
                 </template>
               </template>
             </a-table>
-            <a-empty v-if="!materialBills?.length" description="Chưa có phiếu nhập vật liệu" />
+            <a-empty v-if="!vlxdBills.length" description="Chưa có phiếu nhập vật liệu" />
           </div>
 
           <!-- ===== SUMMARY SUB-TAB ===== -->
@@ -2174,6 +2179,150 @@
             </a-table>
             <a-empty v-if="!materialSummary?.length && !loadingSummary" description="Chưa có dữ liệu tổng hợp vật tư" />
           </div>
+        </div>
+      </a-tab-pane>
+
+      <!-- ============ LABOR BILLS TAB ============ -->
+      <a-tab-pane key="labor_cost" v-if="isTabVisible('labor_cost')">
+        <template #tab><a-tooltip title="Chi phí nhân công theo phiếu nhập" placement="bottom">Nhân công ({{ laborBills.length }})</a-tooltip></template>
+        <div class="p-4">
+          <!-- Summary Cards -->
+          <div class="grid grid-cols-4 gap-3 mb-4">
+            <div class="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-3 border border-blue-100/60">
+              <div class="flex items-center gap-2 mb-1">
+                <div class="w-7 h-7 rounded-lg bg-blue-500/10 flex items-center justify-center"><span class="text-blue-600 text-xs">📄</span></div>
+                <span class="text-[11px] text-gray-400">Tổng phiếu</span>
+              </div>
+              <div class="text-lg font-bold text-gray-800">{{ laborBills.length }}</div>
+            </div>
+            <div class="bg-gradient-to-br from-emerald-50 to-green-50 rounded-xl p-3 border border-emerald-100/60">
+              <div class="flex items-center gap-2 mb-1">
+                <div class="w-7 h-7 rounded-lg bg-emerald-500/10 flex items-center justify-center"><span class="text-emerald-600 text-xs">💰</span></div>
+                <span class="text-[11px] text-gray-400">Tổng chi phí</span>
+              </div>
+              <div class="text-lg font-bold text-emerald-600">{{ fmt(totalLaborAmount) }}</div>
+            </div>
+            <div class="bg-gradient-to-br from-green-50 to-teal-50 rounded-xl p-3 border border-green-100/60">
+              <div class="flex items-center gap-2 mb-1">
+                <div class="w-7 h-7 rounded-lg bg-green-500/10 flex items-center justify-center"><CheckCircleOutlined class="text-green-600 text-xs" /></div>
+                <span class="text-[11px] text-gray-400">Đã duyệt</span>
+              </div>
+              <div class="text-lg font-bold text-green-600">{{ laborBills.filter(b => b.status === 'approved').length }}</div>
+            </div>
+            <div class="bg-gradient-to-br from-amber-50 to-yellow-50 rounded-xl p-3 border border-amber-100/60">
+              <div class="flex items-center gap-2 mb-1">
+                <div class="w-7 h-7 rounded-lg bg-amber-500/10 flex items-center justify-center"><ClockCircleOutlined class="text-amber-600 text-xs" /></div>
+                <span class="text-[11px] text-gray-400">Chờ duyệt</span>
+              </div>
+              <div class="text-lg font-bold text-amber-600">{{ laborBills.filter(b => ['pending_management','pending_accountant'].includes(b.status)).length }}</div>
+            </div>
+          </div>
+
+          <div v-if="can('material.create')" class="flex justify-end mb-3">
+            <a-button type="primary" size="small" @click="openBillModal()">
+              <template #icon><PlusOutlined /></template>Tạo phiếu nhập
+            </a-button>
+          </div>
+
+          <!-- Bill Table -->
+          <a-table :columns="billCols" :data-source="laborBills" :pagination="{ pageSize: 10 }" row-key="id" size="small" class="crm-table hover-row"
+            :custom-row="(record) => ({ onClick: () => openMaterialDetail(record), style: 'cursor: pointer' })">
+            <template #bodyCell="{ column, record }">
+              <template v-if="column.key === 'bill_number'">
+                <div class="font-semibold text-blue-600">{{ record.bill_number || `#${record.id}` }}</div>
+                <div class="text-[10px] text-gray-400">{{ fmtDate(record.bill_date) }}</div>
+              </template>
+              <template v-else-if="column.key === 'supplier'">
+                <span v-if="record.supplier" class="text-sm">{{ record.supplier.name }}</span>
+                <span v-else class="text-xs text-gray-400 italic">—</span>
+              </template>
+              <template v-else-if="column.key === 'material_group'">
+                <span class="text-[11px] text-gray-500 line-clamp-2" :title="getMaterialGroups(record)">{{ getMaterialGroups(record) }}</span>
+              </template>
+              <template v-else-if="column.key === 'items_count'">
+                <span class="font-medium">{{ record.items?.length || 0 }} <span class="text-gray-400 text-xs">mặt hàng</span></span>
+              </template>
+              <template v-else-if="column.key === 'total'">
+                <span class="font-bold text-emerald-600">{{ fmt(record.total_amount) }}</span>
+              </template>
+              <template v-else-if="column.key === 'status'">
+                <a-tag :color="billStatusColor(record.status)" class="rounded-full text-[10px]">{{ billStatusLabel(record.status) }}</a-tag>
+              </template>
+            </template>
+          </a-table>
+          <a-empty v-if="!laborBills.length" description="Chưa có phiếu nhập nhân công" />
+        </div>
+      </a-tab-pane>
+
+      <!-- ============ MANAGEMENT COSTS TAB ============ -->
+      <a-tab-pane key="management_cost" v-if="isTabVisible('management_cost')">
+        <template #tab><a-tooltip title="Chi phí quản lý dự án theo phiếu nhập" placement="bottom">Chi phí quản lý ({{ managementBills.length }})</a-tooltip></template>
+        <div class="p-4">
+          <!-- Summary Cards -->
+          <div class="grid grid-cols-4 gap-3 mb-4">
+            <div class="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-3 border border-blue-100/60">
+              <div class="flex items-center gap-2 mb-1">
+                <div class="w-7 h-7 rounded-lg bg-blue-500/10 flex items-center justify-center"><span class="text-blue-600 text-xs">📄</span></div>
+                <span class="text-[11px] text-gray-400">Tổng phiếu</span>
+              </div>
+              <div class="text-lg font-bold text-gray-800">{{ managementBills.length }}</div>
+            </div>
+            <div class="bg-gradient-to-br from-emerald-50 to-green-50 rounded-xl p-3 border border-emerald-100/60">
+              <div class="flex items-center gap-2 mb-1">
+                <div class="w-7 h-7 rounded-lg bg-emerald-500/10 flex items-center justify-center"><span class="text-emerald-600 text-xs">💰</span></div>
+                <span class="text-[11px] text-gray-400">Tổng chi phí</span>
+              </div>
+              <div class="text-lg font-bold text-emerald-600">{{ fmt(totalManagementAmount) }}</div>
+            </div>
+            <div class="bg-gradient-to-br from-green-50 to-teal-50 rounded-xl p-3 border border-green-100/60">
+              <div class="flex items-center gap-2 mb-1">
+                <div class="w-7 h-7 rounded-lg bg-green-500/10 flex items-center justify-center"><CheckCircleOutlined class="text-green-600 text-xs" /></div>
+                <span class="text-[11px] text-gray-400">Đã duyệt</span>
+              </div>
+              <div class="text-lg font-bold text-green-600">{{ managementBills.filter(b => b.status === 'approved').length }}</div>
+            </div>
+            <div class="bg-gradient-to-br from-amber-50 to-yellow-50 rounded-xl p-3 border border-amber-100/60">
+              <div class="flex items-center gap-2 mb-1">
+                <div class="w-7 h-7 rounded-lg bg-amber-500/10 flex items-center justify-center"><ClockCircleOutlined class="text-amber-600 text-xs" /></div>
+                <span class="text-[11px] text-gray-400">Chờ duyệt</span>
+              </div>
+              <div class="text-lg font-bold text-amber-600">{{ managementBills.filter(b => ['pending_management','pending_accountant'].includes(b.status)).length }}</div>
+            </div>
+          </div>
+
+          <div v-if="can('material.create')" class="flex justify-end mb-3">
+            <a-button type="primary" size="small" @click="openBillModal()">
+              <template #icon><PlusOutlined /></template>Tạo phiếu nhập
+            </a-button>
+          </div>
+
+          <!-- Bill Table -->
+          <a-table :columns="billCols" :data-source="managementBills" :pagination="{ pageSize: 10 }" row-key="id" size="small" class="crm-table hover-row"
+            :custom-row="(record) => ({ onClick: () => openMaterialDetail(record), style: 'cursor: pointer' })">
+            <template #bodyCell="{ column, record }">
+              <template v-if="column.key === 'bill_number'">
+                <div class="font-semibold text-blue-600">{{ record.bill_number || `#${record.id}` }}</div>
+                <div class="text-[10px] text-gray-400">{{ fmtDate(record.bill_date) }}</div>
+              </template>
+              <template v-else-if="column.key === 'supplier'">
+                <span v-if="record.supplier" class="text-sm">{{ record.supplier.name }}</span>
+                <span v-else class="text-xs text-gray-400 italic">—</span>
+              </template>
+              <template v-else-if="column.key === 'material_group'">
+                <span class="text-[11px] text-gray-500 line-clamp-2" :title="getMaterialGroups(record)">{{ getMaterialGroups(record) }}</span>
+              </template>
+              <template v-else-if="column.key === 'items_count'">
+                <span class="font-medium">{{ record.items?.length || 0 }} <span class="text-gray-400 text-xs">mặt hàng</span></span>
+              </template>
+              <template v-else-if="column.key === 'total'">
+                <span class="font-bold text-emerald-600">{{ fmt(record.total_amount) }}</span>
+              </template>
+              <template v-else-if="column.key === 'status'">
+                <a-tag :color="billStatusColor(record.status)" class="rounded-full text-[10px]">{{ billStatusLabel(record.status) }}</a-tag>
+              </template>
+            </template>
+          </a-table>
+          <a-empty v-if="!managementBills.length" description="Chưa có phiếu nhập chi phí quản lý" />
         </div>
       </a-tab-pane>
 
@@ -2547,19 +2696,79 @@
           </div>
         </template>
 
-        <!-- Word / Excel / PowerPoint via Google Docs Viewer -->
-        <template v-else-if="isOfficeFile(previewFile)">
-          <div v-if="previewFile.is_local" class="flex flex-col items-center justify-center p-6 bg-gray-50 min-h-[50vh] text-center">
-            <FileTextOutlined class="text-6xl text-gray-300 mb-4" />
-            <div class="text-lg font-semibold text-gray-700">Không thể xem trước thiết kế văn bản ngay lập tức</div>
-            <div class="text-sm text-gray-500 mt-2">Định dạng nãy cần phải được lưu lên hệ thống trước khi có thể xem nội dung qua Google Docs. Tuy nhiên các file vẫn sẽ được upload bình thường.</div>
+        <!-- Custom Word / Excel / CSV / Text Viewer with Fallbacks -->
+        <template v-else-if="isOfficeFile(previewFile) || isTextFile(previewFile)">
+          <!-- Custom Excel / CSV Inline Viewer -->
+          <div v-if="excelSheets.length > 0 && !previewError" class="flex flex-col">
+            <!-- Sheet Tabs -->
+            <div v-if="excelSheets.length > 1" class="flex gap-2 p-2 border-b bg-gray-50 overflow-x-auto">
+              <button v-for="(sheet, idx) in excelSheets" :key="idx" 
+                      @click="activeExcelSheetIdx = idx" 
+                      :class="activeExcelSheetIdx === idx ? 'bg-blue-600 text-white shadow-sm font-semibold' : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'"
+                      class="px-3 py-1 rounded text-xs transition-all whitespace-nowrap">
+                {{ sheet.name }}
+              </button>
+            </div>
+            <!-- Excel Sheet Content -->
+            <div class="overflow-auto max-h-[72vh] p-4 bg-gray-50 flex justify-center">
+              <div v-html="excelSheets[activeExcelSheetIdx]?.html" class="excel-table-wrapper bg-white shadow rounded-lg border p-4 max-w-full overflow-auto"></div>
+            </div>
           </div>
-          <iframe v-else :src="googleDocsViewerUrl(previewFile)" class="w-full border-0" style="height: 75vh;" @load="previewLoading = false" />
-        </template>
 
-        <!-- Text / Code files -->
-        <template v-else-if="isTextFile(previewFile)">
-          <iframe :src="previewFile.file_url" class="w-full border-0 bg-white" style="height: 75vh;" @load="previewLoading = false" />
+          <!-- Custom Docx Inline Viewer -->
+          <div v-else-if="fileExt(previewFile) === 'docx' && !previewError" class="w-full bg-gray-100 p-6 overflow-auto max-h-[72vh] flex justify-center">
+            <div ref="docxContainer" class="docx-preview-wrapper bg-white shadow-lg p-10 rounded-lg max-w-[850px] w-full min-h-[50vh]"></div>
+          </div>
+
+          <!-- Custom Text Inline Viewer -->
+          <div v-else-if="isTextFile(previewFile) && !isOfficeFile(previewFile) && !previewError" class="p-4 bg-gray-50 max-h-[72vh] overflow-auto">
+            <pre class="p-4 bg-white text-gray-700 font-mono text-sm rounded border shadow-sm select-text whitespace-pre-wrap word-break-all"><code>{{ previewTextContent }}</code></pre>
+          </div>
+
+          <!-- Fallback: Google / Microsoft Viewer (For other office files or if custom viewer errors) -->
+          <template v-else>
+            <!-- Local file warning -->
+            <div v-if="previewFile.is_local" class="flex flex-col items-center justify-center p-6 bg-gray-50 min-h-[50vh] text-center">
+              <FileTextOutlined class="text-6xl text-gray-300 mb-4" />
+              <div class="text-lg font-semibold text-gray-700">Không thể xem trước thiết kế văn bản ngay lập tức</div>
+              <div class="text-sm text-gray-500 mt-2">Định dạng này cần phải được lưu lên hệ thống trước khi có thể xem nội dung qua Google Docs. Tuy nhiên các file vẫn sẽ được upload bình thường.</div>
+            </div>
+            
+            <!-- Localhost / Error View -->
+            <div v-else-if="isLocalEnvironment || previewError" class="flex flex-col items-center justify-center py-20 px-8 bg-gray-50 min-h-[45vh] text-center">
+              <div class="w-20 h-20 rounded-2xl bg-gradient-to-br from-emerald-50 to-emerald-100 flex items-center justify-center mb-5 shadow-sm border border-emerald-200">
+                <FileExcelOutlined v-if="fileExt(previewFile) === 'xlsx' || fileExt(previewFile) === 'xls'" class="text-3xl text-emerald-600" />
+                <FileWordOutlined v-else class="text-3xl text-blue-600" />
+              </div>
+              <div class="text-lg font-semibold text-gray-700 mb-2 truncate max-w-lg">{{ previewFile.original_name || previewFile.file_name }}</div>
+              <div class="text-xs text-gray-500 mb-6 max-w-md leading-relaxed">
+                {{ previewError ? 'Không thể giải nén tài liệu trong trình duyệt: ' + previewError : 'Môi trường cục bộ (Localhost) không hỗ trợ xem trước trực tuyến tài liệu Office.' }}
+                Vui lòng tải xuống để xem nội dung chi tiết.
+              </div>
+              <a :href="previewFile.file_url" target="_blank" class="no-underline">
+                <a-button type="primary" size="large" class="px-8 bg-emerald-600 border-none shadow-sm hover:bg-emerald-500 rounded-xl">
+                  <DownloadOutlined /> Tải xuống tệp
+                </a-button>
+              </a>
+            </div>
+
+            <!-- Standard Microsoft / Google Docs iframe viewer -->
+            <div v-else class="flex flex-col">
+              <div class="flex items-center justify-between px-5 py-2 bg-gray-50 border-b border-gray-100 text-xs gap-3 flex-wrap">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span class="text-gray-500 font-medium">Trình xem trực tuyến:</span>
+                  <a-radio-group v-model:value="officeViewerType" size="small" button-style="solid">
+                    <a-radio-button value="microsoft">Microsoft Office Viewer (Khuyên dùng)</a-radio-button>
+                    <a-radio-button value="google">Google Docs Viewer</a-radio-button>
+                  </a-radio-group>
+                </div>
+                <div class="text-[11px] text-orange-500 font-semibold flex items-center gap-1">
+                  <WarningOutlined class="text-[10px]" /> Nếu không xem được, có thể máy chủ đang chặn truy cập bên ngoài (Basic Auth / IP). Hãy nhấn "Tải xuống" ở góc trên.
+                </div>
+              </div>
+              <iframe :src="officeViewerType === 'google' ? googleDocsViewerUrl(previewFile) : microsoftOfficeViewerUrl(previewFile)" class="w-full border-0" style="height: 72vh;" @load="previewLoading = false" />
+            </div>
+          </template>
         </template>
 
         <!-- Unsupported file type -->
@@ -2673,8 +2882,23 @@
             </div>
           </div>
         </div>
-        <input type="file" multiple @change="e => modalFiles = [...(e.target.files || [])]" class="block w-full text-xs py-1.5 px-2 border border-dashed border-gray-300 rounded-lg hover:border-blue-400 transition" />
-        <div v-if="modalFiles.length" class="text-[10px] text-green-600 mt-1">{{ modalFiles.length }} tệp đã chọn — sẽ upload khi lưu</div>
+        <input type="file" multiple @change="onModalFilesChange" class="block w-full text-xs py-1.5 px-2 border border-dashed border-gray-300 rounded-lg hover:border-blue-400 transition" />
+        <!-- New Selected Files -->
+        <div v-if="modalFiles.length > 0" class="mt-3 space-y-2">
+          <div class="text-[10px] font-bold text-blue-600 uppercase mb-1">Tệp mới chuẩn bị tải lên ({{ modalFiles.length }}):</div>
+          <div v-for="(file, idx) in modalFiles" :key="idx" class="flex items-center justify-between p-2 bg-blue-50/30 border border-blue-100/50 rounded-xl hover:border-blue-200 transition-colors">
+            <div class="flex-1 min-w-0 pr-4 flex items-center gap-2 pl-2 py-1">
+              <PaperClipOutlined class="text-blue-500 shrink-0 text-xs" />
+              <div class="min-w-0">
+                <div class="truncate text-[11px] font-medium text-gray-700">{{ file.name }}</div>
+                <div class="text-[9px] text-gray-400">{{ (file.size / 1024).toFixed(1) }} KB</div>
+              </div>
+            </div>
+            <a-button type="text" danger size="small" @click="modalFiles.splice(idx, 1)" class="hover:bg-red-50 rounded-lg flex items-center justify-center mr-1">
+              <CloseOutlined class="text-[10px]" />
+            </a-button>
+          </div>
+        </div>
       </div>
     </a-form>
   </a-modal>
@@ -2784,9 +3008,25 @@
             </div>
 
             <div class="relative">
-              <input type="file" multiple @change="e => modalFiles = [...(e.target.files || [])]" 
+              <input type="file" multiple @change="onModalFilesChange" 
                      class="block w-full text-[10px] text-gray-400 file:mr-4 file:py-2.5 file:px-5 file:rounded-xl file:border-0 file:text-[10px] file:font-black file:bg-blue-600 file:text-white hover:file:bg-blue-700 cursor-pointer p-1 border border-dashed border-blue-300 rounded-2xl bg-white/50 transition-colors" />
               <div class="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] text-gray-300 font-bold pointer-events-none">DRAG & DROP SUPPORTED</div>
+            </div>
+            <!-- New Selected Files -->
+            <div v-if="modalFiles.length > 0" class="mt-3 space-y-2">
+              <div class="text-[10px] font-bold text-blue-600 uppercase mb-1">Tệp mới chuẩn bị tải lên ({{ modalFiles.length }}):</div>
+              <div v-for="(file, idx) in modalFiles" :key="idx" class="flex items-center justify-between p-2 bg-blue-50/30 border border-blue-100/50 rounded-xl hover:border-blue-200 transition-colors">
+                <div class="flex-1 min-w-0 pr-4 flex items-center gap-2 pl-2 py-1">
+                  <PaperClipOutlined class="text-blue-500 shrink-0 text-xs" />
+                  <div class="min-w-0">
+                    <div class="truncate text-[11px] font-medium text-gray-700">{{ file.name }}</div>
+                    <div class="text-[9px] text-gray-400">{{ (file.size / 1024).toFixed(1) }} KB</div>
+                  </div>
+                </div>
+                <a-button type="text" danger size="small" @click="modalFiles.splice(idx, 1)" class="hover:bg-red-50 rounded-lg flex items-center justify-center mr-1">
+                  <CloseOutlined class="text-[10px]" />
+                </a-button>
+              </div>
             </div>
           </div>
         </div>
@@ -2911,13 +3151,29 @@
 
              <!-- Upload Input -->
              <div class="relative group mt-2">
-               <input type="file" multiple @change="e => modalFiles = [...(e.target.files || [])]" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
+               <input type="file" multiple @change="onModalFilesChange" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
                <div class="border-2 border-dashed border-green-100 group-hover:border-green-300 group-hover:bg-green-50/30 rounded-2xl p-6 transition-all flex flex-col items-center justify-center text-center bg-white/50">
                  <div class="w-12 h-12 bg-green-50 rounded-full flex items-center justify-center mb-3 group-hover:bg-green-100 transition-colors shadow-sm">
                    <UploadOutlined class="text-green-500 text-lg" />
                  </div>
                  <div class="text-xs font-bold text-gray-600">Tải lên chứng từ hoặc hồ sơ đợt này</div>
                  <div class="text-[10px] text-gray-400 mt-1 uppercase tracking-tighter">Hệ thống chấp nhận PDF, JPEG, PNG, DOCX</div>
+               </div>
+             </div>
+             <!-- New Selected Files -->
+             <div v-if="modalFiles.length > 0" class="mt-3 space-y-2">
+               <div class="text-[10px] font-bold text-green-700 uppercase mb-1">Tệp mới chuẩn bị tải lên ({{ modalFiles.length }}):</div>
+               <div v-for="(file, idx) in modalFiles" :key="idx" class="flex items-center justify-between p-2.5 bg-green-50/50 border border-green-100 rounded-xl hover:border-green-200 transition-all">
+                 <div class="flex-1 min-w-0 pr-4 flex items-center gap-2 pl-2 py-1">
+                   <PaperClipOutlined class="text-green-500 shrink-0 text-xs" />
+                   <div class="min-w-0">
+                     <div class="truncate text-[11px] font-medium text-gray-700">{{ file.name }}</div>
+                     <div class="text-[9px] text-gray-400">{{ (file.size / 1024).toFixed(1) }} KB</div>
+                   </div>
+                 </div>
+                 <a-button type="text" danger size="small" @click="modalFiles.splice(idx, 1)" class="hover:bg-red-50 rounded-lg flex items-center justify-center mr-1">
+                   <CloseOutlined class="text-[10px]" />
+                 </a-button>
                </div>
              </div>
           </div>
@@ -2937,6 +3193,19 @@
       </div>
       <a-form-item label="Chứng từ thanh toán" required :validate-status="!paymentProofFiles.length ? 'error' : 'success'" :help="!paymentProofFiles.length ? 'Bắt buộc tải lên ít nhất 1 file chứng từ' : `${paymentProofFiles.length} file đã chọn`">
         <input type="file" multiple accept=".jpg,.jpeg,.png,.pdf,.doc,.docx,.xls,.xlsx" @change="onPaymentProofFileChange" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" />
+        <!-- Selected payment proof files -->
+        <div v-if="paymentProofFiles.length > 0" class="mt-2 space-y-2">
+          <div v-for="(file, idx) in paymentProofFiles" :key="idx" class="flex items-center justify-between p-2 bg-blue-50/50 border border-blue-100 rounded-lg">
+            <div class="flex-1 min-w-0 pr-4 flex items-center gap-2 pl-2">
+              <PaperClipOutlined class="text-blue-500 shrink-0 text-xs" />
+              <span class="truncate text-[11px] font-medium text-gray-700">{{ file.name }}</span>
+              <span class="text-[9px] text-gray-400">({{ (file.size / 1024).toFixed(1) }} KB)</span>
+            </div>
+            <a-button type="text" danger size="small" @click="paymentProofFiles.splice(idx, 1)" class="hover:bg-red-50 rounded-lg flex items-center justify-center mr-1">
+              <CloseOutlined class="text-[10px]" />
+            </a-button>
+          </div>
+        </div>
       </a-form-item>
       <a-row :gutter="12">
         <a-col :span="12">
@@ -3743,11 +4012,11 @@
       <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm space-y-6">
         <div>
           <div class="flex justify-between items-center mb-4">
-             <div class="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2 text-blue-500"><FileProtectOutlined /> Chứng từ đính kèm ({{ (costDetailRecord.attachments || []).filter(a => a.description !== 'after').length }})</div>
+             <div class="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2 text-blue-500"><FileProtectOutlined /> Chứng từ đính kèm ({{ costDetailAttachments.filter(a => a.description !== 'after').length }})</div>
              <a-button v-if="can('cost.update') || (costDetailRecord.status === 'pending_accountant_approval' && can('cost.approve.accountant'))" type="link" size="small" @click="openAttachModal('cost', costDetailRecord)" class="p-0">Thêm tệp</a-button>
           </div>
-          <div v-if="(costDetailRecord.attachments || []).filter(a => a.description !== 'after').length" class="flex flex-wrap gap-2">
-             <div v-for="att in costDetailRecord.attachments.filter(a => a.description !== 'after')" :key="att.id" 
+          <div v-if="costDetailAttachments.filter(a => a.description !== 'after').length" class="flex flex-wrap gap-2">
+             <div v-for="att in costDetailAttachments.filter(a => a.description !== 'after')" :key="att.id" 
                   class="group relative w-16 h-16 rounded-lg border border-gray-200 overflow-hidden cursor-pointer hover:border-blue-400 transition"
                   @click="openFilePreview(att)">
                <img v-if="isImageFile(att)" :src="att.file_url || att.url" class="w-full h-full object-cover" />
@@ -3756,7 +4025,7 @@
                </div>
                <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition gap-2">
                  <EyeOutlined class="text-white text-base" />
-                 <a-popconfirm v-if="!isApproved(costDetailRecord)" title="Xóa tệp đính kèm này?" ok-text="Xóa" cancel-text="Hủy" @confirm="deleteUploadedFileDirectly(att.id)">
+                 <a-popconfirm v-if="!isApproved(costDetailRecord) && att.attachable_type === 'App\\Models\\Cost'" title="Xóa tệp đính kèm này?" ok-text="Xóa" cancel-text="Hủy" @confirm="deleteUploadedFileDirectly(att.id)">
                    <DeleteOutlined class="text-red-400 hover:text-red-500 text-base cursor-pointer" @click.stop />
                  </a-popconfirm>
                </div>
@@ -3767,10 +4036,10 @@
 
         <div>
           <div class="flex justify-between items-center mb-4">
-             <div class="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2 text-green-600"><FileProtectOutlined /> Chứng từ thanh toán ({{ (costDetailRecord.attachments || []).filter(a => a.description === 'after').length }})</div>
+             <div class="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2 text-green-600"><FileProtectOutlined /> Chứng từ thanh toán ({{ costDetailAttachments.filter(a => a.description === 'after').length }})</div>
           </div>
-          <div v-if="(costDetailRecord.attachments || []).filter(a => a.description === 'after').length" class="flex flex-wrap gap-2">
-             <div v-for="att in costDetailRecord.attachments.filter(a => a.description === 'after')" :key="att.id" 
+          <div v-if="costDetailAttachments.filter(a => a.description === 'after').length" class="flex flex-wrap gap-2">
+             <div v-for="att in costDetailAttachments.filter(a => a.description === 'after')" :key="att.id" 
                   class="group relative w-16 h-16 rounded-lg border border-gray-200 overflow-hidden cursor-pointer hover:border-blue-400 transition"
                   @click="openFilePreview(att)">
                <img v-if="isImageFile(att)" :src="att.file_url || att.url" class="w-full h-full object-cover" />
@@ -3779,7 +4048,7 @@
                </div>
                <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition gap-2">
                  <EyeOutlined class="text-white text-base" />
-                 <a-popconfirm v-if="!isApproved(costDetailRecord)" title="Xóa tệp đính kèm này?" ok-text="Xóa" cancel-text="Hủy" @confirm="deleteUploadedFileDirectly(att.id)">
+                 <a-popconfirm v-if="!isApproved(costDetailRecord) && att.attachable_type === 'App\\Models\\Cost'" title="Xóa tệp đính kèm này?" ok-text="Xóa" cancel-text="Hủy" @confirm="deleteUploadedFileDirectly(att.id)">
                    <DeleteOutlined class="text-red-400 hover:text-red-500 text-base cursor-pointer" @click.stop />
                  </a-popconfirm>
                </div>
@@ -6493,8 +6762,23 @@
             </div>
           </div>
         </div>
-        <input type="file" multiple @change="e => modalFiles = [...(e.target.files || [])]" class="block w-full text-xs py-1.5 px-2 border border-dashed border-gray-300 rounded-lg hover:border-blue-400 transition" />
-        <div v-if="modalFiles.length" class="text-[10px] text-green-600 mt-1">{{ modalFiles.length }} tệp đã chọn — sẽ upload khi lưu</div>
+        <input type="file" multiple @change="onModalFilesChange" class="block w-full text-xs py-1.5 px-2 border border-dashed border-gray-300 rounded-lg hover:border-blue-400 transition" />
+        <!-- New Selected Files -->
+        <div v-if="modalFiles.length > 0" class="mt-3 space-y-2">
+          <div class="text-[10px] font-bold text-blue-600 uppercase mb-1">Tệp mới chuẩn bị tải lên ({{ modalFiles.length }}):</div>
+          <div v-for="(file, idx) in modalFiles" :key="idx" class="flex items-center justify-between p-2 bg-blue-50/30 border border-blue-100/50 rounded-xl hover:border-blue-200 transition-colors">
+            <div class="flex-1 min-w-0 pr-4 flex items-center gap-2 pl-2 py-1">
+              <PaperClipOutlined class="text-blue-500 shrink-0 text-xs" />
+              <div class="min-w-0">
+                <div class="truncate text-[11px] font-medium text-gray-700">{{ file.name }}</div>
+                <div class="text-[9px] text-gray-400">{{ (file.size / 1024).toFixed(1) }} KB</div>
+              </div>
+            </div>
+            <a-button type="text" danger size="small" @click="modalFiles.splice(idx, 1)" class="hover:bg-red-50 rounded-lg flex items-center justify-center mr-1">
+              <CloseOutlined class="text-[10px]" />
+            </a-button>
+          </div>
+        </div>
       </div>
     </a-form>
   </a-modal>
@@ -6515,8 +6799,23 @@
       </a-form-item>
       <a-form-item label="Mô tả"><a-textarea v-model:value="acceptForm.description" :rows="3" placeholder="Mô tả nội dung nghiệm thu..." /></a-form-item>
       <a-form-item label="Tài liệu đính kèm">
-        <input type="file" multiple @change="e => modalFiles = [...(e.target.files || [])]" class="block w-full text-xs py-1.5 px-2 border border-dashed border-gray-300 rounded-lg hover:border-blue-400 transition" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" />
-        <div v-if="modalFiles.length" class="text-[10px] text-green-600 mt-1">{{ modalFiles.length }} tệp đã chọn — sẽ upload khi tạo</div>
+        <input type="file" multiple @change="onModalFilesChange" class="block w-full text-xs py-1.5 px-2 border border-dashed border-gray-300 rounded-lg hover:border-blue-400 transition" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" />
+        <!-- New Selected Files -->
+        <div v-if="modalFiles.length > 0" class="mt-3 space-y-2">
+          <div class="text-[10px] font-bold text-blue-600 uppercase mb-1">Tệp mới chuẩn bị tải lên ({{ modalFiles.length }}):</div>
+          <div v-for="(file, idx) in modalFiles" :key="idx" class="flex items-center justify-between p-2 bg-blue-50/30 border border-blue-100/50 rounded-xl hover:border-blue-200 transition-colors">
+            <div class="flex-1 min-w-0 pr-4 flex items-center gap-2 pl-2 py-1">
+              <PaperClipOutlined class="text-blue-500 shrink-0 text-xs" />
+              <div class="min-w-0">
+                <div class="truncate text-[11px] font-medium text-gray-700">{{ file.name }}</div>
+                <div class="text-[9px] text-gray-400">{{ (file.size / 1024).toFixed(1) }} KB</div>
+              </div>
+            </div>
+            <a-button type="text" danger size="small" @click="modalFiles.splice(idx, 1)" class="hover:bg-red-50 rounded-lg flex items-center justify-center mr-1">
+              <CloseOutlined class="text-[10px]" />
+            </a-button>
+          </div>
+        </div>
       </a-form-item>
     </a-form>
   </a-modal>
@@ -6559,8 +6858,23 @@
             </div>
           </div>
         </div>
-        <input type="file" multiple @change="e => modalFiles = [...(e.target.files || [])]" class="block w-full text-xs py-1.5 px-2 border border-dashed border-gray-300 rounded-lg hover:border-blue-400 transition" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" />
-        <div v-if="modalFiles.length" class="text-[10px] text-green-600 mt-1">{{ modalFiles.length }} tệp đã chọn — sẽ upload khi lưu</div>
+        <input type="file" multiple @change="onModalFilesChange" class="block w-full text-xs py-1.5 px-2 border border-dashed border-gray-300 rounded-lg hover:border-blue-400 transition" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" />
+        <!-- New Selected Files -->
+        <div v-if="modalFiles.length > 0" class="mt-3 space-y-2">
+          <div class="text-[10px] font-bold text-blue-600 uppercase mb-1">Tệp mới chuẩn bị tải lên ({{ modalFiles.length }}):</div>
+          <div v-for="(file, idx) in modalFiles" :key="idx" class="flex items-center justify-between p-2 bg-blue-50/30 border border-blue-100/50 rounded-xl hover:border-blue-200 transition-colors">
+            <div class="flex-1 min-w-0 pr-4 flex items-center gap-2 pl-2 py-1">
+              <PaperClipOutlined class="text-blue-500 shrink-0 text-xs" />
+              <div class="min-w-0">
+                <div class="truncate text-[11px] font-medium text-gray-700">{{ file.name }}</div>
+                <div class="text-[9px] text-gray-400">{{ (file.size / 1024).toFixed(1) }} KB</div>
+              </div>
+            </div>
+            <a-button type="text" danger size="small" @click="modalFiles.splice(idx, 1)" class="hover:bg-red-50 rounded-lg flex items-center justify-center mr-1">
+              <CloseOutlined class="text-[10px]" />
+            </a-button>
+          </div>
+        </div>
       </a-form-item>
     </a-form>
   </a-modal>
@@ -7932,7 +8246,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, reactive, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, reactive, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { Head, router, usePage } from '@inertiajs/vue3'
 import CrmLayout from '@/Layouts/CrmLayout.vue'
 import { message, Modal, notification } from 'ant-design-vue'
@@ -8043,6 +8357,24 @@ const materialBills = computed(() => {
     return (b.id || 0) - (a.id || 0);
   });
 })
+const vlxdBills = computed(() => {
+  return materialBills.value.filter(b => {
+    const code = b.cost_group?.code || b.costGroup?.code
+    return !code || code === 'VLXD' || (code !== 'NC' && code !== 'CPQL')
+  })
+})
+const laborBills = computed(() => {
+  return materialBills.value.filter(b => {
+    const code = b.cost_group?.code || b.costGroup?.code
+    return code === 'NC'
+  })
+})
+const managementBills = computed(() => {
+  return materialBills.value.filter(b => {
+    const code = b.cost_group?.code || b.costGroup?.code
+    return code === 'CPQL'
+  })
+})
 const logs = computed(() => props.monitorData?.logs || props.project.construction_logs || [])
 const acceptanceStages = computed(() => props.monitorData?.acceptances || [])
 const defects = computed(() => props.monitorData?.defects || props.project.defects || [])
@@ -8134,7 +8466,7 @@ const tabGroupTabs = {
   overview: ['overview'],
   subcontractor_main: ['subcontractor_info', 'subcontractor_progress', 'subcontractors'],
   finance: ['contract', 'costs', 'payments', 'additional_costs', 'budgets', 'finance', 'invoices'],
-  expense: ['materials', 'equipment'],
+  expense: ['materials', 'equipment', 'labor_cost', 'management_cost'],
   monitor: ['gantt', 'progress', 'logs', 'acceptance', 'defects', 'change_requests', 'comments', 'risks'],
   hr: ['personnel', 'attendance', 'labor'],
   warranty: ['warranty', 'maintenances'],
@@ -8155,6 +8487,8 @@ const tabPermissions = {
   subcontractors: 'subcontractor.view',
   materials: 'material.view',
   equipment: 'equipment.view',
+  labor_cost: 'material.view',
+  management_cost: 'material.view',
   logs: 'log.view',
   acceptance: 'acceptance.view',
   defects: 'defect.view',
@@ -8204,7 +8538,7 @@ const totalCosts = computed(() => costs.value.filter(c => c.status === 'approved
 // ============ OVERVIEW COMPUTED ============
 const totalAdditionalCosts = computed(() => (props.project.additional_costs || []).filter(ac => ['approved', 'confirmed'].includes(ac.status)).reduce((s, c) => s + Number(c.amount || 0), 0))
 const totalSubPayments = computed(() => {
-  const subs = props.project.subcontractors || []
+  const subs = subcontractors.value || []
   return subs.reduce((sum, s) => sum + (s.payments || []).filter(p => p.status === 'paid').reduce((ps, p) => ps + Number(p.amount || 0), 0), 0)
 })
 const contractValue = computed(() => Number(props.project.contract?.contract_value || 0))
@@ -8238,9 +8572,12 @@ const getSubTabCount = (tabKey) => {
     gantt: c.tasks, progress: c.tasks,
     contract: 1, costs: c.costs, payments: c.payments, additional_costs: c.additional_costs, budgets: c.budgets, finance: 1, invoices: c.invoices,
     subcontractor_info: c.subcontractors,
-    subcontractor_progress: props.project.subcontractors?.reduce((acc, s) => acc + (s.progress?.length || 0), 0) || 0,
+    subcontractor_progress: subcontractors.value?.reduce((acc, s) => acc + (s.progress?.length || 0), 0) || 0,
     subcontractors: props.teamData?.subcontractors?.reduce((acc, s) => acc + (s.payments?.length || 0), 0) || allSubcontractorPayments.value?.length || 0,
-    materials: c.material_bills || c.materials, equipment: c.equipment,
+    materials: vlxdBills.value?.length || 0,
+    labor_cost: laborBills.value?.length || 0,
+    management_cost: managementBills.value?.length || 0,
+    equipment: c.equipment,
     logs: c.construction_logs, acceptance: c.acceptance_stages, defects: c.defects, change_requests: c.change_requests, comments: c.comments, risks: c.risks, acceptances: c.acceptance_stages,
     personnel: c.personnel, attendance: c.attendance, labor: c.labor_productivity,
     warranty: c.warranties, maintenances: c.maintenances,
@@ -8255,7 +8592,7 @@ const getInitialTab = () => {
   const validTabs = [
     'overview', 'gantt', 'progress',
     'contract', 'costs', 'payments', 'additional_costs', 'budgets', 'finance', 'invoices',
-    'subcontractor_info', 'subcontractor_progress', 'subcontractors', 'materials', 'equipment',
+    'subcontractor_info', 'subcontractor_progress', 'subcontractors', 'materials', 'equipment', 'labor_cost', 'management_cost',
     'logs', 'acceptance', 'defects', 'change_requests', 'comments', 'risks',
     'personnel', 'attendance', 'labor',
     'warranty', 'maintenances',
@@ -8270,7 +8607,7 @@ const getInitialTab = () => {
     { key: 'monitor', tabs: ['gantt', 'progress', 'logs', 'acceptance', 'defects', 'change_requests'] },
     { key: 'finance', tabs: ['contract', 'costs', 'payments'] },
     { key: 'subcontractor_main', tabs: ['subcontractor_info', 'subcontractor_progress', 'subcontractors'] },
-    { key: 'expense', tabs: ['materials', 'equipment'] },
+    { key: 'expense', tabs: ['materials', 'equipment', 'labor_cost', 'management_cost'] },
     { key: 'hr', tabs: ['personnel', 'attendance'] },
     { key: 'warranty', tabs: ['warranty', 'maintenances'] },
     { key: 'other', tabs: ['documents'] },
@@ -8299,7 +8636,7 @@ const getGroupForTab = (tab) => {
     subcontractors: 'subcontractor_main',
     gantt: 'monitor', progress: 'monitor',
     contract: 'finance', costs: 'finance', payments: 'finance', additional_costs: 'finance', budgets: 'finance', finance: 'finance', invoices: 'finance',
-    materials: 'expense', equipment: 'expense',
+    materials: 'expense', equipment: 'expense', labor_cost: 'expense', management_cost: 'expense',
     logs: 'monitor', acceptance: 'monitor', defects: 'monitor', change_requests: 'monitor', comments: 'monitor', risks: 'monitor',
     personnel: 'hr', attendance: 'hr', labor: 'hr',
     warranty: 'warranty', maintenances: 'warranty',
@@ -8326,6 +8663,64 @@ const allFilterGroups = computed(() => {
 // Drawer Detail Refs
 const showCostDetail = ref(false)
 const costDetailRecord = ref(null)
+
+const costDetailAttachments = computed(() => {
+  const c = costDetailRecord.value
+  if (!c) return []
+  let list = []
+  
+  if (c.attachments) {
+    list = list.concat(c.attachments.map(a => ({
+      ...a,
+      url: a.file_url || a.url,
+      name: a.file_name || a.name || a.original_name
+    })))
+  }
+  
+  const mb = c.material_bill || c.materialBill
+  if (mb && mb.attachments) {
+    list = list.concat(mb.attachments.map(a => ({
+      ...a,
+      url: a.file_url || a.url,
+      name: a.file_name || a.name || a.original_name
+    })))
+  }
+  
+  const sp = c.subcontractor_payment || c.subcontractorPayment
+  if (sp && sp.attachments) {
+    list = list.concat(sp.attachments.map(a => ({
+      ...a,
+      url: a.file_url || a.url,
+      name: a.file_name || a.name || a.original_name
+    })))
+  }
+  
+  const ac = c.additional_cost || c.additionalCost
+  if (ac && ac.attachments) {
+    list = list.concat(ac.attachments.map(a => ({
+      ...a,
+      url: a.file_url || a.url,
+      name: a.file_name || a.name || a.original_name
+    })))
+  }
+  
+  const er = c.equipment_rental || c.equipmentRental
+  if (er && er.attachments) {
+    list = list.concat(er.attachments.map(a => ({
+      ...a,
+      url: a.file_url || a.url,
+      name: a.file_name || a.name || a.original_name
+    })))
+  }
+  
+  const seen = new Set()
+  return list.filter(item => {
+    if (seen.has(item.id)) return false
+    seen.add(item.id)
+    return true
+  })
+})
+
 const showPaymentDetail = ref(false)
 const paymentDetailRecord = ref(null)
 
@@ -8421,7 +8816,7 @@ watch(() => props, (newProps) => {
     if (updated) paymentDetailRecord.value = updated; else showPaymentDetail.value = false;
   }
   if (showSubDetailDrawer.value && subDetail.value) {
-    const updated = newProps.project?.subcontractors?.find(x => x.id === subDetail.value.id)
+    const updated = (newProps.teamData?.subcontractors || newProps.project?.subcontractors || []).find(x => x.id === subDetail.value.id)
     if (updated) subDetail.value = updated; else showSubDetailDrawer.value = false;
   }
   if (showSubPaymentDetailDrawer.value && subPaymentDetail.value) {
@@ -8677,7 +9072,7 @@ const tabGroups = computed(() => {
     { key: 'monitor', icon: '📋', label: 'Giám sát', defaultTab: 'gantt', badge: (props.counts?.tasks || 0) + (props.counts?.construction_logs || 0) + (props.counts?.acceptance_stages || 0) + (props.counts?.defects || 0) + (props.counts?.additional_costs || 0) + (props.counts?.change_requests || 0), perms: ['gantt.view', 'project.task.view', 'log.view', 'acceptance.view', 'defect.view', 'change_request.view', 'additional_cost.view', 'project.comment.view', 'project.risk.view'] },
     { key: 'subcontractor_main', icon: '👷', label: 'Nhà thầu phụ', defaultTab: 'subcontractor_info', badge: props.counts?.subcontractors || 0, perms: ['subcontractor.view'] },
     { key: 'finance', icon: '💰', label: 'Tài chính', defaultTab: 'contract', badge: (props.counts?.costs || 0) + (props.counts?.payments || 0) + (props.counts?.budgets || 0), perms: ['contract.view', 'payment.view', 'invoice.view', 'cost.view', 'budgets.view', 'finance.view'] },
-    { key: 'expense', icon: '🏗️', label: 'Chi phí', defaultTab: 'subcontractors', badge: (props.counts?.subcontractors || 0) + (props.counts?.material_bills || 0) + (props.counts?.equipment || 0), perms: ['subcontractor.view', 'material.view', 'equipment.view'] },
+    { key: 'expense', icon: '🏗️', label: 'Chi phí', defaultTab: 'materials', badge: (props.counts?.material_bills || 0) + (props.counts?.equipment || 0), perms: ['material.view', 'equipment.view'] },
     { key: 'hr', icon: '👥', label: 'Nhân sự', defaultTab: 'personnel', badge: props.counts?.personnel || 0, perms: ['personnel.view', 'attendance.view', 'labor_productivity.view'] },
     { key: 'warranty', icon: '🛡️', label: 'Bảo hành', defaultTab: 'warranty', badge: (props.counts?.warranties || 0) + (props.counts?.maintenances || 0), perms: ['warranty.view'] },
     { key: 'other', icon: '📁', label: 'Khác', defaultTab: 'documents', badge: props.counts?.attachments || 0, perms: ['document.view'] },
@@ -9320,6 +9715,14 @@ const saveProject = () => { router.put(`/projects/${props.project.id}`, projectF
 
 // ============ SHARED MODAL FILES ============
 const modalFiles = ref([])
+const onModalFilesChange = (e) => {
+  const files = Array.from(e.target.files || [])
+  files.forEach(file => {
+    const isDuplicate = modalFiles.value.some(f => f.name === file.name && f.size === file.size)
+    if (!isDuplicate) modalFiles.value.push(file)
+  })
+  e.target.value = ''
+}
 // uploadModalFiles removed - unified into single request logic
 
 // ============ FORM DATA HELPER ============
@@ -9649,14 +10052,119 @@ const showFilePreview = ref(false)
 const previewFile = ref(null)
 const previewLoading = ref(false)
 const imageZoomed = ref(false)
+const officeViewerType = ref('microsoft')
 
-const openFilePreview = (file) => {
+const previewTextContent = ref('')
+const excelSheets = ref([])
+const activeExcelSheetIdx = ref(0)
+const previewError = ref(null)
+const docxContainer = ref(null)
+
+const isLocalEnvironment = computed(() => {
+  return window.location.hostname === 'localhost' || 
+         window.location.hostname === '127.0.0.1' || 
+         window.location.hostname.startsWith('192.168.') || 
+         window.location.hostname.startsWith('10.') || 
+         window.location.hostname.endsWith('.test') || 
+         window.location.hostname.endsWith('.local')
+})
+
+const loadScript = (url, globalVarName) => {
+  return new Promise((resolve, reject) => {
+    if (window[globalVarName]) {
+      resolve(window[globalVarName])
+      return
+    }
+    const existing = document.querySelector(`script[src="${url}"]`)
+    if (existing) {
+      const handleLoad = () => {
+        existing.removeEventListener('load', handleLoad)
+        resolve(window[globalVarName])
+      }
+      existing.addEventListener('load', handleLoad)
+      existing.addEventListener('error', (e) => reject(e))
+      return
+    }
+    const script = document.createElement('script')
+    script.src = url
+    script.async = true
+    script.addEventListener('load', () => resolve(window[globalVarName]))
+    script.addEventListener('error', (e) => reject(e))
+    document.head.appendChild(script)
+  })
+}
+
+const openFilePreview = async (file) => {
   previewFile.value = file
   previewLoading.value = true
   imageZoomed.value = false
   showFilePreview.value = true
+  
+  previewTextContent.value = ''
+  excelSheets.value = []
+  activeExcelSheetIdx.value = 0
+  previewError.value = null
+
   // Auto-stop loading for unsupported types
   if (!isImageFile(file) && !isPdfFile(file) && !isVideoFile(file) && !isOfficeFile(file) && !isTextFile(file)) {
+    previewLoading.value = false
+    return
+  }
+
+  const ext = fileExt(file)
+  const isDocx = ext === 'docx'
+  const isExcel = ['xlsx', 'xls', 'csv'].includes(ext)
+  const isTxt = isTextFile(file) && !isExcel
+
+  if (isDocx || isExcel || isTxt) {
+    try {
+      // 1. Fetch file data
+      const fileUrl = file.file_url?.startsWith('http') || file.file_url?.startsWith('blob:') ? file.file_url : window.location.origin + file.file_url
+      const response = await fetch(fileUrl)
+      if (!response.ok) throw new Error('Không thể tải file từ máy chủ')
+
+      if (isDocx) {
+        const arrayBuffer = await response.arrayBuffer()
+        // Load JSZip and docx-preview
+        await loadScript('https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js', 'JSZip')
+        await loadScript('https://cdn.jsdelivr.net/npm/docx-preview@0.1.15/dist/docx-preview.min.js', 'docx')
+        
+        // Wait for DOM
+        nextTick(async () => {
+          if (docxContainer.value) {
+            docxContainer.value.innerHTML = ''
+            await window.docx.renderAsync(arrayBuffer, docxContainer.value)
+          }
+          previewLoading.value = false
+        })
+      } else if (isExcel) {
+        const arrayBuffer = await response.arrayBuffer()
+        // Load SheetJS
+        await loadScript('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js', 'XLSX')
+        
+        const data = new Uint8Array(arrayBuffer)
+        const workbook = window.XLSX.read(data, { type: 'array' })
+        
+        excelSheets.value = workbook.SheetNames.map(name => {
+          const sheet = workbook.Sheets[name]
+          const html = window.XLSX.utils.sheet_to_html(sheet, {
+            header: '',
+            footer: ''
+          })
+          return { name, html }
+        })
+        activeExcelSheetIdx.value = 0
+        previewLoading.value = false
+      } else if (isTxt) {
+        previewTextContent.value = await response.text()
+        previewLoading.value = false
+      }
+    } catch (err) {
+      console.error('Error previewing file in browser:', err)
+      previewError.value = err.message || 'Không thể hiển thị nội dung tệp trực tiếp.'
+      previewLoading.value = false
+    }
+  } else {
     previewLoading.value = false
   }
 }
@@ -9701,6 +10209,11 @@ const isTextFile = (f) => /\.(txt|csv|json|xml|html|htm|css|js|md|log)$/i.test(f
 const googleDocsViewerUrl = (f) => {
   const fullUrl = f.file_url?.startsWith('http') ? f.file_url : window.location.origin + f.file_url
   return `https://docs.google.com/gview?url=${encodeURIComponent(fullUrl)}&embedded=true`
+}
+
+const microsoftOfficeViewerUrl = (f) => {
+  const fullUrl = f.file_url?.startsWith('http') ? f.file_url : window.location.origin + f.file_url
+  return `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(fullUrl)}`
 }
 
 const fileExtColor = (f) => {
@@ -9787,7 +10300,14 @@ const openPaymentProofModal = (record) => {
   paymentProofForm.value = { paid_date: new Date().toISOString().slice(0, 10), actual_amount: null }
   showPaymentProofModal.value = true
 }
-const onPaymentProofFileChange = (e) => { paymentProofFiles.value = Array.from(e.target.files || []) }
+const onPaymentProofFileChange = (e) => {
+  const files = Array.from(e.target.files || [])
+  files.forEach(file => {
+    const isDuplicate = paymentProofFiles.value.some(f => f.name === file.name && f.size === file.size)
+    if (!isDuplicate) paymentProofFiles.value.push(file)
+  })
+  e.target.value = ''
+}
 const submitPaymentProof = () => {
   if (!paymentProofFiles.value.length || !paymentProofTarget.value) return
   const formData = new FormData()
@@ -10003,7 +10523,7 @@ const openSubProgressModal = (record = null, defaultSubcontractorId = null) => {
   } else {
     editingSubProgress.value = null
     subProgressForm.value = {
-      subcontractor_id: defaultSubcontractorId || (props.project?.subcontractors?.[0]?.id || null),
+      subcontractor_id: defaultSubcontractorId || (subcontractors.value?.[0]?.id || null),
       subcontractor_contract_id: null,
       progress_date: dayjs().format('YYYY-MM-DD'),
       planned_progress: 0,
@@ -10626,7 +11146,7 @@ const selectedSubId = ref(null)
 const isSubPayTargetPreselected = ref(false)
 
 const onSubPayTargetChange = (id) => {
-  const sub = (props.project?.subcontractors || []).find(s => s.id === id)
+  const sub = (subcontractors.value || []).find(s => s.id === id)
   subPayTarget.value = sub || null
 }
 
@@ -10669,8 +11189,8 @@ const editSubPayment = (sub, p) => {
   showInlineSubPayForm.value = true
 }
 const saveSubPayment = (sub) => {
-  if (!sub) sub = subPayTarget.value
-  if (!sub) {
+  if (!sub || !sub.id) sub = subPayTarget.value
+  if (!sub || !sub.id) {
     message.warning('Vui lòng chọn nhà thầu phụ')
     return
   }
@@ -11566,9 +12086,10 @@ const submitLaborRecord = async () => {
 
 // Attendance and Labor logic moved to main activeTab watcher
 
-// ============ MATERIALS TAB — Bill-based tracking (Giống APP) ============
 const fmtQty = (v) => new Intl.NumberFormat('vi-VN').format(v)
-const totalBillAmount = computed(() => (materialBills.value).filter(b => b.status === 'approved').reduce((s, b) => s + Number(b.total_amount || 0), 0))
+const totalBillAmount = computed(() => (vlxdBills.value).filter(b => b.status === 'approved').reduce((s, b) => s + Number(b.total_amount || 0), 0))
+const totalLaborAmount = computed(() => (laborBills.value).filter(b => b.status === 'approved').reduce((s, b) => s + Number(b.total_amount || 0), 0))
+const totalManagementAmount = computed(() => (managementBills.value).filter(b => b.status === 'approved').reduce((s, b) => s + Number(b.total_amount || 0), 0))
 
 const billCols = [
   { title: 'Mã phiếu', key: 'bill_number', width: 130 },
@@ -11651,8 +12172,14 @@ const openBillModal = (record = null) => {
       deleted_attachment_ids: []
     }
   } else {
-    // Tìm nhóm chi phí Vật liệu để set mặc định
-    const defaultGroup = props.costGroups?.find(g => g.code === 'VLXD' || g.name?.toLowerCase().includes('vật liệu'))
+    // Tìm nhóm chi phí tương ứng với tab đang chọn để set mặc định
+    let defaultCode = 'VLXD'
+    if (activeTab.value === 'labor_cost') {
+      defaultCode = 'NC'
+    } else if (activeTab.value === 'management_cost') {
+      defaultCode = 'CPQL'
+    }
+    const defaultGroup = props.costGroups?.find(g => g.code === defaultCode || g.name?.toLowerCase().includes(defaultCode === 'VLXD' ? 'vật liệu' : (defaultCode === 'NC' ? 'nhân công' : 'quản lý')))
     billForm.value = { 
       bill_date: dayjs().format('YYYY-MM-DD'), 
       supplier_id: null, 
@@ -12757,4 +13284,41 @@ const revertContractAction = (contract) => {
 .loading-bar-enter-active { transition: opacity 0.15s ease; }
 .loading-bar-leave-active { transition: opacity 0.4s ease; }
 .loading-bar-enter-from, .loading-bar-leave-to { opacity: 0; }
+
+/* Excel preview custom styling */
+.excel-table-wrapper :deep(table) {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 13px;
+  font-family: 'Inter', sans-serif;
+  color: #374151;
+  background-color: #ffffff;
+  border: 1px solid #e5e7eb;
+}
+.excel-table-wrapper :deep(th), .excel-table-wrapper :deep(td) {
+  border: 1px solid #e5e7eb;
+  padding: 8px 12px;
+  text-align: left;
+  min-width: 100px;
+}
+.excel-table-wrapper :deep(tr:nth-child(even)) {
+  background-color: #f9fafb;
+}
+.excel-table-wrapper :deep(tr:hover) {
+  background-color: #f3f4f6;
+}
+
+/* Docx preview custom styling */
+.docx-preview-wrapper {
+  background: white !important;
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1) !important;
+  padding: 40px !important;
+  max-width: 850px !important;
+  width: 100% !important;
+  min-height: 100%;
+}
+.docx-preview-wrapper :deep(.docx) {
+  background: white !important;
+  padding: 0 !important;
+}
 </style>

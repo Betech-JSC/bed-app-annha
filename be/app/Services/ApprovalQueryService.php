@@ -262,7 +262,23 @@ class ApprovalQueryService
                        ->orWhereNull('project_id');
                 });
             })
-            ->with(['approvable', 'project:id,name,code', 'user:id,name']);
+            ->with([
+                'approvable' => function ($morphTo) {
+                    $morphTo->morphWith([
+                        \App\Models\Cost::class => [
+                            'attachments', 
+                            'materialBill.attachments', 
+                            'subcontractorPayment.attachments', 
+                            'additionalCost.attachments', 
+                            'equipmentRental.attachments'
+                        ],
+                        \App\Models\MaterialBill::class => ['attachments'],
+                        \App\Models\SubcontractorPayment::class => ['attachments'],
+                    ]);
+                },
+                'project:id,name,code',
+                'user:id,name'
+            ]);
 
         $allApprovals = $query->get()->unique(fn($a) => $a->approvable_type . $a->approvable_id);
 

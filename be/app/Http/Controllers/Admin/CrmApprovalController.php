@@ -153,6 +153,17 @@ class CrmApprovalController extends Controller
             'hr' => $userPermissions['can_hr'] ? ($data['attendances_pending'] ?? collect([]))->filter(fn($i) => $this->crmCan($user, Permissions::ATTENDANCE_APPROVE))->map(fn($i) => array_merge($this->formatAttendanceItem($i), ['_approveType' => 'attendance']))->values() : collect([]),
         ];
 
+        // Sort each group by creation date descending
+        $sortFn = function ($a, $b) {
+            $dateA = !empty($a['created_at']) ? \Carbon\Carbon::createFromFormat('d/m/Y H:i', $a['created_at'])->timestamp : 0;
+            $dateB = !empty($b['created_at']) ? \Carbon\Carbon::createFromFormat('d/m/Y H:i', $b['created_at'])->timestamp : 0;
+            return $dateB <=> $dateA;
+        };
+
+        foreach ($roleGroups as $key => $collection) {
+            $roleGroups[$key] = $collection->sort($sortFn)->values();
+        }
+
         return Inertia::render('Crm/Approvals/Index', [
             'roleGroups' => $roleGroups,
             'recentItems' => $this->formatRecentActivity($data['recent']),

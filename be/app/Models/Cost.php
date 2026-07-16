@@ -183,9 +183,84 @@ class Cost extends Model
         return $this->belongsTo(InputInvoice::class, 'input_invoice_id');
     }
 
+    public function subcontractorPayment(): BelongsTo
+    {
+        return $this->belongsTo(SubcontractorPayment::class, 'subcontractor_payment_id');
+    }
+
+    public function additionalCost(): BelongsTo
+    {
+        return $this->belongsTo(AdditionalCost::class, 'additional_cost_id');
+    }
+
     // ==================================================================
     // ACCESSOR
     // ==================================================================
+
+    /**
+     * Get combined attachments from the cost itself and its linked parent entities (MaterialBill, SubcontractorPayment, etc.)
+     */
+    public function getAttachmentsAttribute()
+    {
+        $ownAttachments = $this->relationLoaded('attachments') 
+            ? $this->getRelation('attachments') 
+            : $this->attachments()->get();
+
+        $parentAttachments = collect([]);
+
+        // 1. Linked Material Bill
+        if ($this->material_bill_id) {
+            $bill = $this->relationLoaded('materialBill') ? $this->getRelation('materialBill') : $this->materialBill;
+            if ($bill) {
+                $parentAttachments = $parentAttachments->concat(
+                    $bill->relationLoaded('attachments') ? $bill->getRelation('attachments') : $bill->attachments()->get()
+                );
+            }
+        }
+
+        // 2. Linked Subcontractor Payment
+        if ($this->subcontractor_payment_id) {
+            $subPay = $this->relationLoaded('subcontractorPayment') ? $this->getRelation('subcontractorPayment') : $this->subcontractorPayment;
+            if ($subPay) {
+                $parentAttachments = $parentAttachments->concat(
+                    $subPay->relationLoaded('attachments') ? $subPay->getRelation('attachments') : $subPay->attachments()->get()
+                );
+            }
+        }
+
+        // 3. Linked Additional Cost
+        if ($this->additional_cost_id) {
+            $addCost = $this->relationLoaded('additionalCost') ? $this->getRelation('additionalCost') : $this->additionalCost;
+            if ($addCost) {
+                $parentAttachments = $parentAttachments->concat(
+                    $addCost->relationLoaded('attachments') ? $addCost->getRelation('attachments') : $addCost->attachments()->get()
+                );
+            }
+        }
+
+        // 4. Linked Equipment Rental
+        if ($this->equipment_rental_id) {
+            $rental = $this->relationLoaded('equipmentRental') ? $this->getRelation('equipmentRental') : $this->equipmentRental;
+            if ($rental) {
+                $parentAttachments = $parentAttachments->concat(
+                    $rental->relationLoaded('attachments') ? $rental->getRelation('attachments') : $rental->attachments()->get()
+                );
+            }
+        }
+
+        // 5. Linked Input Invoice (for company costs)
+        if ($this->input_invoice_id) {
+            $invoice = $this->relationLoaded('inputInvoice') ? $this->getRelation('inputInvoice') : $this->inputInvoice;
+            if ($invoice) {
+                $parentAttachments = $parentAttachments->concat(
+                    $invoice->relationLoaded('attachments') ? $invoice->getRelation('attachments') : $invoice->attachments()->get()
+                );
+            }
+        }
+
+        // Return combined list without duplicates
+        return $ownAttachments->concat($parentAttachments)->unique('id')->values();
+    }
 
     public function getIsApprovedAttribute(): bool
     {
@@ -209,6 +284,13 @@ class Cost extends Model
 
         // Return the raw category if it's not mapped to a group, or 'Khác' as final fallback
         return $this->category ?? 'Khác';
+    }
+
+    public function toArray()
+    {
+        $array = parent::toArray();
+        $array['attachments'] = $this->attachments->toArray();
+        return $array;
     }
 
     /**

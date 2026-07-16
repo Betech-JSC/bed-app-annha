@@ -166,7 +166,7 @@
         </template>
         <!-- Nội dung -->
         <template v-if="column.key === 'title'">
-          <div class="ac-item-title" @click="openDetailDrawer(record)">
+          <div class="ac-item-title" @click="navigateToDetail(record)">
             <div class="ac-item-title__main">
               {{ record.title }}
               <!-- Defect Warning Badge -->
@@ -319,9 +319,17 @@
             <AuditOutlined v-else-if="detailItem.type === 'cost'" class="text-xl" />
             <FileTextOutlined v-else class="text-xl" />
           </div>
-          <div class="min-w-0">
+          <div class="min-w-0" v-if="getDetailUrl(detailItem)" @click="navigateToDetail(detailItem)">
+            <div class="text-[10px] text-blue-500 hover:text-blue-600 uppercase font-bold tracking-wider mb-0.5 cursor-pointer flex items-center gap-1 font-semibold">
+              Yêu cầu duyệt: {{ detailItem.type_label }} <ArrowRightOutlined class="text-[9px]" />
+            </div>
+            <div class="text-lg font-bold text-gray-800 hover:text-blue-600 transition-colors truncate max-w-[340px] cursor-pointer" :title="detailItem.title">
+              {{ detailItem.title }}
+            </div>
+          </div>
+          <div class="min-w-0" v-else>
             <div class="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-0.5">Yêu cầu duyệt: {{ detailItem.type_label }}</div>
-            <div class="text-lg font-bold text-gray-800 truncate max-w-[340px]">{{ detailItem.title }}</div>
+            <div class="text-lg font-bold text-gray-800 truncate max-w-[340px]" :title="detailItem.title">{{ detailItem.title }}</div>
           </div>
         </div>
         <a-button type="text" class="flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg" @click="detailItem = null">
@@ -335,7 +343,15 @@
           <div class="grid grid-cols-2 gap-x-8 gap-y-4">
             <div>
               <div class="text-[10px] text-gray-400 uppercase font-bold mb-1">Dự án</div>
-              <div class="text-sm font-semibold text-gray-700 truncate" :title="detailItem.subtitle">{{ detailItem.subtitle }}</div>
+              <div v-if="getDetailUrl(detailItem)" 
+                   class="text-sm font-semibold text-blue-600 hover:text-blue-700 hover:underline cursor-pointer transition-colors truncate" 
+                   :title="detailItem.subtitle" 
+                   @click="navigateToDetail(detailItem)">
+                {{ detailItem.subtitle }}
+              </div>
+              <div v-else class="text-sm font-semibold text-gray-700 truncate" :title="detailItem.subtitle">
+                {{ detailItem.subtitle }}
+              </div>
             </div>
             <div v-if="detailItem.amount">
               <div class="text-[10px] text-gray-400 uppercase font-bold mb-1">Số tiền</div>
@@ -579,24 +595,11 @@
       <div class="fixed bottom-0 right-0 w-[560px] p-4 bg-white border-t border-gray-100 flex justify-end items-center shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-40 transition-all rounded-br-2xl">
         <div class="flex gap-2 w-full">
            <a-button @click="detailItem = null" class="rounded-xl h-12 font-bold px-4">Đóng</a-button>
-           <a-button v-if="canApproveDirectly(detailItem)"
-                     type="primary"
-                     danger
-                     class="rounded-xl h-12 px-4 font-bold border-0 shadow-lg shadow-red-100" 
-                     @click="handleRejectDirectly(detailItem)">
-             Từ chối
-           </a-button>
-           <a-button v-if="canApproveDirectly(detailItem)"
-                     type="primary"
-                     class="rounded-xl h-12 px-6 font-bold bg-green-600 hover:bg-green-700 shadow-lg shadow-green-100 border-0 flex-1" 
-                     @click="handleApproveDirectly(detailItem)">
-             {{ getApproveButtonLabel() }}
-           </a-button>
-           <a-button v-if="!canApproveDirectly(detailItem) && getDetailUrl(detailItem)" 
+           <a-button v-if="getDetailUrl(detailItem)" 
                      type="primary"
                      class="rounded-xl h-12 px-6 font-bold bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-100 border-0 flex-1" 
                      @click="navigateToDetail(detailItem)">
-             <ArrowRightOutlined /> Vào module để xử lý phiếu
+             <ArrowRightOutlined /> Xem chi tiết
            </a-button>
         </div>
       </div>
@@ -1075,8 +1078,10 @@ const activeItems = computed(() => {
   return [...items].sort((a, b) => {
     const dateA = a.created_at || ''
     const dateB = b.created_at || ''
-    const pa = dateA.split(/[\/ :]/).reverse().join('')
-    const pb = dateB.split(/[\/ :]/).reverse().join('')
+    const partsA = dateA.split(/[\/ :]/)
+    const partsB = dateB.split(/[\/ :]/)
+    const pa = partsA.length >= 5 ? partsA[2] + partsA[1] + partsA[0] + partsA[3] + partsA[4] : dateA
+    const pb = partsB.length >= 5 ? partsB[2] + partsB[1] + partsB[0] + partsB[3] + partsB[4] : dateB
     return pb.localeCompare(pa)
   })
 })
