@@ -75,6 +75,10 @@ class CrmDashboardController extends Controller
         $paidPaymentsQuery = ProjectPayment::where('status', 'paid');
         if ($projectId && $projectId !== 'all') {
             $paidPaymentsQuery->where('project_id', $projectId);
+        } else {
+            $paidPaymentsQuery->whereHas('project', function ($q) {
+                $q->where('status', 'completed');
+            });
         }
         $paidPayments = $paidPaymentsQuery->sum('amount');
 
@@ -230,7 +234,9 @@ class CrmDashboardController extends Controller
             $paymentQuery->where('project_id', $projectId);
             $projectQuery->where('id', $projectId);
         } else {
-            $contractQuery->whereHas('project', fn($q) => $q->whereBetween('created_at', [$start, $end]));
+            $contractQuery->whereHas('project', fn($q) => $q->where('status', 'completed')->whereBetween('created_at', [$start, $end]));
+            $costQuery->whereHas('project', fn($q) => $q->where('status', 'completed'));
+            $paymentQuery->whereHas('project', fn($q) => $q->where('status', 'completed'));
         }
 
         $revenue = $contractQuery->sum('contract_value') ?: 0;
@@ -342,6 +348,9 @@ class CrmDashboardController extends Controller
             if ($projectId && $projectId !== 'all') {
                 $revenueQuery->where('project_id', $projectId);
                 $costQuery->where('project_id', $projectId);
+            } else {
+                $revenueQuery->whereHas('project', fn($q) => $q->where('status', 'completed'));
+                $costQuery->whereHas('project', fn($q) => $q->where('status', 'completed'));
             }
 
             $revenue[] = (float) ($revenueQuery->sum('amount') ?: 0);
@@ -405,6 +414,8 @@ class CrmDashboardController extends Controller
 
         if ($projectId && $projectId !== 'all') {
             $query->where('id', $projectId);
+        } else {
+            $query->where('status', 'completed');
         }
 
         $top = $query->get()
