@@ -185,10 +185,11 @@ class ProjectTask extends Model
         
         // Đảm bảo có progress record
         if (!$project->progress) {
-            $project->progress()->create([
+            $progressRecord = $project->progress()->create([
                 'overall_percentage' => 0,
                 'calculated_from' => 'logs',
             ]);
+            $project->setRelation('progress', $progressRecord);
         }
 
         // Tính lại tiến độ tổng hợp từ logs (vì logs cập nhật task progress)

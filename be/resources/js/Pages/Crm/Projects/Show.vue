@@ -987,12 +987,21 @@
           <!-- Flat acceptances grouped by parent task -->
           <template v-if="acceptanceGroups.length">
             <div v-for="group in acceptanceGroups" :key="group.parentTaskId" class="mb-6">
-              <!-- Group header: parent task name -->
+              <!-- Group header: parent task name + parent acceptance status -->
               <div class="flex items-center justify-between mb-3 px-1">
                 <div class="flex items-center gap-2">
                   <div class="w-2 h-5 bg-blue-600 rounded-full"></div>
                   <span class="text-[15px] font-bold text-gray-800">{{ group.parentTaskName }}</span>
-                  <a-tag class="rounded-full bg-blue-50 text-blue-600 border-none px-2 py-0.5 text-[11px] font-semibold ml-1">{{ group.items.length }} hạng mục</a-tag>
+                  <a-tag class="rounded-full bg-blue-50 text-blue-600 border-none px-2 py-0.5 text-[11px] font-semibold ml-1">{{ group.items.length }} hạng mục con</a-tag>
+                </div>
+                <!-- Render Parent Acceptance Status if it exists -->
+                <div v-if="group.parentAcceptance" class="flex items-center gap-2">
+                  <span class="text-xs text-gray-400 font-medium">Nghiệm thu nhóm:</span>
+                  <a-tag :color="acceptStatusColors[group.parentAcceptance.workflow_status] || 'default'" 
+                         class="rounded-full text-xs m-0 border-none font-medium px-2.5 shadow-sm cursor-pointer hover:opacity-80 transition-all"
+                         @click="openAcceptDetailModal(group.parentAcceptance)">
+                    {{ acceptStatusLabels[group.parentAcceptance.workflow_status] || group.parentAcceptance.workflow_status }}
+                  </a-tag>
                 </div>
               </div>
 
@@ -1002,8 +1011,8 @@
                 @click="openAcceptDetailModal(acceptance)">
                 <div class="flex items-center justify-between p-3">
                   <div class="flex items-center gap-3 flex-1 min-w-0">
-                    <div :class="['w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors', getAcceptIconClass(acceptance.workflow_status)]">
-                      <CheckCircleOutlined v-if="acceptance.workflow_status === 'customer_approved'" class="text-lg" />
+                    <div :class="['w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors', getAcceptIconClass(acceptance.workflow_status, acceptance.is_fully_approved)]">
+                      <CheckCircleOutlined v-if="acceptance.is_fully_approved" class="text-lg" />
                       <CloseCircleOutlined v-else-if="acceptance.workflow_status === 'rejected'" class="text-lg" />
                       <ClockCircleOutlined v-else class="text-lg opacity-80" />
                     </div>
@@ -5742,7 +5751,8 @@
           </a-step>
 
           <!-- Step 3: Khách hàng phê duyệt -->
-          <a-step title="Khách hàng phê duyệt" 
+          <a-step v-if="relatedAcceptance.is_parent_task"
+                  title="Khách hàng phê duyệt" 
                   :status="relatedAcceptance.workflow_status === 'customer_approved' ? 'finish' : (relatedAcceptance.workflow_status === 'supervisor_approved' ? 'process' : (relatedAcceptance.workflow_status === 'rejected' && relatedAcceptance.supervisor_approved_at ? 'error' : 'wait'))">
             <template #description>
               <div class="text-xs mt-1 text-gray-500">
@@ -6923,8 +6933,8 @@
         <div class="bg-gray-50 p-5 rounded-2xl border border-gray-100 flex items-center justify-between">
           <div class="flex items-center gap-3">
             <div :class="['w-12 h-12 rounded-xl flex items-center justify-center text-white shrink-0 shadow-lg', 
-              acceptDetailStage.workflow_status === 'customer_approved' ? 'bg-emerald-500 shadow-emerald-100' : 'bg-amber-500 shadow-amber-100']">
-              <SafetyCertificateOutlined v-if="acceptDetailStage.workflow_status === 'customer_approved'" class="text-xl" />
+              acceptDetailStage.is_fully_approved ? 'bg-emerald-500 shadow-emerald-100' : 'bg-amber-500 shadow-amber-100']">
+              <SafetyCertificateOutlined v-if="acceptDetailStage.is_fully_approved" class="text-xl" />
               <WarningOutlined v-else class="text-xl" />
             </div>
             <div>
@@ -7269,7 +7279,7 @@
                       type="primary" size="large" class="rounded-xl h-10 px-6 font-bold bg-blue-600 hover:bg-blue-700 border-blue-600" @click="approveSupervisor(acceptDetailStage)">
               Duyệt (GS)
             </a-button>
-            <a-button v-if="acceptDetailStage.workflow_status === 'supervisor_approved' && can('acceptance.approve.level_3')"
+            <a-button v-if="acceptDetailStage.workflow_status === 'supervisor_approved' && acceptDetailStage.is_parent_task && can('acceptance.approve.level_3')"
                       type="primary" size="large" class="rounded-xl h-10 px-6 font-bold bg-emerald-600 hover:bg-emerald-700 border-emerald-600" @click="approveCustomer(acceptDetailStage)">
               Duyệt (KH)
             </a-button>
@@ -9525,12 +9535,34 @@ const acceptanceGroups = computed(() => {
   const list = acceptanceStages.value
   if (!list.length) return []
   const groups = {}
+  
+  // First pass: identify all parent task acceptances and initialize groups
   list.forEach(a => {
-    const parentId = a.task?.parent_id ?? 'ungrouped'
-    const parentName = a.task?.parent?.name ?? a.task?.name ?? 'Chưa phân nhóm'
-    if (!groups[parentId]) groups[parentId] = { parentTaskId: parentId, parentTaskName: parentName, items: [] }
-    groups[parentId].items.push(a)
+    const isParent = !a.task?.parent_id
+    if (isParent) {
+      const parentId = a.task_id
+      if (!groups[parentId]) {
+        groups[parentId] = { parentTaskId: parentId, parentTaskName: a.task?.name || a.name, items: [], parentAcceptance: a }
+      } else {
+        groups[parentId].parentAcceptance = a
+        groups[parentId].parentTaskName = a.task?.name || a.name
+      }
+    }
   })
+
+  // Second pass: place child task acceptances into their parent groups
+  list.forEach(a => {
+    const isParent = !a.task?.parent_id
+    if (!isParent) {
+      const parentId = a.task.parent_id
+      const parentName = a.task.parent?.name || 'Chưa phân nhóm'
+      if (!groups[parentId]) {
+        groups[parentId] = { parentTaskId: parentId, parentTaskName: parentName, items: [], parentAcceptance: null }
+      }
+      groups[parentId].items.push(a)
+    }
+  })
+  
   return Object.values(groups)
 })
 
@@ -11680,8 +11712,8 @@ const acceptStatusColors = {
   draft: 'default', submitted: 'processing', supervisor_approved: 'cyan',
   customer_approved: 'success', rejected: 'error',
 }
-const getAcceptIconClass = (status) => {
-  if (status === 'customer_approved') return 'bg-emerald-50 text-emerald-600'
+const getAcceptIconClass = (status, isFullyApproved = false) => {
+  if (status === 'customer_approved' || isFullyApproved) return 'bg-emerald-50 text-emerald-600'
   if (status === 'supervisor_approved') return 'bg-blue-50 text-blue-600'
   if (status === 'rejected') return 'bg-red-50 text-red-600'
   if (status === 'submitted') return 'bg-indigo-50 text-indigo-600'
@@ -11713,7 +11745,14 @@ const acceptDefectProgress = computed(() => {
   }
 })
 
-const isAcceptanceLocked = computed(() => acceptDetailStage.value?.workflow_status === 'customer_approved')
+const isAcceptanceLocked = computed(() => {
+  const stage = acceptDetailStage.value
+  if (!stage) return false
+  if (!stage.is_parent_task) {
+    return ['supervisor_approved', 'customer_approved'].includes(stage.workflow_status)
+  }
+  return stage.workflow_status === 'customer_approved'
+})
 
 const openAcceptDetailModal = (acceptance) => {
   acceptDetailStage.value = acceptance

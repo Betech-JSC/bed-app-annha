@@ -50,6 +50,7 @@ class Acceptance extends Model
         'workflow_status_label',
         'is_fully_approved',
         'has_open_defects',
+        'is_parent_task',
     ];
 
     // ==================================================================
@@ -123,13 +124,23 @@ class Acceptance extends Model
 
     public function isPendingApproval(): bool
     {
-        return in_array($this->workflow_status, ['submitted', 'supervisor_approved']);
+        if ($this->is_parent_task) {
+            return in_array($this->workflow_status, ['submitted', 'supervisor_approved']);
+        }
+        return $this->workflow_status === 'submitted';
     }
 
     public function getApprovalResolvedStatus(): string
     {
+        if ($this->is_parent_task) {
+            return match ($this->workflow_status) {
+                'customer_approved' => 'approved',
+                'rejected'          => 'rejected',
+                default             => 'pending',
+            };
+        }
         return match ($this->workflow_status) {
-            'customer_approved' => 'approved',
+            'supervisor_approved', 'customer_approved' => 'approved',
             'rejected'          => 'rejected',
             default             => 'pending',
         };
@@ -174,7 +185,15 @@ class Acceptance extends Model
 
     public function getIsFullyApprovedAttribute(): bool
     {
-        return $this->workflow_status === 'customer_approved';
+        if ($this->is_parent_task) {
+            return $this->workflow_status === 'customer_approved';
+        }
+        return in_array($this->workflow_status, ['supervisor_approved', 'customer_approved']);
+    }
+
+    public function getIsParentTaskAttribute(): bool
+    {
+        return $this->task ? \App\Models\ProjectTask::where('parent_id', $this->task_id)->whereNull('deleted_at')->exists() : false;
     }
 
     public function getHasOpenDefectsAttribute(): bool

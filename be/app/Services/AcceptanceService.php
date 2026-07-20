@@ -26,41 +26,37 @@ class AcceptanceService
      * Push a child task into the acceptance flow when it reaches 100%.
      * Idempotent: creates if missing, flips draft → submitted if already exists.
      */
-    public function pushFromTask(ProjectTask $child): ?Acceptance
+    public function pushFromTask(ProjectTask $task): ?Acceptance
     {
         try {
-            if ($child->parent_id === null) {
-                return null;
-            }
-
-            $acceptance = Acceptance::where('task_id', $child->id)->first();
+            $acceptance = Acceptance::where('task_id', $task->id)->first();
 
             if (!$acceptance) {
-                $maxOrder = (int) Acceptance::where('project_id', $child->project_id)->max('order');
+                $maxOrder = (int) Acceptance::where('project_id', $task->project_id)->max('order');
                 $acceptance = Acceptance::create([
-                    'project_id'      => $child->project_id,
-                    'task_id'         => $child->id,
-                    'name'            => $child->name,
-                    'description'     => $child->description,
+                    'project_id'      => $task->project_id,
+                    'task_id'         => $task->id,
+                    'name'            => $task->name,
+                    'description'     => $task->description,
                     'order'           => $maxOrder + 1,
                     'workflow_status' => 'submitted',
                     'submitted_at'    => now(),
-                    'submitted_by'    => auth()->id() ?? $child->updated_by ?? $child->created_by,
-                    'created_by'      => $child->created_by,
+                    'submitted_by'    => auth()->id() ?? $task->updated_by ?? $task->created_by,
+                    'created_by'      => $task->created_by,
                 ]);
 
-                Log::info('Acceptance auto-created (submitted) for child task', [
-                    'task_id'       => $child->id,
+                Log::info('Acceptance auto-created (submitted) for task', [
+                    'task_id'       => $task->id,
                     'acceptance_id' => $acceptance->id,
                 ]);
             } elseif ($acceptance->workflow_status === 'draft') {
                 $acceptance->workflow_status = 'submitted';
                 $acceptance->submitted_at    = now();
-                $acceptance->submitted_by    = auth()->id() ?? $child->updated_by ?? $child->created_by;
+                $acceptance->submitted_by    = auth()->id() ?? $task->updated_by ?? $task->created_by;
                 $acceptance->save();
 
-                Log::info('Acceptance flipped draft → submitted for child task', [
-                    'task_id'       => $child->id,
+                Log::info('Acceptance flipped draft → submitted for task', [
+                    'task_id'       => $task->id,
                     'acceptance_id' => $acceptance->id,
                 ]);
             }
@@ -70,7 +66,7 @@ class AcceptanceService
             return $acceptance;
         } catch (\Exception $e) {
             Log::error('AcceptanceService::pushFromTask failed', [
-                'task_id' => $child->id,
+                'task_id' => $task->id,
                 'error'   => $e->getMessage(),
             ]);
             // Non-critical — must not break progress recalculation
@@ -86,6 +82,8 @@ class AcceptanceService
     public function approve(Acceptance $acceptance, User $user, int $level): bool
     {
         return DB::transaction(function () use ($acceptance, $user, $level) {
+            $hasChildren = $acceptance->task && ProjectTask::where('parent_id', $acceptance->task_id)->whereNull('deleted_at')->exists();
+
             switch ($level) {
                 case 1:
                     if ($acceptance->workflow_status !== 'submitted') {
@@ -94,12 +92,25 @@ class AcceptanceService
                     if ($acceptance->has_open_defects) {
                         throw new \Exception('Không thể duyệt vì còn lỗi chưa được xử lý xong.');
                     }
-                    $acceptance->workflow_status          = 'supervisor_approved';
-                    $acceptance->supervisor_approved_by   = $user->id;
-                    $acceptance->supervisor_approved_at   = now();
+                    
+                    if ($hasChildren) {
+                        $acceptance->workflow_status          = 'supervisor_approved';
+                        $acceptance->supervisor_approved_by   = $user->id;
+                        $acceptance->supervisor_approved_at   = now();
+                    } else {
+                        // For child tasks, supervisor approval is final approval
+                        $acceptance->workflow_status          = 'customer_approved';
+                        $acceptance->supervisor_approved_by   = $user->id;
+                        $acceptance->supervisor_approved_at   = now();
+                        $acceptance->customer_approved_by     = $user->id;
+                        $acceptance->customer_approved_at     = now();
+                    }
                     break;
 
                 case 3:
+                    if (!$hasChildren) {
+                        throw new \Exception('Hạng mục con không cần khách hàng duyệt.');
+                    }
                     if ($acceptance->workflow_status !== 'supervisor_approved') {
                         throw new \Exception('Phiếu nghiệm thu cần được giám sát xác nhận trước khi khách hàng duyệt.');
                     }
@@ -117,7 +128,10 @@ class AcceptanceService
 
             $saved = $acceptance->save();
 
-            if ($saved && $level === 3) {
+            // Level 1 is final for child tasks; Level 3 is final for parent tasks
+            $isFinal = (!$hasChildren && $level === 1) || ($hasChildren && $level === 3);
+
+            if ($saved && $isFinal) {
                 $this->createProgressLogOnApproval($acceptance, $user);
                 $this->checkParentCompletion($acceptance);
             }
@@ -249,10 +263,10 @@ class AcceptanceService
                 ->count();
 
             if ($approvedCount >= $siblingTaskIds->count()) {
-                // All children accepted — auto-complete the parent task
-                $parentTask->forceFill(['status' => 'completed'])->saveQuietly();
+                // All children accepted — trigger parent task progress recalculation and status updates
+                app(\App\Services\TaskProgressService::class)->updateTaskFromLogs($parentTask, true);
 
-                Log::info('Parent task auto-completed after all children accepted', [
+                Log::info('Parent task progress updated after all children accepted', [
                     'parent_task_id' => $parentTask->id,
                     'children_count' => $siblingTaskIds->count(),
                 ]);

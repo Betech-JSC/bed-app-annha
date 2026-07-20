@@ -73,24 +73,7 @@ class TaskProgressService
                 return 'in_progress'; // Children not all at 100% yet
             }
 
-            // ROOT TASK (Category A): all children must be customer_approved
-            if (!$task->parent_id) {
-                $childIds = ProjectTask::where('parent_id', $task->id)
-                    ->whereNull('deleted_at')
-                    ->pluck('id');
-
-                if ($childIds->isNotEmpty()) {
-                    $approvedCount = Acceptance::whereIn('task_id', $childIds)
-                        ->where('workflow_status', 'customer_approved')
-                        ->count();
-                    if ($approvedCount < $childIds->count()) {
-                        return 'pending_acceptance'; // Some children still in acceptance
-                    }
-                }
-                return 'completed';
-            }
-
-            // CHILD TASK (Category B): check its own Acceptance record
+            // Check its own Acceptance record
             $acceptance = Acceptance::where('task_id', $task->id)->first();
             if ($acceptance) {
                 if ($acceptance->workflow_status === 'customer_approved') {
@@ -99,7 +82,12 @@ class TaskProgressService
                 return 'pending_acceptance';
             }
 
-            // No Acceptance record yet — will be created by pushFromTask()
+            $hasChildren = ProjectTask::where('parent_id', $task->id)->whereNull('deleted_at')->exists();
+            if ($hasChildren) {
+                return 'pending_acceptance';
+            }
+
+            // Child task, no Acceptance record yet — will be created by pushFromTask()
             return 'completed';
         }
 
@@ -225,6 +213,37 @@ class TaskProgressService
     }
 
     /**
+     * Check if all child tasks under a parent task are completed
+     * 
+     * @param ProjectTask $task
+     * @return bool
+     */
+    public function areAllChildrenCompleted(ProjectTask $task): bool
+    {
+        $children = ProjectTask::where('parent_id', $task->id)
+            ->whereNull('deleted_at')
+            ->get();
+
+        if ($children->isEmpty()) {
+            return $task->status === 'completed';
+        }
+
+        foreach ($children as $child) {
+            if (ProjectTask::where('parent_id', $child->id)->whereNull('deleted_at')->exists()) {
+                if ($child->status !== 'completed' || !$this->areAllChildrenCompleted($child)) {
+                    return false;
+                }
+            } else {
+                if ($child->status !== 'completed') {
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    }
+
+    /**
      * Check if a task is "customer accepted" based on Acceptance module
      * 
      * @param ProjectTask $task
@@ -232,22 +251,15 @@ class TaskProgressService
      */
     public function isTaskAccepted(ProjectTask $task): bool
     {
-        // Root task (Category A): all children must be customer_approved
-        if (!$task->parent_id) {
-            $childIds = ProjectTask::where('parent_id', $task->id)->whereNull('deleted_at')->pluck('id');
-            if ($childIds->isEmpty()) {
-                return true;
-            }
-            $approvedCount = Acceptance::whereIn('task_id', $childIds)
-                ->where('workflow_status', 'customer_approved')
-                ->count();
-            return $approvedCount >= $childIds->count();
-        }
+        $hasChildren = ProjectTask::where('parent_id', $task->id)->whereNull('deleted_at')->exists();
 
-        // Child task (Category B): check its own Acceptance record
         $acceptance = Acceptance::where('task_id', $task->id)->first();
         if ($acceptance) {
             return $acceptance->workflow_status === 'customer_approved';
+        }
+
+        if ($hasChildren) {
+            return false;
         }
 
         return true;
@@ -285,11 +297,16 @@ class TaskProgressService
                 $progress = max($logProgress, $storedProgress);
             }
 
-            // STEP 1: Push child task into acceptance when it hits 100%.
-            // Root tasks have no direct acceptance record — their status is derived
-            // from all children's acceptance records in calculateStatus().
-            if ($progress >= 99.9 && $task->parent_id !== null) {
-                app(AcceptanceService::class)->pushFromTask($task);
+            // STEP 1: Push task into acceptance when it hits 100%.
+            $hasChildren = ProjectTask::where('parent_id', $task->id)->whereNull('deleted_at')->exists();
+            if ($progress >= 99.9) {
+                if (!$hasChildren) {
+                    app(AcceptanceService::class)->pushFromTask($task);
+                } else {
+                    if ($this->areAllChildrenCompleted($task)) {
+                        app(AcceptanceService::class)->pushFromTask($task);
+                    }
+                }
             }
 
             // STEP 2: Calculate status (now aware of acceptance state)
