@@ -132,6 +132,27 @@
         class="ac-table"
         :scroll="{ x: 1000 }"
         :loading="isRefreshing"
+        :custom-row="(record) => ({
+          onClick: (event) => {
+            if (!getDetailUrl(record)) return;
+            const path = event.composedPath();
+            const isInteractive = path.some(el => 
+              el.tagName === 'BUTTON' || 
+              el.tagName === 'A' || 
+              el.tagName === 'INPUT' || 
+              (el.classList && (
+                el.classList.contains('ant-btn') || 
+                el.classList.contains('ant-space') || 
+                el.classList.contains('ant-avatar') ||
+                el.classList.contains('ant-tag')
+              ))
+            );
+            if (!isInteractive) {
+              navigateToDetail(record);
+            }
+          },
+          style: getDetailUrl(record) ? 'cursor: pointer' : ''
+        })"
       >
       <template #bodyCell="{ column, record }">
         <!-- Status Tag (New in Table) -->
