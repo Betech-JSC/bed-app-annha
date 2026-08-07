@@ -27,11 +27,11 @@
         <template v-if="column.key === 'name'">
           <div><div class="font-semibold">{{ record.name }}</div><div class="text-xs text-gray-400">{{ record.code }}</div></div>
         </template>
-        <template v-else-if="column.key === 'category'">
+        <template v-else-if="column.key === 'cost_group'">
           <span v-if="record.cost_group" class="px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-600 text-[11px] font-medium border border-blue-100">
             {{ record.cost_group.name }}
           </span>
-          <span v-else class="text-gray-400 text-xs italic">{{ record.category || '—' }}</span>
+          <span v-else class="text-gray-400 text-xs italic">—</span>
         </template>
         <template v-else-if="column.key === 'price'">{{ formatCurrency(record.unit_price) }}</template>
         <template v-else-if="column.key === 'actions'">
@@ -57,11 +57,20 @@
         <a-col :span="8"><a-form-item label="Đơn vị" required><a-input v-model:value="form.unit" placeholder="thùng, kg..." size="large" /></a-form-item></a-col>
         <a-col :span="12"><a-form-item label="Đơn giá"><a-input-number v-model:value="form.unit_price" :min="0" class="w-full" size="large" :formatter="(v) => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" /></a-form-item></a-col>
       </a-row>
-      <a-form-item label="Nhóm chi phí (Danh mục)">
-        <a-select v-model:value="form.cost_group_id" placeholder="Chọn nhóm chi phí..." size="large" show-search option-filter-prop="label">
-          <a-select-option v-for="g in costGroups" :key="g.id" :value="g.id" :label="g.name">{{ g.name }}</a-select-option>
-        </a-select>
-      </a-form-item>
+      <a-row :gutter="16">
+        <a-col :span="12">
+          <a-form-item label="Danh mục (Ví dụ: Sắt xây dựng, Cát đá...)">
+            <a-input v-model:value="form.category" placeholder="Nhập danh mục..." size="large" />
+          </a-form-item>
+        </a-col>
+        <a-col :span="12">
+          <a-form-item label="Nhóm vật tư (Liên kết chi phí)">
+            <a-select v-model:value="form.cost_group_id" placeholder="Chọn nhóm vật tư..." size="large" show-search option-filter-prop="label">
+              <a-select-option v-for="g in costGroups" :key="g.id" :value="g.id" :label="g.name">{{ g.name }}</a-select-option>
+            </a-select>
+          </a-form-item>
+        </a-col>
+      </a-row>
       <a-form-item label="Mô tả"><a-textarea v-model:value="form.description" :rows="2" /></a-form-item>
     </a-form>
   </a-modal>
@@ -86,7 +95,8 @@ const filters = ref({ search: props.filters?.search || '', cost_group_id: props.
 const columns = [
   { title: 'Vật tư', key: 'name', width: 250 },
   { title: 'Đơn vị', dataIndex: 'unit', width: 100 },
-  { title: 'Danh mục', key: 'category', width: 140 },
+  { title: 'Danh mục', dataIndex: 'category', width: 140 },
+  { title: 'Nhóm vật tư', key: 'cost_group', width: 180 },
   { title: 'Đơn giá', key: 'price', align: 'right', width: 150 },
   { title: '', key: 'actions', width: 100, align: 'center' },
 ]
@@ -96,9 +106,9 @@ const debounceSearch = () => { clearTimeout(searchTimeout); searchTimeout = setT
 const applyFilters = () => { loading.value = true; router.get('/materials', { search: filters.value.search || undefined, cost_group_id: filters.value.cost_group_id || undefined }, { preserveState: true, replace: true, onFinish: () => loading.value = false }) }
 const handleTableChange = (p) => { loading.value = true; router.get('/materials', { page: p.current, ...filters.value }, { preserveState: true, replace: true, onFinish: () => loading.value = false }) }
 
-const form = useForm({ name: '', code: '', unit: '', cost_group_id: null, unit_price: null, description: '' })
+const form = useForm({ name: '', code: '', unit: '', category: '', cost_group_id: null, unit_price: null, description: '' })
 const openCreateModal = () => { editing.value = null; form.reset(); showModal.value = true }
-const openEditModal = (m) => { editing.value = m; Object.assign(form, { name: m.name, code: m.code || '', unit: m.unit, cost_group_id: m.cost_group_id, unit_price: m.unit_price, description: m.description || '' }); showModal.value = true }
+const openEditModal = (m) => { editing.value = m; Object.assign(form, { name: m.name, code: m.code || '', unit: m.unit, category: m.category || '', cost_group_id: m.cost_group_id, unit_price: m.unit_price, description: m.description || '' }); showModal.value = true }
 const handleSubmit = () => {
   if (editing.value) router.put(`/materials/${editing.value.id}`, form.data(), { onSuccess: () => { showModal.value = false; resetForm() } })
   else router.post('/materials', form.data(), { onSuccess: () => { showModal.value = false; resetForm() } })

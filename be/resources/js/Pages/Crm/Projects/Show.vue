@@ -2049,18 +2049,22 @@
         </div>
       </a-tab-pane>
 
-      <!-- ============ MATERIALS TAB — Bill-based tracking (Giống APP) ============ -->
-      <a-tab-pane key="materials" v-if="isTabVisible('materials')">
-        <template #tab><a-tooltip title="Quản lý chi phí vật liệu theo bill nhập: theo dõi từng phiếu, duyệt thanh toán" placement="bottom">Vật liệu ({{ vlxdBills.length }})</a-tooltip></template>
+      <!-- ============ DYNAMIC COST GROUP TABS ============ -->
+      <a-tab-pane v-for="g in visibleCostGroups" :key="'cost_group_' + g.id">
+        <template #tab>
+          <a-tooltip :title="g.description || g.name" placement="bottom">
+            {{ g.name }} ({{ getBillsForGroup(g.id).length }})
+          </a-tooltip>
+        </template>
         <div class="p-4">
-          <!-- Sub-tab switcher -->
-          <div class="flex items-center gap-2 mb-4">
-            <a-button :type="matSubTab === 'bills' ? 'primary' : 'default'" size="small" @click="switchMatSubTab('bills')">📄 Phiếu nhập ({{ vlxdBills.length }})</a-button>
+          <!-- Sub-tab switcher (Only for VLXD group) -->
+          <div v-if="g.code === 'VLXD'" class="flex items-center gap-2 mb-4">
+            <a-button :type="matSubTab === 'bills' ? 'primary' : 'default'" size="small" @click="switchMatSubTab('bills')">📄 Phiếu nhập ({{ getBillsForGroup(g.id).length }})</a-button>
             <a-button :type="matSubTab === 'summary' ? 'primary' : 'default'" size="small" @click="switchMatSubTab('summary')">📊 Tổng hợp vật tư</a-button>
           </div>
 
           <!-- ===== BILLS SUB-TAB ===== -->
-          <div v-if="matSubTab === 'bills'">
+          <div v-if="g.code !== 'VLXD' || matSubTab === 'bills'">
             <!-- Summary Cards -->
             <div class="grid grid-cols-4 gap-3 mb-4">
               <div class="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-3 border border-blue-100/60">
@@ -2068,28 +2072,28 @@
                   <div class="w-7 h-7 rounded-lg bg-blue-500/10 flex items-center justify-center"><span class="text-blue-600 text-xs">📄</span></div>
                   <span class="text-[11px] text-gray-400">Tổng phiếu</span>
                 </div>
-                <div class="text-lg font-bold text-gray-800">{{ vlxdBills.length }}</div>
+                <div class="text-lg font-bold text-gray-800">{{ getBillsForGroup(g.id).length }}</div>
               </div>
               <div class="bg-gradient-to-br from-emerald-50 to-green-50 rounded-xl p-3 border border-emerald-100/60">
                 <div class="flex items-center gap-2 mb-1">
                   <div class="w-7 h-7 rounded-lg bg-emerald-500/10 flex items-center justify-center"><span class="text-emerald-600 text-xs">💰</span></div>
                   <span class="text-[11px] text-gray-400">Tổng chi phí</span>
                 </div>
-                <div class="text-lg font-bold text-emerald-600">{{ fmt(totalBillAmount) }}</div>
+                <div class="text-lg font-bold text-emerald-600">{{ fmt(getGroupTotalAmount(g.id)) }}</div>
               </div>
               <div class="bg-gradient-to-br from-green-50 to-teal-50 rounded-xl p-3 border border-green-100/60">
                 <div class="flex items-center gap-2 mb-1">
                   <div class="w-7 h-7 rounded-lg bg-green-500/10 flex items-center justify-center"><CheckCircleOutlined class="text-green-600 text-xs" /></div>
                   <span class="text-[11px] text-gray-400">Đã duyệt</span>
                 </div>
-                <div class="text-lg font-bold text-green-600">{{ vlxdBills.filter(b => b.status === 'approved').length }}</div>
+                <div class="text-lg font-bold text-green-600">{{ getBillsForGroup(g.id).filter(b => b.status === 'approved').length }}</div>
               </div>
               <div class="bg-gradient-to-br from-amber-50 to-yellow-50 rounded-xl p-3 border border-amber-100/60">
                 <div class="flex items-center gap-2 mb-1">
                   <div class="w-7 h-7 rounded-lg bg-amber-500/10 flex items-center justify-center"><ClockCircleOutlined class="text-amber-600 text-xs" /></div>
                   <span class="text-[11px] text-gray-400">Chờ duyệt</span>
                 </div>
-                <div class="text-lg font-bold text-amber-600">{{ vlxdBills.filter(b => ['pending_management','pending_accountant'].includes(b.status)).length }}</div>
+                <div class="text-lg font-bold text-amber-600">{{ getBillsForGroup(g.id).filter(b => ['pending_management','pending_accountant'].includes(b.status)).length }}</div>
               </div>
             </div>
 
@@ -2100,7 +2104,7 @@
             </div>
 
             <!-- Bill Table -->
-            <a-table :columns="billCols" :data-source="vlxdBills" :pagination="{ pageSize: 10 }" row-key="id" size="small" class="crm-table hover-row"
+            <a-table :columns="billCols" :data-source="getBillsForGroup(g.id)" :pagination="{ pageSize: 10 }" row-key="id" size="small" class="crm-table hover-row"
               :custom-row="(record) => ({ onClick: () => openMaterialDetail(record), style: 'cursor: pointer' })">
               <template #bodyCell="{ column, record }">
                 <template v-if="column.key === 'bill_number'">
@@ -2125,11 +2129,11 @@
                 </template>
               </template>
             </a-table>
-            <a-empty v-if="!vlxdBills.length" description="Chưa có phiếu nhập vật liệu" />
+            <a-empty v-if="!getBillsForGroup(g.id).length" :description="'Chưa có phiếu nhập ' + g.name" />
           </div>
 
-          <!-- ===== SUMMARY SUB-TAB ===== -->
-          <div v-else-if="matSubTab === 'summary'">
+          <!-- ===== SUMMARY SUB-TAB (Only for VLXD group) ===== -->
+          <div v-else-if="g.code === 'VLXD' && matSubTab === 'summary'">
             <div class="flex justify-between items-center mb-3">
               <span class="text-xs text-gray-400 font-medium italic">
                 * Thực dùng dựa trên các mặt hàng từ phiếu nhập vật tư đã được phê duyệt.
@@ -2188,150 +2192,6 @@
             </a-table>
             <a-empty v-if="!materialSummary?.length && !loadingSummary" description="Chưa có dữ liệu tổng hợp vật tư" />
           </div>
-        </div>
-      </a-tab-pane>
-
-      <!-- ============ LABOR BILLS TAB ============ -->
-      <a-tab-pane key="labor_cost" v-if="isTabVisible('labor_cost')">
-        <template #tab><a-tooltip title="Chi phí nhân công theo phiếu nhập" placement="bottom">Nhân công ({{ laborBills.length }})</a-tooltip></template>
-        <div class="p-4">
-          <!-- Summary Cards -->
-          <div class="grid grid-cols-4 gap-3 mb-4">
-            <div class="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-3 border border-blue-100/60">
-              <div class="flex items-center gap-2 mb-1">
-                <div class="w-7 h-7 rounded-lg bg-blue-500/10 flex items-center justify-center"><span class="text-blue-600 text-xs">📄</span></div>
-                <span class="text-[11px] text-gray-400">Tổng phiếu</span>
-              </div>
-              <div class="text-lg font-bold text-gray-800">{{ laborBills.length }}</div>
-            </div>
-            <div class="bg-gradient-to-br from-emerald-50 to-green-50 rounded-xl p-3 border border-emerald-100/60">
-              <div class="flex items-center gap-2 mb-1">
-                <div class="w-7 h-7 rounded-lg bg-emerald-500/10 flex items-center justify-center"><span class="text-emerald-600 text-xs">💰</span></div>
-                <span class="text-[11px] text-gray-400">Tổng chi phí</span>
-              </div>
-              <div class="text-lg font-bold text-emerald-600">{{ fmt(totalLaborAmount) }}</div>
-            </div>
-            <div class="bg-gradient-to-br from-green-50 to-teal-50 rounded-xl p-3 border border-green-100/60">
-              <div class="flex items-center gap-2 mb-1">
-                <div class="w-7 h-7 rounded-lg bg-green-500/10 flex items-center justify-center"><CheckCircleOutlined class="text-green-600 text-xs" /></div>
-                <span class="text-[11px] text-gray-400">Đã duyệt</span>
-              </div>
-              <div class="text-lg font-bold text-green-600">{{ laborBills.filter(b => b.status === 'approved').length }}</div>
-            </div>
-            <div class="bg-gradient-to-br from-amber-50 to-yellow-50 rounded-xl p-3 border border-amber-100/60">
-              <div class="flex items-center gap-2 mb-1">
-                <div class="w-7 h-7 rounded-lg bg-amber-500/10 flex items-center justify-center"><ClockCircleOutlined class="text-amber-600 text-xs" /></div>
-                <span class="text-[11px] text-gray-400">Chờ duyệt</span>
-              </div>
-              <div class="text-lg font-bold text-amber-600">{{ laborBills.filter(b => ['pending_management','pending_accountant'].includes(b.status)).length }}</div>
-            </div>
-          </div>
-
-          <div v-if="can('material.create')" class="flex justify-end mb-3">
-            <a-button type="primary" size="small" @click="openBillModal()">
-              <template #icon><PlusOutlined /></template>Tạo phiếu nhập
-            </a-button>
-          </div>
-
-          <!-- Bill Table -->
-          <a-table :columns="billCols" :data-source="laborBills" :pagination="{ pageSize: 10 }" row-key="id" size="small" class="crm-table hover-row"
-            :custom-row="(record) => ({ onClick: () => openMaterialDetail(record), style: 'cursor: pointer' })">
-            <template #bodyCell="{ column, record }">
-              <template v-if="column.key === 'bill_number'">
-                <div class="font-semibold text-blue-600">{{ record.bill_number || `#${record.id}` }}</div>
-                <div class="text-[10px] text-gray-400">{{ fmtDate(record.bill_date) }}</div>
-              </template>
-              <template v-else-if="column.key === 'supplier'">
-                <span v-if="record.supplier" class="text-sm">{{ record.supplier.name }}</span>
-                <span v-else class="text-xs text-gray-400 italic">—</span>
-              </template>
-              <template v-else-if="column.key === 'material_group'">
-                <span class="text-[11px] text-gray-500 line-clamp-2" :title="getMaterialGroups(record)">{{ getMaterialGroups(record) }}</span>
-              </template>
-              <template v-else-if="column.key === 'items_count'">
-                <span class="font-medium">{{ record.items?.length || 0 }} <span class="text-gray-400 text-xs">mặt hàng</span></span>
-              </template>
-              <template v-else-if="column.key === 'total'">
-                <span class="font-bold text-emerald-600">{{ fmt(record.total_amount) }}</span>
-              </template>
-              <template v-else-if="column.key === 'status'">
-                <a-tag :color="billStatusColor(record.status)" class="rounded-full text-[10px]">{{ billStatusLabel(record.status) }}</a-tag>
-              </template>
-            </template>
-          </a-table>
-          <a-empty v-if="!laborBills.length" description="Chưa có phiếu nhập nhân công" />
-        </div>
-      </a-tab-pane>
-
-      <!-- ============ MANAGEMENT COSTS TAB ============ -->
-      <a-tab-pane key="management_cost" v-if="isTabVisible('management_cost')">
-        <template #tab><a-tooltip title="Chi phí quản lý dự án theo phiếu nhập" placement="bottom">Chi phí quản lý ({{ managementBills.length }})</a-tooltip></template>
-        <div class="p-4">
-          <!-- Summary Cards -->
-          <div class="grid grid-cols-4 gap-3 mb-4">
-            <div class="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-3 border border-blue-100/60">
-              <div class="flex items-center gap-2 mb-1">
-                <div class="w-7 h-7 rounded-lg bg-blue-500/10 flex items-center justify-center"><span class="text-blue-600 text-xs">📄</span></div>
-                <span class="text-[11px] text-gray-400">Tổng phiếu</span>
-              </div>
-              <div class="text-lg font-bold text-gray-800">{{ managementBills.length }}</div>
-            </div>
-            <div class="bg-gradient-to-br from-emerald-50 to-green-50 rounded-xl p-3 border border-emerald-100/60">
-              <div class="flex items-center gap-2 mb-1">
-                <div class="w-7 h-7 rounded-lg bg-emerald-500/10 flex items-center justify-center"><span class="text-emerald-600 text-xs">💰</span></div>
-                <span class="text-[11px] text-gray-400">Tổng chi phí</span>
-              </div>
-              <div class="text-lg font-bold text-emerald-600">{{ fmt(totalManagementAmount) }}</div>
-            </div>
-            <div class="bg-gradient-to-br from-green-50 to-teal-50 rounded-xl p-3 border border-green-100/60">
-              <div class="flex items-center gap-2 mb-1">
-                <div class="w-7 h-7 rounded-lg bg-green-500/10 flex items-center justify-center"><CheckCircleOutlined class="text-green-600 text-xs" /></div>
-                <span class="text-[11px] text-gray-400">Đã duyệt</span>
-              </div>
-              <div class="text-lg font-bold text-green-600">{{ managementBills.filter(b => b.status === 'approved').length }}</div>
-            </div>
-            <div class="bg-gradient-to-br from-amber-50 to-yellow-50 rounded-xl p-3 border border-amber-100/60">
-              <div class="flex items-center gap-2 mb-1">
-                <div class="w-7 h-7 rounded-lg bg-amber-500/10 flex items-center justify-center"><ClockCircleOutlined class="text-amber-600 text-xs" /></div>
-                <span class="text-[11px] text-gray-400">Chờ duyệt</span>
-              </div>
-              <div class="text-lg font-bold text-amber-600">{{ managementBills.filter(b => ['pending_management','pending_accountant'].includes(b.status)).length }}</div>
-            </div>
-          </div>
-
-          <div v-if="can('material.create')" class="flex justify-end mb-3">
-            <a-button type="primary" size="small" @click="openBillModal()">
-              <template #icon><PlusOutlined /></template>Tạo phiếu nhập
-            </a-button>
-          </div>
-
-          <!-- Bill Table -->
-          <a-table :columns="billCols" :data-source="managementBills" :pagination="{ pageSize: 10 }" row-key="id" size="small" class="crm-table hover-row"
-            :custom-row="(record) => ({ onClick: () => openMaterialDetail(record), style: 'cursor: pointer' })">
-            <template #bodyCell="{ column, record }">
-              <template v-if="column.key === 'bill_number'">
-                <div class="font-semibold text-blue-600">{{ record.bill_number || `#${record.id}` }}</div>
-                <div class="text-[10px] text-gray-400">{{ fmtDate(record.bill_date) }}</div>
-              </template>
-              <template v-else-if="column.key === 'supplier'">
-                <span v-if="record.supplier" class="text-sm">{{ record.supplier.name }}</span>
-                <span v-else class="text-xs text-gray-400 italic">—</span>
-              </template>
-              <template v-else-if="column.key === 'material_group'">
-                <span class="text-[11px] text-gray-500 line-clamp-2" :title="getMaterialGroups(record)">{{ getMaterialGroups(record) }}</span>
-              </template>
-              <template v-else-if="column.key === 'items_count'">
-                <span class="font-medium">{{ record.items?.length || 0 }} <span class="text-gray-400 text-xs">mặt hàng</span></span>
-              </template>
-              <template v-else-if="column.key === 'total'">
-                <span class="font-bold text-emerald-600">{{ fmt(record.total_amount) }}</span>
-              </template>
-              <template v-else-if="column.key === 'status'">
-                <a-tag :color="billStatusColor(record.status)" class="rounded-full text-[10px]">{{ billStatusLabel(record.status) }}</a-tag>
-              </template>
-            </template>
-          </a-table>
-          <a-empty v-if="!managementBills.length" description="Chưa có phiếu nhập chi phí quản lý" />
         </div>
       </a-tab-pane>
 
@@ -8367,6 +8227,29 @@ const materialBills = computed(() => {
     return (b.id || 0) - (a.id || 0);
   });
 })
+const getBillsForGroup = (groupId) => {
+  const group = props.costGroups?.find(g => g.id === groupId)
+  const isVLXD = group && group.code === 'VLXD'
+  
+  return materialBills.value?.filter(b => {
+    const bGroupId = b.cost_group_id || b.costGroup?.id
+    if (bGroupId === groupId) return true
+    
+    // Fallback: If group is VLXD, include bills with null or non-existent cost_group_id
+    if (isVLXD) {
+      if (bGroupId == null) return true
+      const groupExists = props.costGroups?.some(g => g.id === bGroupId)
+      if (!groupExists) return true
+    }
+    
+    return false
+  }) || []
+}
+
+const getGroupTotalAmount = (groupId) => {
+  return getBillsForGroup(groupId).filter(b => b.status === 'approved').reduce((s, b) => s + Number(b.total_amount || 0), 0)
+}
+
 const vlxdBills = computed(() => {
   return materialBills.value.filter(b => {
     const code = b.cost_group?.code || b.costGroup?.code
@@ -8472,16 +8355,19 @@ const hasSystemPermission = (perm) => {
 }
 
 // Tab group → sub-tab mapping
-const tabGroupTabs = {
-  overview: ['overview'],
-  subcontractor_main: ['subcontractor_info', 'subcontractor_progress', 'subcontractors'],
-  finance: ['contract', 'costs', 'payments', 'additional_costs', 'budgets', 'finance', 'invoices'],
-  expense: ['materials', 'equipment', 'labor_cost', 'management_cost'],
-  monitor: ['gantt', 'progress', 'logs', 'acceptance', 'defects', 'change_requests', 'comments', 'risks'],
-  hr: ['personnel', 'attendance', 'labor'],
-  warranty: ['warranty', 'maintenances'],
-  other: ['documents'],
-}
+const tabGroupTabs = computed(() => {
+  const expenseKeys = (props.costGroups || []).map(g => `cost_group_${g.id}`)
+  return {
+    overview: ['overview'],
+    subcontractor_main: ['subcontractor_info', 'subcontractor_progress', 'subcontractors'],
+    finance: ['contract', 'costs', 'payments', 'additional_costs', 'budgets', 'finance', 'invoices'],
+    expense: [...expenseKeys, 'equipment'],
+    monitor: ['gantt', 'progress', 'logs', 'acceptance', 'defects', 'change_requests', 'comments', 'risks'],
+    hr: ['personnel', 'attendance', 'labor'],
+    warranty: ['warranty', 'maintenances'],
+    other: ['documents'],
+  }
+})
 
 const tabPermissions = {
   gantt: 'gantt.view',
@@ -8515,6 +8401,7 @@ const tabPermissions = {
 }
 
 const isTabPermitted = (tabKey) => {
+  if (tabKey && tabKey.startsWith('cost_group_')) return can('material.view')
   if (!tabPermissions[tabKey]) return true
   return can(tabPermissions[tabKey])
 }
@@ -8577,6 +8464,10 @@ const daysRemaining = computed(() => {
 // ============ STATE ============
 // Read initial tab from URL query string (?tab=costs, ?tab=materials, etc.)
 const getSubTabCount = (tabKey) => {
+  if (tabKey && tabKey.startsWith('cost_group_')) {
+    const groupId = Number(tabKey.replace('cost_group_', ''))
+    return materialBills.value?.filter(b => b.cost_group_id === groupId || b.costGroup?.id === groupId).length || 0
+  }
   const c = props.counts || {}
   const map = {
     gantt: c.tasks, progress: c.tasks,
@@ -8608,7 +8499,8 @@ const getInitialTab = () => {
     'warranty', 'maintenances',
     'documents',
   ]
-  const target = (tabParam && validTabs.includes(tabParam)) ? tabParam : null
+  const isDynamicCostTab = tabParam && tabParam.startsWith('cost_group_')
+  const target = (tabParam && (validTabs.includes(tabParam) || isDynamicCostTab)) ? tabParam : null
   
   if (target && isTabPermitted(target)) return target
   
@@ -8617,7 +8509,7 @@ const getInitialTab = () => {
     { key: 'monitor', tabs: ['gantt', 'progress', 'logs', 'acceptance', 'defects', 'change_requests'] },
     { key: 'finance', tabs: ['contract', 'costs', 'payments'] },
     { key: 'subcontractor_main', tabs: ['subcontractor_info', 'subcontractor_progress', 'subcontractors'] },
-    { key: 'expense', tabs: ['materials', 'equipment', 'labor_cost', 'management_cost'] },
+    { key: 'expense', tabs: [...(props.costGroups || []).map(g => 'cost_group_' + g.id), 'equipment'] },
     { key: 'hr', tabs: ['personnel', 'attendance'] },
     { key: 'warranty', tabs: ['warranty', 'maintenances'] },
     { key: 'other', tabs: ['documents'] },
@@ -8639,6 +8531,7 @@ const getInitialTab = () => {
 }
 
 const getGroupForTab = (tab) => {
+  if (tab && tab.startsWith('cost_group_')) return 'expense'
   const groupMap = {
     overview: 'overview',
     subcontractor_info: 'subcontractor_main',
@@ -9089,7 +8982,7 @@ const tabGroups = computed(() => {
   ]
   return groups
     .map(g => {
-      const visibleSubTabs = (tabGroupTabs[g.key] || []).filter(t => isTabPermitted(t))
+      const visibleSubTabs = (tabGroupTabs.value[g.key] || []).filter(t => isTabPermitted(t))
       if (visibleSubTabs.length === 0) return null
       
       // Preference logic: 
@@ -9109,9 +9002,13 @@ const tabGroups = computed(() => {
 
 const isTabVisible = (tabKey) => {
   if (!isTabPermitted(tabKey)) return false
-  const tabs = tabGroupTabs[activeTabGroup.value]
+  const tabs = tabGroupTabs.value[activeTabGroup.value]
   return tabs ? tabs.includes(tabKey) : false
 }
+
+const visibleCostGroups = computed(() => {
+  return (props.costGroups || []).filter(g => isTabVisible(`cost_group_${g.id}`))
+})
 
 // Map activeTab to correct group (for when tab clicked directly)
 watch(activeTab, (tab) => {
@@ -12212,13 +12109,19 @@ const openBillModal = (record = null) => {
     }
   } else {
     // Tìm nhóm chi phí tương ứng với tab đang chọn để set mặc định
-    let defaultCode = 'VLXD'
-    if (activeTab.value === 'labor_cost') {
-      defaultCode = 'NC'
-    } else if (activeTab.value === 'management_cost') {
-      defaultCode = 'CPQL'
+    let defaultGroup = null
+    if (activeTab.value && activeTab.value.startsWith('cost_group_')) {
+      const groupId = Number(activeTab.value.replace('cost_group_', ''))
+      defaultGroup = props.costGroups?.find(g => g.id === groupId)
+    } else {
+      let defaultCode = 'VLXD'
+      if (activeTab.value === 'labor_cost') {
+        defaultCode = 'NC'
+      } else if (activeTab.value === 'management_cost') {
+        defaultCode = 'CPQL'
+      }
+      defaultGroup = props.costGroups?.find(g => g.code === defaultCode || g.name?.toLowerCase().includes(defaultCode === 'VLXD' ? 'vật liệu' : (defaultCode === 'NC' ? 'nhân công' : 'quản lý')))
     }
-    const defaultGroup = props.costGroups?.find(g => g.code === defaultCode || g.name?.toLowerCase().includes(defaultCode === 'VLXD' ? 'vật liệu' : (defaultCode === 'NC' ? 'nhân công' : 'quản lý')))
     billForm.value = { 
       bill_date: dayjs().format('YYYY-MM-DD'), 
       supplier_id: null, 
