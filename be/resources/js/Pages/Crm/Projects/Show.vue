@@ -4656,14 +4656,14 @@
            <a-button @click="showRentalDetailDrawer = false">Đóng</a-button>
            <a-button v-if="selectedRental.status === 'draft' && can('equipment.update')" @click="openRentalModal(selectedRental)"><EditOutlined /> Sửa</a-button>
            <a-button v-if="selectedRental.status === 'draft' && can('equipment.update')" type="primary" @click="submitRental(selectedRental)">Gửi duyệt</a-button>
-           <a-button v-if="selectedRental.status === 'pending_management' && can('equipment.approve')" type="primary" class="!bg-green-500 !border-green-500 hover:!bg-green-600" @click="approveRentalMgmt(selectedRental)"><CheckCircleOutlined /> BĐH Duyệt</a-button>
-            <a-tooltip v-if="selectedRental.status === 'pending_accountant' && can('equipment.approve')" :title="!(selectedRental.attachments || []).filter(a => a.description !== 'after').length ? 'Thiếu chứng từ — Không thể xác nhận' : ''">
+           <a-button v-if="selectedRental.status === 'pending_management' && (can('cost.approve.management') || can('equipment.approve'))" type="primary" class="!bg-green-500 !border-green-500 hover:!bg-green-600" @click="approveRentalMgmt(selectedRental)"><CheckCircleOutlined /> BĐH Duyệt</a-button>
+            <a-tooltip v-if="selectedRental.status === 'pending_accountant' && (can('cost.approve.accountant') || can('equipment.approve'))" :title="!(selectedRental.attachments || []).filter(a => a.description !== 'after').length ? 'Thiếu chứng từ — Không thể xác nhận' : ''">
               <a-button type="primary" :disabled="!(selectedRental.attachments || []).filter(a => a.description !== 'after').length" @click="confirmRentalKT(selectedRental)"><CheckOutlined /> KT Xác nhận</a-button>
             </a-tooltip>
             <a-button v-if="selectedRental.status === 'in_use' && can('equipment.update')" type="primary" class="!bg-orange-500 !border-orange-500 hover:!bg-orange-600" @click="requestReturnRental(selectedRental)">Đánh dấu đã trả</a-button>
-            <a-button v-if="selectedRental.status === 'pending_return' && can('equipment.approve')" type="primary" @click="confirmReturnRentalAction(selectedRental)"><CheckOutlined /> KT Xác nhận trả</a-button>
+            <a-button v-if="selectedRental.status === 'pending_return' && (can('cost.approve.accountant') || can('equipment.approve'))" type="primary" @click="confirmReturnRentalAction(selectedRental)"><CheckOutlined /> KT Xác nhận trả</a-button>
             <a-button v-if="['pending_management', 'pending_accountant', 'available', 'rejected'].includes(selectedRental.status) && hasSystemPermission('equipment.revert')" danger ghost @click="revertRentalAction && revertRentalAction(selectedRental)">Hoàn duyệt</a-button>
-            <a-popconfirm v-if="['pending_management','pending_accountant'].includes(selectedRental.status) && can('equipment.approve')" title="Từ chối phiếu thuê?" @confirm="rejectRental(selectedRental)">
+            <a-popconfirm v-if="['pending_management','pending_accountant'].includes(selectedRental.status) && (can('cost.approve.management') || can('cost.approve.accountant') || can('equipment.approve'))" title="Từ chối phiếu thuê?" @confirm="rejectRental(selectedRental)">
              <template #description>
                <a-input v-model:value="rejectReason" placeholder="Nhập lý do từ chối..." class="mt-2" />
              </template>

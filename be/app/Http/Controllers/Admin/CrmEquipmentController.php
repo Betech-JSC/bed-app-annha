@@ -473,9 +473,9 @@ class CrmEquipmentController extends Controller
         $project = Project::findOrFail($targetProjectId);
         $totalPrice = $equipment->purchase_price * $exportQuantity;
 
-        $costGroupId = \App\Models\CostGroup::where('code', 'equipment')
+        $costGroupId = \App\Models\CostGroup::where('code', 'TBMM')
             ->orWhere('name', 'LIKE', '%Thiết bị%')
-            ->value('id') ?: 4;
+            ->value('id') ?: \App\Models\CostGroup::first()?->id;
 
         DB::transaction(function () use ($equipment, $project, $targetProjectId, $exportQuantity, $exportDate, $notes, $totalPrice, $user, $costGroupId) {
             // 1. Update/Split equipment

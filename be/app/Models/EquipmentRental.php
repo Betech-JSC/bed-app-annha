@@ -135,9 +135,9 @@ class EquipmentRental extends Model
             $costStatus = 'approved';
         }
 
-        $costGroupId = \App\Models\CostGroup::where('code', 'equipment_rental')
-            ->orWhere('name', 'LIKE', '%Thuê thiết bị%')
-            ->value('id') ?: 6;
+        $costGroupId = \App\Models\CostGroup::where('code', 'TBMM')
+            ->orWhere('name', 'LIKE', '%Thiết bị%')
+            ->value('id') ?: \App\Models\CostGroup::first()?->id;
 
         Cost::updateOrCreate(
             ['equipment_rental_id' => $this->id],
