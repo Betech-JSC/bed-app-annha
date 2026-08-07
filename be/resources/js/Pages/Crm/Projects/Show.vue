@@ -7348,12 +7348,27 @@
             <div class="flex items-center gap-3 flex-1 min-w-0">
               <div class="w-7 h-7 rounded-lg bg-orange-50 border border-orange-100 flex items-center justify-center text-xs font-bold text-orange-500">{{ i + 1 }}</div>
               <div class="min-w-0 flex-1">
-                <div class="text-sm font-semibold text-gray-700 truncate">{{ bi._name }}</div>
-                <div class="text-xs text-gray-400">{{ fmtQty(bi.quantity) }} {{ bi._unit }} × {{ fmt(bi.unit_price) }}</div>
+                <div class="text-sm font-semibold text-gray-700 truncate" :title="bi._name">{{ bi._name }}</div>
+                <div class="flex flex-wrap items-center gap-x-2 gap-y-1.5 mt-1.5">
+                  <div class="flex items-center gap-1">
+                    <span class="text-[10px] text-gray-400 font-bold uppercase mr-1">SL:</span>
+                    <a-input-number v-model:value="bi.quantity" :min="0.01" size="small" class="w-20" />
+                    <span class="text-xs text-gray-500 font-medium pl-1">{{ bi._unit }}</span>
+                  </div>
+                  <span class="text-gray-300">|</span>
+                  <div class="flex items-center gap-1">
+                    <span class="text-[10px] text-gray-400 font-bold uppercase mr-1">Đơn giá:</span>
+                    <a-input-number v-model:value="bi.unit_price" :min="0" size="small" class="w-32" :formatter="v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')" :parser="v => v.replace(/,/g, '')" />
+                    <span class="text-xs text-gray-500 font-medium pl-1">đ</span>
+                  </div>
+                </div>
               </div>
             </div>
-            <div class="flex items-center gap-2">
-              <span class="text-sm font-bold text-emerald-600 whitespace-nowrap">{{ fmt(bi.quantity * bi.unit_price) }}</span>
+            <div class="flex items-center gap-3">
+              <div class="text-right">
+                <div class="text-[10px] text-gray-400 font-bold uppercase">Thành tiền</div>
+                <span class="text-sm font-bold text-emerald-600 whitespace-nowrap">{{ fmt(bi.quantity * bi.unit_price) }}</span>
+              </div>
               <a-button type="text" size="small" danger @click="billForm.items.splice(i, 1)"><CloseOutlined class="text-xs" /></a-button>
             </div>
           </div>
