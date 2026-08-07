@@ -250,9 +250,19 @@ class SubcontractorPayment extends Model
             return;
         }
 
-        $costGroupId = \App\Models\CostGroup::where('code', 'subcontractor')
-            ->orWhere('name', 'LIKE', '%Nhà thầu phụ%')
-            ->value('id') ?: 5;
+        $isLabor = $this->subcontractor && stripos($this->subcontractor->category, 'nhân công') !== false;
+        if ($isLabor) {
+            $costGroupId = \App\Models\CostGroup::where('code', 'NC')
+                ->orWhere('name', 'LIKE', '%Nhân công%')
+                ->value('id');
+        } else {
+            $costGroupId = \App\Models\CostGroup::where('code', 'subcontractor')
+                ->orWhere('name', 'LIKE', '%Nhà thầu phụ%')
+                ->value('id');
+        }
+        if (!$costGroupId) {
+            $costGroupId = 5;
+        }
         
         $costStatus = match($this->status) {
             'draft'                           => 'draft',

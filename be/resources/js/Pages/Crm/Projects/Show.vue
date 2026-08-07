@@ -2053,7 +2053,7 @@
       <a-tab-pane v-for="g in visibleCostGroups" :key="'cost_group_' + g.id">
         <template #tab>
           <a-tooltip :title="g.description || g.name" placement="bottom">
-            {{ g.name }} ({{ getBillsForGroup(g.id).length }})
+            {{ g.name }} ({{ g.code === 'NC' ? laborSubcontractorPayments.length : getBillsForGroup(g.id).length }})
           </a-tooltip>
         </template>
         <div class="p-4">
@@ -2063,8 +2063,72 @@
             <a-button :type="matSubTab === 'summary' ? 'primary' : 'default'" size="small" @click="switchMatSubTab('summary')">📊 Tổng hợp vật tư</a-button>
           </div>
 
+          <!-- ===== LABOR COST TAB ===== -->
+          <div v-if="g.code === 'NC'">
+            <!-- Summary Cards -->
+            <div class="grid grid-cols-4 gap-3 mb-4">
+              <div class="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-3 border border-blue-100/60">
+                <div class="flex items-center gap-2 mb-1">
+                  <div class="w-7 h-7 rounded-lg bg-blue-500/10 flex items-center justify-center"><span class="text-blue-600 text-xs">📄</span></div>
+                  <span class="text-[11px] text-gray-400">Tổng phiếu</span>
+                </div>
+                <div class="text-lg font-bold text-gray-800">{{ laborSubcontractorPayments.length }}</div>
+              </div>
+              <div class="bg-gradient-to-br from-emerald-50 to-green-50 rounded-xl p-3 border border-emerald-100/60">
+                <div class="flex items-center gap-2 mb-1">
+                  <div class="w-7 h-7 rounded-lg bg-emerald-500/10 flex items-center justify-center"><span class="text-emerald-600 text-xs">💰</span></div>
+                  <span class="text-[11px] text-gray-400">Tổng chi phí</span>
+                </div>
+                <div class="text-lg font-bold text-emerald-600">{{ fmt(totalLaborPaymentAmount) }}</div>
+              </div>
+              <div class="bg-gradient-to-br from-green-50 to-teal-50 rounded-xl p-3 border border-green-100/60">
+                <div class="flex items-center gap-2 mb-1">
+                  <div class="w-7 h-7 rounded-lg bg-green-500/10 flex items-center justify-center"><CheckCircleOutlined class="text-green-600 text-xs" /></div>
+                  <span class="text-[11px] text-gray-400">Đã duyệt</span>
+                </div>
+                <div class="text-lg font-bold text-green-600">{{ laborSubcontractorPayments.filter(p => p.status === 'paid').length }}</div>
+              </div>
+              <div class="bg-gradient-to-br from-amber-50 to-yellow-50 rounded-xl p-3 border border-amber-100/60">
+                <div class="flex items-center gap-2 mb-1">
+                  <div class="w-7 h-7 rounded-lg bg-amber-500/10 flex items-center justify-center"><ClockCircleOutlined class="text-amber-600 text-xs" /></div>
+                  <span class="text-[11px] text-gray-400">Chờ duyệt</span>
+                </div>
+                <div class="text-lg font-bold text-amber-600">{{ laborSubcontractorPayments.filter(p => ['pending_management_approval', 'pending_accountant_confirmation'].includes(p.status)).length }}</div>
+              </div>
+            </div>
+
+            <div v-if="can('subcontractor_payment.create')" class="flex justify-end mb-3">
+              <a-button type="primary" size="small" @click="openSubPaymentDrawer(null, true)">
+                <template #icon><PlusOutlined /></template>Tạo thanh toán nhân công
+              </a-button>
+            </div>
+
+            <!-- Labor Payments Table -->
+            <a-table :columns="allSubPayCols" :data-source="laborSubcontractorPayments" :pagination="{ pageSize: 10 }" row-key="id" size="small" class="crm-table hover-row"
+              :custom-row="(r) => ({ onClick: () => openSubPaymentDetail(r), style: 'cursor: pointer' })">
+              <template #bodyCell="{ column, record }">
+                <template v-if="column.key === 'subcontractor_name'">
+                  <span class="font-semibold text-gray-800">{{ record.subcontractor_name }}</span>
+                </template>
+                <template v-else-if="column.key === 'payment_stage'">
+                  <span class="text-gray-700">{{ record.payment_stage || 'Thanh toán' }}</span>
+                </template>
+                <template v-else-if="column.key === 'amount'">
+                  <span class="font-semibold text-red-500">{{ fmt(record.amount) }}</span>
+                </template>
+                <template v-else-if="column.key === 'status'">
+                  <a-tag :color="subPayStatusColors[record.status]" class="rounded-full text-[10px]">{{ subPayStatusLabels[record.status] || record.status }}</a-tag>
+                </template>
+                <template v-else-if="column.key === 'payment_date'">
+                  <span class="text-xs text-gray-500">{{ record.payment_date ? fmtDate(record.payment_date) : '—' }}</span>
+                </template>
+              </template>
+            </a-table>
+            <a-empty v-if="!laborSubcontractorPayments?.length" description="Chưa có phiếu nhập nhân công" />
+          </div>
+
           <!-- ===== BILLS SUB-TAB ===== -->
-          <div v-if="g.code !== 'VLXD' || matSubTab === 'bills'">
+          <div v-else-if="g.code !== 'VLXD' || matSubTab === 'bills'">
             <!-- Summary Cards -->
             <div class="grid grid-cols-4 gap-3 mb-4">
               <div class="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-3 border border-blue-100/60">
@@ -6107,13 +6171,13 @@
     </template>
   </a-drawer>
 
-  <a-drawer v-model:open="showSubPayCreateDrawer" title="Tạo phiếu thanh toán NTP" :width="500" @close="closeSubPayCreateDrawer" destroy-on-close class="crm-drawer">
+  <a-drawer v-model:open="showSubPayCreateDrawer" :title="subPayIsLaborMode ? 'Tạo phiếu thanh toán Nhân công' : 'Tạo phiếu thanh toán NTP'" :width="500" @close="closeSubPayCreateDrawer" destroy-on-close class="crm-drawer">
     <div class="px-3 py-2">
       <!-- Subcontractor Selection Dropdown (if not pre-selected) -->
       <div v-if="!isSubPayTargetPreselected" class="mb-4 bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
-        <a-form-item label="Nhà thầu phụ" required class="mb-0">
-          <a-select v-model:value="selectedSubId" class="w-full rounded-lg" size="large" placeholder="Chọn nhà thầu phụ..." @change="onSubPayTargetChange" show-search option-filter-prop="label">
-            <a-select-option v-for="sub in project.subcontractors || []" :key="sub.id" :value="sub.id" :label="sub.name">{{ sub.name }}</a-select-option>
+        <a-form-item :label="subPayIsLaborMode ? 'Tổ đội nhân công' : 'Nhà thầu phụ'" required class="mb-0">
+          <a-select v-model:value="selectedSubId" class="w-full rounded-lg" size="large" :placeholder="subPayIsLaborMode ? 'Chọn tổ đội nhân công...' : 'Chọn nhà thầu phụ...'" @change="onSubPayTargetChange" show-search option-filter-prop="label">
+            <a-select-option v-for="sub in subPayDrawerSubcontractors" :key="sub.id" :value="sub.id" :label="sub.name">{{ sub.name }}</a-select-option>
           </a-select>
         </a-form-item>
       </div>
@@ -8287,6 +8351,32 @@ const allSubcontractorPayments = computed(() => {
   });
   return payments.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).reverse();
 });
+
+const subPayIsLaborMode = ref(false)
+
+const laborSubcontractorPayments = computed(() => {
+  return (allSubcontractorPayments.value || []).filter(p => {
+    const cat = p.subcontractor?.category || '';
+    return cat.toLowerCase().includes('nhân công');
+  });
+})
+
+const totalLaborPaymentAmount = computed(() => {
+  return laborSubcontractorPayments.value
+    .filter(p => p.status === 'paid')
+    .reduce((s, p) => s + Number(p.amount || 0), 0)
+})
+
+const subPayDrawerSubcontractors = computed(() => {
+  const allSubs = subcontractors.value || []
+  if (subPayIsLaborMode.value) {
+    return allSubs.filter(sub => {
+      const cat = sub.category || '';
+      return cat.toLowerCase().includes('nhân công');
+    })
+  }
+  return allSubs
+})
 const equipmentRentals = computed(() => props.equipmentData?.rentals || [])
 const equipmentPurchases = computed(() => props.equipmentData?.purchases || [])
 const assetUsages = computed(() => props.equipmentData?.usages || [])
@@ -8466,7 +8556,11 @@ const daysRemaining = computed(() => {
 const getSubTabCount = (tabKey) => {
   if (tabKey && tabKey.startsWith('cost_group_')) {
     const groupId = Number(tabKey.replace('cost_group_', ''))
-    return materialBills.value?.filter(b => b.cost_group_id === groupId || b.costGroup?.id === groupId).length || 0
+    const group = props.costGroups?.find(g => g.id === groupId)
+    if (group && group.code === 'NC') {
+      return laborSubcontractorPayments.value?.length || 0
+    }
+    return getBillsForGroup(groupId).length || 0
   }
   const c = props.counts || {}
   const map = {
@@ -11089,7 +11183,8 @@ const openSubPaymentHistory = (sub) => {
   subDetail.value = sub
   showSubPayDrawer.value = true
 }
-const openSubPaymentDrawer = (sub) => {
+const openSubPaymentDrawer = (sub, isLaborMode = false) => {
+  subPayIsLaborMode.value = isLaborMode
   subPayTarget.value = sub
   selectedSubId.value = sub ? sub.id : null
   isSubPayTargetPreselected.value = !!sub

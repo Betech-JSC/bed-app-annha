@@ -55,6 +55,10 @@ class CostEquipmentSyncTest extends TestCase
             'name' => 'Nhà thầu phụ',
             'code' => 'subcontractor',
         ]);
+        \App\Models\CostGroup::firstOrCreate(['id' => 2], [
+            'name' => 'Nhân công',
+            'code' => 'NC',
+        ]);
         \App\Models\CostGroup::firstOrCreate(['id' => 6], [
             'name' => 'Thuê thiết bị',
             'code' => 'equipment_rental',
@@ -224,6 +228,34 @@ class CostEquipmentSyncTest extends TestCase
         $cost = Cost::where('subcontractor_payment_id', $payment->id)->first();
         $this->assertNotNull($cost);
         $this->assertEquals('opex', $cost->expense_category);
+    }
+
+    public function test_subcontractor_payment_sync_resolves_nc_cost_group_for_labor()
+    {
+        $laborSub = \App\Models\Subcontractor::create([
+            'project_id' => $this->project->id,
+            'name' => 'Tổ đội nhân công Toàn Cầu',
+            'category' => 'Nhân công xây tô',
+            'total_quote' => 10000000,
+        ]);
+
+        $payment = \App\Models\SubcontractorPayment::create([
+            'project_id' => $this->project->id,
+            'subcontractor_id' => $laborSub->id,
+            'payment_stage' => 'Đợt 1',
+            'amount' => 5000000,
+            'payment_date' => now()->toDateString(),
+            'status' => 'paid',
+            'created_by' => $this->user->id,
+        ]);
+
+        $payment->syncToCostTable();
+
+        $cost = Cost::where('subcontractor_payment_id', $payment->id)->first();
+        $this->assertNotNull($cost);
+        
+        $ncGroup = \App\Models\CostGroup::where('code', 'NC')->first();
+        $this->assertEquals($ncGroup->id, $cost->cost_group_id);
     }
 
     public function test_additional_cost_sync_sets_opex()
