@@ -525,7 +525,8 @@ class Cost extends Model
             $this->subcontractor_payment_id || 
             $this->equipment_id || 
             $this->equipment_rental_id ||
-            $this->additional_cost_id) {
+            $this->additional_cost_id ||
+            $this->equipment_purchase_id) {
             return false;
         }
 
