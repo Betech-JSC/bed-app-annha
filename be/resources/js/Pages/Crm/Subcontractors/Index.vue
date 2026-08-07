@@ -257,13 +257,57 @@
         </a-collapse-panel>
       </a-collapse>
 
-      <div v-if="!editingSub" class="border-t pt-4 mt-4">
+      <div class="border-t pt-4 mt-4">
         <a-checkbox v-model:checked="form.create_cost" class="mb-2 text-sm font-medium">Tự động tạo chi phí dự án cho NTP này</a-checkbox>
         <div v-if="form.create_cost" class="mt-2">
           <label class="block text-sm font-medium text-gray-700 mb-1">Nhóm chi phí</label>
           <a-select v-model:value="form.cost_group_id" style="width: 100%;" size="large" allow-clear placeholder="Tự động tìm nhóm 'Nhà thầu phụ'">
             <a-select-option v-for="g in costGroups" :key="g.id" :value="g.id">{{ g.name }}</a-select-option>
           </a-select>
+        </div>
+      </div>
+
+      <div class="border-t pt-4 mt-4">
+        <div class="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-1">
+          <FileOutlined /> Báo giá / Hồ sơ đính kèm
+        </div>
+        <div class="border-2 border-dashed border-gray-200 rounded-xl p-4 transition-colors hover:border-blue-400 bg-gray-50/30">
+          <!-- Existing files when editing -->
+          <div v-if="editingSub && editingSub.attachments?.length" class="mb-3">
+            <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Tài liệu hiện tại:</div>
+            <div class="flex flex-wrap gap-2">
+              <div v-for="att in editingSub.attachments" :key="att.id" 
+                   class="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-100 rounded-xl text-xs text-gray-700 shadow-sm relative group">
+                <a :href="att.file_url || att.file_path" target="_blank" class="flex items-center gap-1.5 text-gray-700 hover:text-blue-500">
+                  <FileOutlined class="text-gray-400" />
+                  <span class="truncate max-w-[120px]" :class="deletedAttachmentIds.includes(att.id) ? 'line-through text-red-400' : ''">{{ att.original_name || att.file_name }}</span>
+                </a>
+                <span class="text-[10px] text-gray-400">({{ formatFileSize(att.file_size) }})</span>
+                <button type="button" @click="toggleSubAttachmentDeletion(att.id)" class="ml-1 text-gray-400 hover:text-red-500 transition-colors">
+                  <UndoOutlined v-if="deletedAttachmentIds.includes(att.id)" class="text-blue-500" />
+                  <DeleteOutlined v-else />
+                </button>
+              </div>
+            </div>
+          </div>
+          <!-- Upload new files -->
+          <div class="flex justify-between items-center mb-1">
+            <label class="text-[10px] font-bold text-gray-500 uppercase block">Chọn tệp mới để tải lên ({{ subFiles.length }}) - Click để xem trước</label>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <div v-for="(file, idx) in subFiles" :key="idx" class="relative group cursor-pointer" @click="openLocalFilePreview(file)">
+              <div class="w-16 h-16 rounded-lg bg-white border border-blue-200 flex flex-col items-center justify-center overflow-hidden hover:border-blue-400 transition">
+                <FileOutlined class="text-blue-400 text-lg" />
+                <span class="text-[8px] text-gray-400 px-1 truncate w-full text-center">{{ file.name }}</span>
+              </div>
+              <button type="button" @click.stop="subFiles.splice(idx, 1)" class="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full flex items-center justify-center text-[10px] opacity-100 transition-opacity">×</button>
+            </div>
+            <label class="w-16 h-16 rounded-lg border border-dashed border-blue-300 bg-white/50 flex flex-col items-center justify-center cursor-pointer hover:bg-blue-50 transition-colors">
+              <PlusOutlined class="text-blue-400" />
+              <span class="text-[8px] text-blue-400 mt-1 uppercase font-bold">Thêm file</span>
+              <input type="file" multiple class="hidden" @change="e => subFiles = [...subFiles, ...Array.from(e.target.files)]" />
+            </label>
+          </div>
         </div>
       </div>
     </div>
@@ -365,13 +409,68 @@
           </div>
         </div>
       </div>
+
+      <!-- Date Information -->
+      <div class="p-4 bg-white rounded-2xl border border-gray-100 shadow-sm">
+        <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2 text-blue-500"><CalendarOutlined /> Thời gian dự kiến</div>
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <div class="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-1">Ngày bắt đầu</div>
+            <div class="text-sm font-medium text-gray-700">{{ formatDate(subDetail.progress_start_date) || '—' }}</div>
+          </div>
+          <div>
+            <div class="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-1">Ngày hoàn thành</div>
+            <div class="text-sm font-medium text-gray-700">{{ formatDate(subDetail.progress_end_date) || '—' }}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Attachments -->
+      <div class="p-4 bg-white rounded-2xl border border-gray-100 shadow-sm">
+        <div class="flex items-center justify-between mb-3">
+          <div class="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2 text-blue-500">
+            <PaperClipOutlined /> Hình ảnh / Tài liệu ({{ subDetail.attachments?.length || 0 }})
+          </div>
+          <a-button v-if="can('subcontractor.update')" type="link" size="small" @click="openAttachModal('subcontractor', subDetail)" class="p-0">
+            <PlusOutlined /> Thêm file
+          </a-button>
+        </div>
+        <div v-if="subDetail.attachments?.length" class="flex flex-wrap gap-2">
+          <div v-for="att in subDetail.attachments" :key="att.id"
+               class="relative group cursor-pointer">
+            <a :href="att.file_url || att.file_path" target="_blank" class="block">
+              <img v-if="att.mime_type?.startsWith('image/')"
+                   :src="att.file_url || att.file_path"
+                   class="w-20 h-20 object-cover rounded-xl border border-gray-200 shadow-sm group-hover:opacity-80 transition" />
+              <div v-else class="w-20 h-20 rounded-xl border border-gray-200 bg-gray-50 flex flex-col items-center justify-center gap-1 group-hover:bg-gray-100 transition">
+                <FileOutlined class="text-2xl text-gray-400" />
+                <span class="text-[9px] text-gray-400 uppercase font-bold">{{ (att.original_name || att.file_name || '').split('.').pop() }}</span>
+              </div>
+            </a>
+            <a-popconfirm title="Xóa tệp đính kèm này?" ok-text="Xóa" cancel-text="Hủy" @confirm="deleteUploadedFileDirectly(att.id)">
+              <button class="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-[10px] opacity-0 group-hover:opacity-100 transition-opacity">×</button>
+            </a-popconfirm>
+          </div>
+        </div>
+        <div v-else class="text-xs text-gray-400 italic">Chưa có tài liệu đính kèm.</div>
+      </div>
     </div>
   </a-drawer>
+
+  <!-- Shared File Upload Modal -->
+  <a-modal v-model:open="showAttachModal" :title="attachModalTitle" :width="540" @ok="submitAttachFiles" ok-text="Upload" cancel-text="Đóng" centered destroy-on-close class="crm-modal" :ok-button-props="{ disabled: !attachFiles.length }">
+    <div class="mt-4">
+      <a-form-item label="Chọn file mới" required>
+        <input type="file" @change="onAttachFileChange" multiple class="block w-full text-sm py-2 px-3 border border-gray-300 rounded-lg" />
+      </a-form-item>
+      <div v-if="attachFiles.length" class="text-xs text-green-600">{{ attachFiles.length }} file sẵn sàng upload</div>
+    </div>
+  </a-modal>
 </template>
 
 <script setup>
 import { ref, reactive, computed } from 'vue'
-import { Head, router, useForm } from '@inertiajs/vue3'
+import { Head, router, useForm, usePage } from '@inertiajs/vue3'
 import { Bar, Doughnut } from 'vue-chartjs'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend,
@@ -383,9 +482,11 @@ import StatCard from '@/Components/Crm/StatCard.vue'
 import ChartCard from '@/Components/Crm/ChartCard.vue'
 import { useChart, CHART_COLORS } from '@/Composables/useChart'
 import { useStatusFormat } from '@/Composables/useStatusFormat'
+import { message } from 'ant-design-vue'
 import {
   PlusOutlined, TeamOutlined, DollarOutlined, CheckCircleOutlined, WarningOutlined,
   EditOutlined, DeleteOutlined, EyeOutlined, BankOutlined,
+  CalendarOutlined, PaperClipOutlined, FileOutlined, UndoOutlined,
 } from '@ant-design/icons-vue'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend)
@@ -585,6 +686,95 @@ const form = useForm({
   cost_group_id: null,
 })
 
+const subFiles = ref([])
+const deletedAttachmentIds = ref([])
+const showAttachModal = ref(false)
+const attachTarget = ref(null)
+const attachType = ref('subcontractor')
+const attachModalTitle = computed(() => {
+  return attachTarget.value ? `Đính kèm tài liệu: ${attachTarget.value.name}` : 'Đính kèm tài liệu'
+})
+
+const openAttachModal = (type, record) => {
+  attachType.value = type
+  attachTarget.value = record
+  attachFiles.value = []
+  showAttachModal.value = true
+}
+
+const attachFiles = ref([])
+const onAttachFileChange = (e) => {
+  attachFiles.value = Array.from(e.target.files)
+}
+
+const submitAttachFiles = () => {
+  if (!attachFiles.value.length || !attachTarget.value) return
+  const formData = new FormData()
+  attachFiles.value.forEach((f) => formData.append('files[]', f))
+  const url = `/projects/${attachTarget.value.project_id}/subcontractors/${attachTarget.value.id}/attach-files`
+  router.post(url, formData, {
+    forceFormData: true,
+    preserveScroll: true,
+    onSuccess: () => {
+      showAttachModal.value = false
+      attachFiles.value = []
+      if (subDetail.value && subDetail.value.id === attachTarget.value.id) {
+        router.reload({
+          only: ['subcontractors'],
+          onSuccess: (page) => {
+            const updated = page.props.subcontractors.data.find(s => s.id === subDetail.value.id)
+            if (updated) {
+              subDetail.value = updated
+            }
+          }
+        })
+      }
+      message.success('Tải lên tài liệu thành công.')
+    },
+  })
+}
+
+const deleteUploadedFileDirectly = (fileId) => {
+  router.delete(`/admin/files/${fileId}`, {
+    preserveScroll: true,
+    onSuccess: () => {
+      message.success('Đã xóa tệp đính kèm thành công.')
+      if (subDetail.value && subDetail.value.attachments) {
+        subDetail.value.attachments = subDetail.value.attachments.filter(a => a.id !== fileId)
+      }
+    }
+  })
+}
+
+const openLocalFilePreview = (file) => {
+  if (!file) return
+  const url = URL.createObjectURL(file)
+  window.open(url, '_blank')
+}
+
+const formatFileSize = (bytes) => {
+  if (!bytes) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
+}
+
+const toggleSubAttachmentDeletion = (id) => {
+  if (deletedAttachmentIds.value.includes(id)) {
+    deletedAttachmentIds.value = deletedAttachmentIds.value.filter(x => x !== id)
+  } else {
+    deletedAttachmentIds.value.push(id)
+  }
+}
+
+const can = (perm) => {
+  const auth = usePage().props.auth;
+  const isSuperAdmin = auth?.user?.super_admin === true;
+  const userPerms = auth?.user?.permissions || [];
+  return isSuperAdmin || userPerms.includes(perm);
+}
+
 const showCreateModal = () => {
   editingSub.value = null
   form.reset()
@@ -594,6 +784,8 @@ const showCreateModal = () => {
   form.global_subcontractor_id = null
   formStartDate.value = null
   formEndDate.value = null
+  subFiles.value = []
+  deletedAttachmentIds.value = []
   formModalVisible.value = true
 }
 
@@ -608,28 +800,56 @@ const showEditModal = (record) => {
   form.bank_account_name = record.bank_account_name || ''
   form.progress_status = record.progress_status || 'not_started'
   form.global_subcontractor_id = record.global_subcontractor_id || null
-  form.create_cost = false
-  form.cost_group_id = null
+  form.create_cost = record.costs && record.costs.length > 0
+  form.cost_group_id = record.costs?.[0]?.cost_group_id || null
   formStartDate.value = record.progress_start_date ? dayjs(record.progress_start_date) : null
   formEndDate.value = record.progress_end_date ? dayjs(record.progress_end_date) : null
+  subFiles.value = []
+  deletedAttachmentIds.value = []
   formModalVisible.value = true
 }
 
 const saveForm = () => {
-  form.progress_start_date = formStartDate.value ? formStartDate.value.format('YYYY-MM-DD') : ''
-  form.progress_end_date = formEndDate.value ? formEndDate.value.format('YYYY-MM-DD') : ''
+  const startDateStr = formStartDate.value ? formStartDate.value.format('YYYY-MM-DD') : ''
+  const endDateStr = formEndDate.value ? formEndDate.value.format('YYYY-MM-DD') : ''
 
+  const fd = new FormData()
   if (editingSub.value) {
-    form.put(`/subcontractors/${editingSub.value.id}`, {
-      preserveScroll: true,
-      onSuccess: () => { formModalVisible.value = false },
-    })
-  } else {
-    form.post('/subcontractors', {
-      preserveScroll: true,
-      onSuccess: () => { formModalVisible.value = false },
-    })
+    fd.append('_method', 'PUT')
   }
+  
+  fd.append('project_id', form.project_id || '')
+  if (form.global_subcontractor_id) {
+    fd.append('global_subcontractor_id', form.global_subcontractor_id)
+  }
+  fd.append('name', form.name || '')
+  fd.append('category', form.category || '')
+  fd.append('total_quote', form.total_quote || 0)
+  fd.append('bank_name', form.bank_name || '')
+  fd.append('bank_account_number', form.bank_account_number || '')
+  fd.append('bank_account_name', form.bank_account_name || '')
+  fd.append('progress_start_date', startDateStr)
+  fd.append('progress_end_date', endDateStr)
+  fd.append('progress_status', form.progress_status || 'not_started')
+  fd.append('create_cost', form.create_cost ? '1' : '0')
+  if (form.create_cost && form.cost_group_id) {
+    fd.append('cost_group_id', form.cost_group_id)
+  }
+  
+  subFiles.value.forEach(f => fd.append('files[]', f))
+  deletedAttachmentIds.value.forEach(id => fd.append('deleted_attachment_ids[]', id))
+
+  const url = editingSub.value ? `/subcontractors/${editingSub.value.id}` : '/subcontractors'
+  
+  router.post(url, fd, {
+    forceFormData: true,
+    preserveScroll: true,
+    onSuccess: () => {
+      formModalVisible.value = false
+      subFiles.value = []
+      deletedAttachmentIds.value = []
+    }
+  })
 }
 
 const deleteSub = (id) => {

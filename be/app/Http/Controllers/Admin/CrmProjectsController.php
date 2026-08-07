@@ -305,6 +305,7 @@ class CrmProjectsController extends Controller
                 'personnel' => $project->personnel()->with(['user:id,name,email,image as avatar,phone', 'personnelRole:id,name'])->get(),
                 'subcontractors' => $project->subcontractors()->with([
                     'attachments', 
+                    'costs',
                     'payments.attachments', 
                     'progress' => fn($q) => $q->with(['attachments', 'reporter', 'verifier'])->orderByDesc('progress_date')
                 ])->get(),
@@ -2020,10 +2021,41 @@ class CrmProjectsController extends Controller
             'progress_start_date' => 'nullable|date',
             'progress_end_date' => 'nullable|date',
             'progress_status' => ['sometimes', 'in:not_started,in_progress,completed,delayed'],
+            'create_cost' => 'nullable|boolean',
+            'cost_group_id' => 'nullable|exists:cost_groups,id',
         ]);
 
         try {
-            $this->subcontractorService->upsert($validated, $sub, $user);
+            DB::beginTransaction();
+
+            $subData = collect($validated)->except(['create_cost', 'cost_group_id'])->toArray();
+            $this->subcontractorService->upsert($subData, $sub, $user);
+
+            // Sync Cost record:
+            if ($request->input('create_cost') && $request->input('cost_group_id')) {
+                $cost = \App\Models\Cost::where('subcontractor_id', $sub->id)->first();
+                if ($cost) {
+                    $cost->update([
+                        'cost_group_id' => $request->input('cost_group_id'),
+                        'amount' => $sub->total_quote,
+                        'name' => "Hợp đồng thầu phụ: " . $sub->name,
+                    ]);
+                } else {
+                    \App\Models\Cost::create([
+                        'project_id' => $sub->project_id,
+                        'subcontractor_id' => $sub->id,
+                        'name' => "Hợp đồng thầu phụ: " . $sub->name,
+                        'amount' => $sub->total_quote,
+                        'cost_date' => $sub->progress_start_date ?: now(),
+                        'cost_group_id' => $request->input('cost_group_id'),
+                        'category' => 'other',
+                        'status' => 'draft',
+                        'created_by' => $user->id,
+                    ]);
+                }
+            } else {
+                \App\Models\Cost::where('subcontractor_id', $sub->id)->delete();
+            }
 
             // Handle file deletions
             $this->attachmentService->handleDeletedRequest($request, $sub);
@@ -2031,8 +2063,10 @@ class CrmProjectsController extends Controller
             // Handle file uploads on update
             $this->attachFilesToEntity($request, $sub, "subcontractors/{$project->id}/{$sub->id}", false);
 
+            DB::commit();
             return back()->with('success', 'Đã cập nhật nhà thầu phụ.');
         } catch (\Exception $e) {
+            DB::rollBack();
             return back()->with('error', 'Lỗi: ' . $e->getMessage());
         }
     }

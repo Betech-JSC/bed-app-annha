@@ -5914,7 +5914,7 @@
 
           <!-- Customer: Approve & Pay -->
           <template v-if="paymentDetailRecord.status === 'customer_pending_approval' && can('payment.approve')">
-            <a-button type="primary" class="bg-blue-600 border-blue-600" @click="openPaymentProofModal(paymentDetailRecord)">Duyệt & Báo cáo TT</a-button>
+            <a-button type="primary" class="bg-blue-600 border-blue-600" @click="openPaymentProofModal(paymentDetailRecord)">Xác nhận thanh toán</a-button>
             <a-button danger ghost @click="openRejectPaymentModal(paymentDetailRecord)">Từ chối</a-button>
           </template>
 
@@ -6344,7 +6344,7 @@
         </a-select>
       </a-form-item>
 
-      <div v-if="!editingSub" class="border-t pt-4 mt-4">
+      <div class="border-t pt-4 mt-4">
         <a-checkbox v-model:checked="subForm.create_cost" class="mb-2 text-sm font-medium">Tự động tạo chi phí dự án cho NTP này</a-checkbox>
         <a-form-item v-if="subForm.create_cost" label="Nhóm chi phí">
           <a-select v-model:value="subForm.cost_group_id" size="large" class="w-full" allow-clear placeholder="Tự động tìm nhóm 'Nhà thầu phụ'">
@@ -6361,16 +6361,35 @@
           <div v-if="editingSub?.attachments?.length" class="flex flex-wrap gap-2 mb-3">
             <div v-for="a in editingSub.attachments" :key="a.id" class="relative group">
               <a href="#" @click.prevent="openFilePreview(a)" 
-                 class="inline-flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg transition cursor-pointer border bg-blue-50 text-blue-600 border-blue-100 hover:bg-blue-100 shadow-sm">
+                 class="inline-flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg transition cursor-pointer border bg-blue-50 text-blue-600 border-blue-100 hover:bg-blue-100 shadow-sm"
+                 :class="subForm.deleted_attachment_ids?.includes(a.id) ? 'line-through text-red-400 opacity-60' : ''">
                 <EyeOutlined class="text-[10px]" /> {{ a.original_name || a.file_name }}
               </a>
               <div class="absolute -top-1.5 -right-1.5 opacity-0 group-hover:opacity-100 transition-all cursor-pointer bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center shadow-lg border border-white z-10"
                    @click.stop="toggleDeleteAttachment(subForm, a.id)">
-                <CloseOutlined class="text-[10px] font-bold" />
+                <UndoOutlined v-if="subForm.deleted_attachment_ids?.includes(a.id)" class="text-[10px]" />
+                <CloseOutlined v-else class="text-[10px] font-bold" />
               </div>
             </div>
           </div>
-          <input type="file" multiple @change="e => subFiles = [...(e.target.files || [])]" class="block w-full text-sm cursor-pointer file:mr-4 file:py-1.5 file:px-4 file:rounded-lg file:border file:border-gray-300 file:text-xs file:font-semibold file:bg-white file:text-gray-700 hover:file:bg-gray-50" />
+          <!-- Upload new files -->
+          <div class="flex justify-between items-center mb-1">
+            <label class="text-[10px] font-bold text-gray-500 uppercase block">Chọn tệp mới để tải lên ({{ subFiles.length }}) - Click để xem trước</label>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <div v-for="(file, idx) in subFiles" :key="idx" class="relative group cursor-pointer" @click="openLocalFilePreview(file)">
+              <div class="w-16 h-16 rounded-lg bg-white border border-blue-200 flex flex-col items-center justify-center overflow-hidden hover:border-blue-400 transition">
+                <FileOutlined class="text-blue-400 text-lg" />
+                <span class="text-[8px] text-gray-400 px-1 truncate w-full text-center">{{ file.name }}</span>
+              </div>
+              <button type="button" @click.stop="subFiles.splice(idx, 1)" class="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full flex items-center justify-center text-[10px] opacity-100 transition-opacity">×</button>
+            </div>
+            <label class="w-16 h-16 rounded-lg border border-dashed border-blue-300 bg-white/50 flex flex-col items-center justify-center cursor-pointer hover:bg-blue-50 transition-colors">
+              <PlusOutlined class="text-blue-400" />
+              <span class="text-[8px] text-blue-400 mt-1 uppercase font-bold">Thêm file</span>
+              <input type="file" multiple class="hidden" @change="e => subFiles = [...subFiles, ...Array.from(e.target.files)]" />
+            </label>
+          </div>
         </div>
       </div>
     </a-form>
@@ -10117,6 +10136,12 @@ const loadScript = (url, globalVarName) => {
   })
 }
 
+const openLocalFilePreview = (file) => {
+  if (!file) return
+  const url = URL.createObjectURL(file)
+  window.open(url, '_blank')
+}
+
 const openFilePreview = async (file) => {
   previewFile.value = file
   previewLoading.value = true
@@ -11101,7 +11126,7 @@ const subForm = ref({ name: '', category: '', total_quote: null, bank_name: '', 
 const openSubModal = (s) => {
   editingSub.value = s
   subFiles.value = []
-  subForm.value = s ? { name: s.name, category: s.category || '', total_quote: s.total_quote, bank_name: s.bank_name || '', bank_account_number: s.bank_account_number || '', bank_account_name: s.bank_account_name || '', progress_start_date: s.progress_start_date || null, progress_end_date: s.progress_end_date || null, progress_status: s.progress_status || 'not_started', deleted_attachment_ids: [] }
+  subForm.value = s ? { name: s.name, category: s.category || '', total_quote: s.total_quote, bank_name: s.bank_name || '', bank_account_number: s.bank_account_number || '', bank_account_name: s.bank_account_name || '', progress_start_date: s.progress_start_date || null, progress_end_date: s.progress_end_date || null, progress_status: s.progress_status || 'not_started', create_cost: s.costs && s.costs.length > 0, cost_group_id: s.costs?.[0]?.cost_group_id || null, deleted_attachment_ids: [] }
     : { name: '', category: '', total_quote: null, bank_name: '', bank_account_number: '', bank_account_name: '', progress_start_date: null, progress_end_date: null, progress_status: 'not_started', global_subcontractor_id: null, create_cost: false, cost_group_id: null, deleted_attachment_ids: [] }
   showSubModal.value = true
 }
