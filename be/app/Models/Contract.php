@@ -9,9 +9,14 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
 
+use App\Traits\NotifiesUsers;
+use App\Traits\Approvable;
+use App\Traits\Auditable;
+
 class Contract extends Model
 {
-    use SoftDeletes, \App\Traits\NotifiesUsers, \App\Traits\Approvable;
+    use SoftDeletes, NotifiesUsers, Approvable, Auditable;
+
 
     protected $fillable = [
         'uuid',

@@ -70,7 +70,8 @@ class ChangeRequestService
     /**
      * Reject change request
      */
-    public function reject(ChangeRequest $cr, $user = null, string $reason): bool
+    public function reject(ChangeRequest $cr, $user = null, string $reason = ''): bool
+
     {
         if (!in_array($cr->status, ['submitted', 'under_review'])) {
             throw new \Exception('Yêu cầu không ở trạng thái chờ duyệt.');

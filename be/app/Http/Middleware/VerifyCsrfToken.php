@@ -2,23 +2,18 @@
 
 namespace App\Http\Middleware;
 
-use Closure;
-use Illuminate\Http\Request;
+use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken as Middleware;
 
-class VerifyCsrfToken
+class VerifyCsrfToken extends Middleware
 {
     /**
      * The URIs that should be excluded from CSRF verification.
      *
-     * @var array
+     * @var array<int, string>
      */
     protected $except = [
         'api/register',  // Exclude the register route
         'api/login',     // Exclude the login route
     ];
-
-    public function handle(Request $request, Closure $next)
-    {
-        return parent::handle($request, $next);
-    }
 }
+

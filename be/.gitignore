@@ -2,11 +2,14 @@
 /node_modules
 /public/hot
 /public/build
+/public/build-test
 /public/storage
 /storage/*.key
 /vendor
 .DS_Store
 .env
+.env.*
+!.env.example
 .env.backup
 .phpunit.result.cache
 .php-cs-fixer.php
@@ -17,3 +20,5 @@ Homestead.yaml
 npm-debug.log
 /.idea
 /.vscode
+/.claude
+

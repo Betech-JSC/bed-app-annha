@@ -392,7 +392,9 @@ import {
   UsergroupAddOutlined,
   ShopOutlined,
   CodeOutlined,
+  HistoryOutlined,
   QuestionCircleOutlined,
+
   BookOutlined,
   ApartmentOutlined,
   FileProtectOutlined,
@@ -757,7 +759,9 @@ const menuItems = computed(() => {
         { key: 'files', label: 'Tổng hợp File', icon: () => h(FolderOpenOutlined), perm: 'document.view' },
         { key: 'notifications', label: 'Thông báo', icon: () => h(BellOutlined) }, // Always visible
         { key: 'roles', label: 'Phân quyền', icon: () => h(SafetyOutlined), perm: 'settings.manage' },
+        { key: 'activity-logs', label: 'Truy xuất & Nhật ký thao tác', icon: () => h(HistoryOutlined), perm: 'settings.manage' },
         { key: 'system-logs', label: 'Nhật ký hệ thống', icon: () => h(CodeOutlined), perm: 'settings.manage' },
+
         { key: 'settings', label: 'Cấu hình chung', icon: () => h(SettingOutlined), perm: 'settings.manage' },
         { key: 'cost-groups', label: 'Nhóm chi phí', icon: () => h(FolderOpenOutlined), perm: 'company_cost.view' },
         { key: 'user-guide', label: 'Hướng dẫn sử dụng', icon: () => h(BookOutlined) }, // Always visible
@@ -816,7 +820,9 @@ const handleMenuClick = ({ key }) => {
     settings: '/settings',
     roles: '/roles',
     files: '/files',
+    'activity-logs': '/admin/activity-logs',
     'system-logs': '/system-logs',
+
     'user-guide': '/user-guide',
   }
   if (routes[key]) {

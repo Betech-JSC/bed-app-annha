@@ -5,13 +5,19 @@ namespace App\Models;
 use App\Models\Cost;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Support\Str;
 
+use App\Traits\NotifiesUsers;
+use App\Traits\Approvable;
+use App\Traits\Auditable;
+
 class EquipmentRental extends Model
 {
-    use \App\Traits\NotifiesUsers, \App\Traits\Approvable;
+    use SoftDeletes, NotifiesUsers, Approvable, Auditable;
+
     protected $fillable = [
         'uuid', 'project_id', 'equipment_name', 'equipment_id',
         'quantity', 'unit_price',

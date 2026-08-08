@@ -1038,12 +1038,36 @@ const openDetailDrawer = (record) => {
 
 // Form Action Submissions
 const handleSubmit = () => {
+  // Always ensure period_start & period_end are derived from formMonth if available
+  if (formMonth.value) {
+    form.period_start = dayjs(formMonth.value).startOf('month').format('YYYY-MM-DD')
+    form.period_end = dayjs(formMonth.value).endOf('month').format('YYYY-MM-DD')
+  }
+
+  // Ensure empty project_id is sent as null
+  if (!form.project_id) {
+    form.project_id = null
+  }
+
+  if (!form.user_id) {
+    message.warning('Vui lòng chọn nhân viên.')
+    return
+  }
+  if (!form.period_start || !form.period_end) {
+    message.warning('Vui lòng chọn tháng áp dụng.')
+    return
+  }
+
   if (editingRecord.value) {
     form.put(`/hr/payrolls/${editingRecord.value.id}`, {
       onSuccess: () => {
         message.success('Cập nhật phiếu lương thành công')
         showModal.value = false
         resetForm()
+      },
+      onError: (errors) => {
+        const firstErr = Object.values(errors)[0]
+        if (firstErr) message.error(Array.isArray(firstErr) ? firstErr[0] : firstErr)
       }
     })
   } else {
@@ -1052,10 +1076,15 @@ const handleSubmit = () => {
         message.success('Tạo phiếu lương thành công')
         showModal.value = false
         resetForm()
+      },
+      onError: (errors) => {
+        const firstErr = Object.values(errors)[0]
+        if (firstErr) message.error(Array.isArray(firstErr) ? firstErr[0] : firstErr)
       }
     })
   }
 }
+
 
 const resetForm = () => {
   editingRecord.value = null

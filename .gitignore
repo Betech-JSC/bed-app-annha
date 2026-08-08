@@ -1,15 +1,55 @@
-graphify-out/
-venv/
-graphify_*.txt
-config.bat
-node_modules/
-# Ignore frontend folder
-fe/
-/fe/
-fe
-**/fe/**
-
-annha.sql
-be/database/mysql_local/
-huong_dan_test.md
+graphify-out/
+venv/
+graphify_*.txt
+config.bat
+
+# Dependencies & Package Managers
+node_modules/
+**/node_modules/
+vendor/
+**/vendor/
+
+# Build outputs & Artifacts
+public/build/
+public/build-test/
+be/public/build/
+be/public/build-test/
+be/bootstrap/ssr/
+dist/
+out/
+
+# Frontend folder
+fe/
+/fe/
+fe
+**/fe/**
+
+# Logs & Cache
+*.log
+be/storage/logs/*.log
+be/storage/framework/cache/*
+be/storage/framework/sessions/*
+be/storage/framework/views/*
+
+# Database & Local dumps
+annha.sql
+be/database/mysql_local/
+*.sqlite
+
+# Environment & Configs
 .env
+.env.*
+!.env.example
+.env.backup
+
+# System & IDE files
+.DS_Store
+**/ .DS_Store
+Thumbs.db
+.vscode/
+.idea/
+.claude/
+.gemini/
+
+# Documentation / Scratch
+huong_dan_test.md

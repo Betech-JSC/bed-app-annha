@@ -10,6 +10,8 @@ use App\Http\Controllers\Admin\PermissionController;
 use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\Admin\FileController;
 use App\Http\Controllers\Admin\CrmSystemLogController;
+use App\Http\Controllers\Admin\CrmActivityLogController;
+
 
 // Admin Auth Routes (public)
 Route::prefix('admin')->name('admin.')->group(function () {
@@ -246,6 +248,16 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         Route::get('/download', [CrmSystemLogController::class, 'download'])->name('download');
     });
 
+    // Activity Logs & Audit Trail (Nhật ký thao tác & Truy xuất dữ liệu)
+    Route::prefix('activity-logs')->name('activity-logs.')->group(function () {
+        Route::get('/', [CrmActivityLogController::class, 'index'])->name('index');
+        Route::get('/show/{id}', [CrmActivityLogController::class, 'show'])->name('show');
+        Route::get('/deleted', [CrmActivityLogController::class, 'deletedRecords'])->name('deleted');
+        Route::post('/restore', [CrmActivityLogController::class, 'restoreRecord'])->name('restore');
+        Route::get('/export', [CrmActivityLogController::class, 'export'])->name('export');
+    });
+
+
     // User Guide (Hướng dẫn sử dụng)
     Route::get('/user-guide', function () {
         return \Inertia\Inertia::render('Crm/UserGuide/Index');
@@ -479,6 +491,8 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         Route::delete('/{project}/material-quotas/{quota}', [CrmProjectsController::class, 'destroyMaterialQuota'])->name('material-quotas.destroy');
         Route::get('/{project}/materials/export', [CrmProjectsController::class, 'exportMaterialSummary'])->name('materials.export');
         Route::get('/{project}/finance/pnl/export', [CrmProjectsController::class, 'exportPnLSummary'])->name('finance.pnl.export');
+        Route::get('/{project}/finance/cashflow/export', [CrmProjectsController::class, 'exportCashFlowSummary'])->name('finance.cashflow.export');
+
 
         // Attendance (CRM proxy for API AttendanceController — auth:admin)
         Route::get('/{project}/attendance/statistics', [CrmProjectsController::class, 'attendanceStatistics'])->name('attendance.statistics');

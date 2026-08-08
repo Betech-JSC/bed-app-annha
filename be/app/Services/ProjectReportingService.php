@@ -416,12 +416,13 @@ class ProjectReportingService
             $costQuery->where('project_id', $projectId);
         } else {
             $contractQuery->whereHas('project', function ($q) {
-                $q->where('status', 'completed');
+                $q->where('status', '!=', 'cancelled');
             });
             $costQuery->whereHas('project', function ($q) {
-                $q->where('status', 'completed');
+                $q->where('status', '!=', 'cancelled');
             });
         }
+
 
         $totalProjects = (clone $projectQuery)->count();
         $activeProjects = (clone $projectQuery)->where('status', 'in_progress')->count();
@@ -515,8 +516,9 @@ class ProjectReportingService
         // 4. Budget Utilization
         $budgetUtilQuery = (clone $projectQuery)->whereHas('contract');
         if (!$projectId || $projectId === 'all') {
-            $budgetUtilQuery->where('status', 'completed');
+            $budgetUtilQuery->where('status', '!=', 'cancelled');
         }
+
         $budgetUtilQuery->with('contract:id,project_id,contract_value')
             ->withSum(['costs' => fn($q) => $q->where('status', 'approved')], 'amount')
             ->limit(6);

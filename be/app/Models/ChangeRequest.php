@@ -123,7 +123,8 @@ class ChangeRequest extends Model
         return $this->save();
     }
 
-    public function reject(?User $user = null, string $reason): bool
+    public function reject(?User $user = null, string $reason = ''): bool
+
     {
         if (!in_array($this->status, ['submitted', 'under_review'])) {
             return false;

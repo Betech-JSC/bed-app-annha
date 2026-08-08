@@ -61,12 +61,13 @@ class MaterialInventoryService
         int $materialId,
         int $projectId,
         float $quantity,
-        string $notes = '',
+        string $notes,
         int $createdBy,
         ?string $transactionDate = null,
         ?int $costGroupId = null,
         ?float $amount = null
     ): ?MaterialTransaction {
+
         try {
             $material = Material::findOrFail($materialId);
 

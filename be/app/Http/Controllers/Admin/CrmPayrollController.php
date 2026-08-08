@@ -108,7 +108,9 @@ class CrmPayrollController extends Controller
         try {
             $payroll = $this->payrollService->upsert($request->all(), null, $admin);
             return back()->with('success', 'Tạo phiếu lương thành công.');
-        } catch (\Exception $e) {
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return back()->withErrors($e->errors());
+        } catch (\Throwable $e) {
             return back()->with('error', 'Lỗi: ' . $e->getMessage());
         }
     }
@@ -126,10 +128,13 @@ class CrmPayrollController extends Controller
         try {
             $this->payrollService->upsert($request->all(), $payroll, $admin);
             return back()->with('success', 'Cập nhật phiếu lương thành công.');
-        } catch (\Exception $e) {
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return back()->withErrors($e->errors());
+        } catch (\Throwable $e) {
             return back()->with('error', 'Lỗi: ' . $e->getMessage());
         }
     }
+
 
     /**
      * Delete a payroll sheet (draft only)

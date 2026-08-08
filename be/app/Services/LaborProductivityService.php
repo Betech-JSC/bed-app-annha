@@ -12,7 +12,8 @@ class LaborProductivityService
     /**
      * Create or update a productivity record
      */
-    public function upsert(array $data, ?LaborProductivity $record = null, User $actor): LaborProductivity
+    public function upsert(array $data, ?LaborProductivity $record = null, ?User $actor = null): LaborProductivity
+
     {
         if ($record) {
             $record->update($data);

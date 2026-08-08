@@ -3,15 +3,18 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Support\Str;
 
 use App\Traits\Approvable;
+use App\Traits\Auditable;
 
 class AdditionalCost extends Model
 {
-    use Approvable;
+    use SoftDeletes, Approvable, Auditable;
+
     protected $fillable = [
         'uuid',
         'project_id',

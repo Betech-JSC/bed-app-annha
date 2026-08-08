@@ -554,9 +554,10 @@
         </div>
       </a-tab-pane>
 
-      <!-- ============ COSTS TAB (Renamed to Phiếu chi) ============ -->
+      <!-- ============ COSTS TAB (Renamed to Tất cả chi phí) ============ -->
       <a-tab-pane key="costs" v-if="isTabVisible('costs')">
-        <template #tab><a-tooltip title="Quản lý phiếu chi: tạo, gửi duyệt BĐH → KT xác nhận, đính kèm chứng từ" placement="bottom">Phiếu chi ({{ counts.costs || 0 }})</a-tooltip></template>
+        <template #tab><a-tooltip title="Xem tất cả phiếu chi phí của dự án" placement="bottom">Tất cả ({{ counts.costs || 0 }})</a-tooltip></template>
+
         <div class="p-4">
           <!-- Premium Header for Phiếu chi -->
           <div class="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
@@ -1027,11 +1028,24 @@
                       </div>
                     </div>
                   </div>
-                  <div class="flex flex-col items-end gap-1.5 flex-shrink-0 ml-3">
+                  <div class="flex items-center gap-2 flex-shrink-0 ml-3" @click.stop>
                     <a-tag :color="acceptStatusColors[acceptance.workflow_status] || 'default'" class="rounded-full text-xs m-0 border-none font-medium px-2.5 shadow-sm">
                       {{ acceptStatusLabels[acceptance.workflow_status] || acceptance.workflow_status }}
                     </a-tag>
+                    <a-popconfirm
+                      title="Xóa nghiệm thu & reset tiến độ?"
+                      description="Xóa nghiệm thu này và cập nhật lại tiến độ công việc về trạng thái làm lại?"
+                      ok-text="Xóa"
+                      cancel-text="Hủy"
+                      :ok-button-props="{ danger: true }"
+                      @confirm="deleteAccept(acceptance)"
+                    >
+                      <a-button type="text" danger size="small" class="opacity-70 hover:opacity-100 p-1 flex items-center">
+                        <template #icon><DeleteOutlined /></template>
+                      </a-button>
+                    </a-popconfirm>
                   </div>
+
                 </div>
 
                 <div v-if="getOpenDefects(acceptance) > 0 || (acceptance.workflow_status === 'rejected' && acceptance.rejection_reason)" 
@@ -1301,6 +1315,13 @@
               <a-button size="small" :type="financeView === 'warranty' ? 'primary' : 'default'" @click="financeView = 'warranty'">Bảo hành</a-button>
               <a-button size="small" type="primary" ghost @click="loadFinanceData()" :loading="financeLoading"><template #icon><CalendarOutlined /></template>Refresh</a-button>
             </div>
+            <div v-if="financeView === 'cashflow'" class="flex gap-2">
+              <a :href="`/admin/projects/${project.id}/finance/cashflow/export`" target="_blank">
+                <a-button size="small" type="default" class="flex items-center text-emerald-600 border-emerald-200 hover:text-emerald-700 hover:border-emerald-300">
+                  <template #icon><DownloadOutlined /></template>Xuất data Dòng tiền
+                </a-button>
+              </a>
+            </div>
             <div v-if="financeView === 'pnl' && pnlData.revenue" class="flex gap-2">
               <a :href="`/admin/projects/${project.id}/finance/pnl/export`" target="_blank">
                 <a-button size="small" type="default" class="flex items-center text-emerald-600 border-emerald-200 hover:text-emerald-700 hover:border-emerald-300">
@@ -1308,6 +1329,7 @@
                 </a-button>
               </a>
             </div>
+
           </div>
 
           <!-- Finance Error Alert -->
@@ -7465,7 +7487,7 @@
   </a-modal>
 
   <!-- ACCOUNTANT CONFIRM PAYMENT MODAL (Unified for Material, Sub, Rental, Usage, Purchase, Project Payment) -->
-  <a-modal v-model:open="showConfirmPaymentModal" :title="{ material: 'Kế toán xác nhận - Phiếu Vật tư', cost: 'Kế toán xác nhận - Phiếu chi', sub: 'Kế toán xác nhận - Thanh toán thầu phụ', rental: 'Kế toán xác nhận - Thuê thiết bị', usage: 'Kế toán xác nhận - Sử dụng thiết bị', purchase: 'Kế toán xác nhận - Mua thiết bị', project_payment: 'Kế toán xác nhận - Đợt thanh toán từ Khách hàng' }[confirmPaymentType]" @ok="confirmApprovePayment" ok-text="Xác nhận" cancel-text="Hủy" centered class="crm-modal" :ok-button-props="{ disabled: (confirmPaymentType !== 'project_payment' && !confirmPaymentFiles.length) || confirmPaymentLoading }" :confirm-loading="confirmPaymentLoading">
+  <a-modal v-model:open="showConfirmPaymentModal" :title="{ material: 'Kế toán xác nhận - Phiếu Vật tư', cost: 'Kế toán xác nhận - Phiếu chi', sub: 'Kế toán xác nhận - Thanh toán thầu phụ', rental: 'Kế toán xác nhận - Thuê thiết bị', usage: 'Kế toán xác nhận - Sử dụng thiết bị', purchase: 'Kế toán xác nhận - Mua thiết bị', project_payment: 'Kế toán xác nhận - Đợt thanh toán từ Khách hàng' }[confirmPaymentType]" @ok="confirmApprovePayment" ok-text="Xác nhận" cancel-text="Hủy" centered class="crm-modal" :ok-button-props="{ disabled: (confirmPaymentType !== 'project_payment' && (!confirmPaymentFiles.length || !confirmPaymentBudgetItem)) || confirmPaymentLoading }" :confirm-loading="confirmPaymentLoading">
     <div class="p-4 space-y-4">
       <div class="bg-blue-50 p-3 rounded-xl border border-blue-100 flex items-center gap-3">
         <div class="w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center shadow-lg"><InfoCircleOutlined /></div>
@@ -7524,7 +7546,9 @@
       </div>
 
       <div v-if="confirmPaymentType !== 'project_payment'">
-        <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Chọn hạng mục Ngân sách</div>
+        <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1">
+          CHỌN HẠNG MỤC NGÂN SÁCH <span class="text-red-500 font-bold">* (BẮT BUỘC)</span>
+        </div>
         <a-select v-model:value="confirmPaymentBudgetItem" class="w-full" placeholder="Chọn hạng mục dự toán..." show-search :filter-option="(input, option) => (option.label || '').toLowerCase().indexOf(input.toLowerCase()) >= 0">
           <a-select-opt-group v-for="budget in (project.budgets || []).filter(b => b.status === 'active')" :key="budget.id">
             <template #label><span class="text-indigo-600 font-bold uppercase text-[10px]">{{ budget.name }} - ĐANG SỬ DỤNG</span></template>
@@ -7543,8 +7567,9 @@
              </template>
           </a-select-opt-group>
         </a-select>
-        <div v-if="!confirmPaymentBudgetItem" class="mt-1 text-[10px] text-amber-500 italic">* Khuyên dùng: Hãy chọn hạng mục để theo dõi thực chi chính xác.</div>
+        <div v-if="!confirmPaymentBudgetItem" class="mt-1 text-[10px] text-red-500 font-semibold">* Bắt buộc: Vui lòng chọn hạng mục ngân sách để hệ thống tự động trừ định mức.</div>
       </div>
+
 
       <!-- Accountant payment proof upload -->
       <div class="border-t border-dashed pt-4">
@@ -8484,8 +8509,9 @@ const tabGroupTabs = computed(() => {
   return {
     overview: ['overview'],
     subcontractor_main: ['subcontractor_info', 'subcontractor_progress', 'subcontractors'],
-    finance: ['contract', 'costs', 'payments', 'additional_costs', 'budgets', 'finance', 'invoices'],
-    expense: [...expenseKeys, 'equipment'],
+    finance: ['contract', 'payments', 'additional_costs', 'budgets', 'finance', 'invoices'],
+    expense: ['costs', ...expenseKeys, 'equipment'],
+
     monitor: ['gantt', 'progress', 'logs', 'acceptance', 'defects', 'change_requests', 'comments', 'risks'],
     hr: ['personnel', 'attendance', 'labor'],
     warranty: ['warranty', 'maintenances'],
@@ -8637,7 +8663,7 @@ const getInitialTab = () => {
     { key: 'monitor', tabs: ['gantt', 'progress', 'logs', 'acceptance', 'defects', 'change_requests'] },
     { key: 'finance', tabs: ['contract', 'costs', 'payments'] },
     { key: 'subcontractor_main', tabs: ['subcontractor_info', 'subcontractor_progress', 'subcontractors'] },
-    { key: 'expense', tabs: [...(props.costGroups || []).map(g => 'cost_group_' + g.id), 'equipment'] },
+    { key: 'expense', tabs: ['costs', ...(props.costGroups || []).map(g => 'cost_group_' + g.id), 'equipment'] },
     { key: 'hr', tabs: ['personnel', 'attendance'] },
     { key: 'warranty', tabs: ['warranty', 'maintenances'] },
     { key: 'other', tabs: ['documents'] },
@@ -8666,8 +8692,9 @@ const getGroupForTab = (tab) => {
     subcontractor_progress: 'subcontractor_main',
     subcontractors: 'subcontractor_main',
     gantt: 'monitor', progress: 'monitor',
-    contract: 'finance', costs: 'finance', payments: 'finance', additional_costs: 'finance', budgets: 'finance', finance: 'finance', invoices: 'finance',
-    materials: 'expense', equipment: 'expense', labor_cost: 'expense', management_cost: 'expense',
+    contract: 'finance', payments: 'finance', additional_costs: 'finance', budgets: 'finance', finance: 'finance', invoices: 'finance',
+    costs: 'expense', materials: 'expense', equipment: 'expense', labor_cost: 'expense', management_cost: 'expense',
+
     logs: 'monitor', acceptance: 'monitor', defects: 'monitor', change_requests: 'monitor', comments: 'monitor', risks: 'monitor',
     personnel: 'hr', attendance: 'hr', labor: 'hr',
     warranty: 'warranty', maintenances: 'warranty',
@@ -9102,8 +9129,9 @@ const tabGroups = computed(() => {
   const groups = [
     { key: 'monitor', icon: '📋', label: 'Giám sát', defaultTab: 'gantt', badge: (props.counts?.tasks || 0) + (props.counts?.construction_logs || 0) + (props.counts?.acceptance_stages || 0) + (props.counts?.defects || 0) + (props.counts?.additional_costs || 0) + (props.counts?.change_requests || 0), perms: ['gantt.view', 'project.task.view', 'log.view', 'acceptance.view', 'defect.view', 'change_request.view', 'additional_cost.view', 'project.comment.view', 'project.risk.view'] },
     { key: 'subcontractor_main', icon: '👷', label: 'Nhà thầu phụ', defaultTab: 'subcontractor_info', badge: props.counts?.subcontractors || 0, perms: ['subcontractor.view'] },
-    { key: 'finance', icon: '💰', label: 'Tài chính', defaultTab: 'contract', badge: (props.counts?.costs || 0) + (props.counts?.payments || 0) + (props.counts?.budgets || 0), perms: ['contract.view', 'payment.view', 'invoice.view', 'cost.view', 'budgets.view', 'finance.view'] },
-    { key: 'expense', icon: '🏗️', label: 'Chi phí', defaultTab: 'materials', badge: (props.counts?.material_bills || 0) + (props.counts?.equipment || 0), perms: ['material.view', 'equipment.view'] },
+    { key: 'finance', icon: '💰', label: 'Tài chính', defaultTab: 'contract', badge: (props.counts?.payments || 0) + (props.counts?.budgets || 0), perms: ['contract.view', 'payment.view', 'invoice.view', 'budgets.view', 'finance.view'] },
+    { key: 'expense', icon: '🏗️', label: 'Chi phí', defaultTab: 'costs', badge: (props.counts?.costs || 0) + (props.counts?.material_bills || 0) + (props.counts?.equipment || 0), perms: ['cost.view', 'material.view', 'equipment.view'] },
+
     { key: 'hr', icon: '👥', label: 'Nhân sự', defaultTab: 'personnel', badge: props.counts?.personnel || 0, perms: ['personnel.view', 'attendance.view', 'labor_productivity.view'] },
     { key: 'warranty', icon: '🛡️', label: 'Bảo hành', defaultTab: 'warranty', badge: (props.counts?.warranties || 0) + (props.counts?.maintenances || 0), perms: ['warranty.view'] },
     { key: 'other', icon: '📁', label: 'Khác', defaultTab: 'documents', badge: props.counts?.attachments || 0, perms: ['document.view'] },
@@ -12384,10 +12412,17 @@ const confirmSubPayment = (sub, p) => {
 }
 
 const confirmApprovePayment = () => {
-  if (confirmPaymentType.value !== 'project_payment' && !confirmPaymentFiles.value.length) {
-    message.warning('Vui lòng chọn ít nhất một chứng từ chuyển khoản.')
-    return
+  if (confirmPaymentType.value !== 'project_payment') {
+    if (!confirmPaymentBudgetItem.value) {
+      message.warning('Vui lòng chọn Hạng mục ngân sách để hệ thống trừ định mức.')
+      return
+    }
+    if (!confirmPaymentFiles.value.length) {
+      message.warning('Vui lòng chọn ít nhất một chứng từ chuyển khoản.')
+      return
+    }
   }
+
 
   confirmPaymentLoading.value = true
   const fd = new FormData()

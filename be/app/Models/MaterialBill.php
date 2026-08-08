@@ -11,10 +11,12 @@ use Illuminate\Support\Str;
 use App\Traits\NotifiesUsers;
 use App\Traits\HasAutoCode;
 use App\Traits\Approvable;
+use App\Traits\Auditable;
 
 class MaterialBill extends Model
 {
-    use SoftDeletes, NotifiesUsers, HasAutoCode, Approvable;
+    use SoftDeletes, NotifiesUsers, HasAutoCode, Approvable, Auditable;
+
 
     public function getCodeColumn(): string
     {

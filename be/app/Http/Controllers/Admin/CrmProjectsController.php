@@ -627,8 +627,13 @@ class CrmProjectsController extends Controller
 
         $cost = Cost::where('project_id', $project->id)->findOrFail($costId);
 
+        if (!$request->filled('budget_item_id') && !$cost->budget_item_id) {
+            return back()->with('error', 'Vui lòng chọn Hạng mục ngân sách trước khi xác nhận.');
+        }
+
         try {
             // Mandatorily attach uploaded files to the Cost
+
             $request->merge(['description' => 'after']);
             $this->attachFilesToEntity($request, $cost, "costs/{$project->id}/{$cost->id}", true);
 
@@ -2314,8 +2319,18 @@ class CrmProjectsController extends Controller
         $this->crmRequire($admin, Permissions::COST_APPROVE_ACCOUNTANT, $project);
         $payment = SubcontractorPayment::where('project_id', $project->id)->findOrFail($paymentId);
 
+        if (!$request->filled('budget_item_id') && !$payment->budget_item_id) {
+            return back()->with('error', 'Vui lòng chọn Hạng mục ngân sách trước khi xác nhận.');
+        }
+
         try {
+            if ($request->filled('budget_item_id')) {
+                $payment->budget_item_id = $request->budget_item_id;
+                $payment->save();
+            }
+
             // Mandatorily attach uploaded files to the payment
+
             $request->merge(['description' => 'after']);
             $this->attachFilesToEntity($request, $payment, "sub-payments/{$project->id}/{$payment->id}", true);
 
@@ -3135,15 +3150,30 @@ class CrmProjectsController extends Controller
 
         $acceptance = \App\Models\Acceptance::where('project_id', $project->id)->findOrFail($id);
 
-        $isSuperAdmin = $user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
-        if (!$isSuperAdmin && $acceptance->workflow_status !== 'draft' && $acceptance->workflow_status !== 'rejected') {
-            return back()->with('error', 'Chỉ có thể xóa phiếu nghiệm thu ở trạng thái Nháp hoặc Từ chối.');
-        }
+        \Illuminate\Support\Facades\DB::transaction(function () use ($acceptance, $project) {
+            // Reset associated ProjectTask status & progress if linked
+            if ($acceptance->task_id) {
+                $task = \App\Models\ProjectTask::find($acceptance->task_id);
+                if ($task) {
+                    $task->update([
+                        'status' => 'in_progress',
+                        'progress_percentage' => 0,
+                    ]);
+                }
+            }
 
-        $acceptance->delete();
+            // Delete (Soft Delete) acceptance record
+            $acceptance->delete();
 
-        return back()->with('success', 'Đã xóa phiếu nghiệm thu.');
+            // Recalculate project progress
+            if ($project->progress) {
+                $project->progress->calculateOverall(true);
+            }
+        });
+
+        return back()->with('success', 'Đã xóa phiếu nghiệm thu và cập nhật lại tiến độ dự án.');
     }
+
 
     // ============ DOCUMENT CRUD ============
 
@@ -3451,8 +3481,18 @@ class CrmProjectsController extends Controller
             return back()->with('error', 'Phiếu thuê thiết bị không ở trạng thái chờ Kế toán xác nhận. Trạng thái hiện tại: ' . ($rental->status ?? 'Nháp'));
         }
 
+        if (!$request->filled('budget_item_id') && !$rental->budget_item_id) {
+            return back()->with('error', 'Vui lòng chọn Hạng mục ngân sách trước khi xác nhận.');
+        }
+
         try {
+            if ($request->filled('budget_item_id')) {
+                $rental->budget_item_id = $request->budget_item_id;
+                $rental->save();
+            }
+
             // Mandatorily attach uploaded files to the Equipment Rental
+
             $request->merge(['description' => 'after']);
             $this->attachFilesToEntity($request, $rental, "equipment-rentals/{$project->id}/{$rental->id}", true);
 
@@ -4392,8 +4432,13 @@ class CrmProjectsController extends Controller
             return back()->with('error', 'Phiếu vật tư không ở trạng thái chờ Kế toán xác nhận. Trạng thái hiện tại: ' . ($bill->status ?? 'Nháp'));
         }
 
+        if (!$request->filled('budget_item_id')) {
+            return back()->with('error', 'Vui lòng chọn Hạng mục ngân sách trước khi xác nhận.');
+        }
+
         try {
             // Mandatorily attach uploaded files to the material bill
+
             $request->merge(['description' => 'after']);
             $this->attachFilesToEntity($request, $bill, "material-bills/{$project->id}/{$bill->id}", true);
 
@@ -4763,6 +4808,38 @@ class CrmProjectsController extends Controller
             $fileName
         );
     }
+
+    /**
+     * Xuất Excel báo cáo Dòng tiền của dự án
+     */
+    public function exportCashFlowSummary(string $projectId)
+    {
+        $project = Project::findOrFail($projectId);
+        $user = auth('admin')->user();
+        $this->crmRequire($user, Permissions::FINANCE_VIEW, $project);
+
+        $financeService = app(\App\Services\FinanceService::class);
+        $cashFlowData = $financeService->getCashFlow($projectId);
+
+        $actualPayments = \App\Models\ProjectPayment::where('project_id', $projectId)
+            ->whereIn('status', ['paid', 'confirmed'])
+            ->latest('paid_date')
+            ->get();
+
+        $actualCosts = \App\Models\Cost::where('project_id', $projectId)
+            ->where('status', 'approved')
+            ->with(['supplier', 'subcontractor'])
+            ->latest('cost_date')
+            ->get();
+
+        $fileName = 'Bao_cao_dong_tien_' . \Illuminate\Support\Str::slug($project->name, '_') . '_' . date('Ymd_His') . '.xlsx';
+
+        return \Maatwebsite\Excel\Facades\Excel::download(
+            new \App\Exports\ProjectCashFlowSummaryExport($project, $cashFlowData, $actualPayments, $actualCosts),
+            $fileName
+        );
+    }
+
 
     // ===================================================================
     // HELPER — CRM Notification dispatch (matching APP NotificationService)

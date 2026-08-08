@@ -10,10 +10,12 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
 use App\Traits\HasAutoCode;
+use App\Traits\Auditable;
 
 class Project extends Model
 {
-    use SoftDeletes, HasAutoCode;
+    use SoftDeletes, HasAutoCode, Auditable;
+
 
     protected $fillable = [
         'uuid',

@@ -17,6 +17,10 @@ class PayrollService
      */
     public function upsert(array $data, ?Payroll $payroll = null, $user = null): Payroll
     {
+        if (array_key_exists('project_id', $data) && (empty($data['project_id']) || $data['project_id'] === 'null' || $data['project_id'] === 'undefined')) {
+            $data['project_id'] = null;
+        }
+
         $rules = [
             'user_id'          => 'required|exists:users,id',
             'project_id'       => 'nullable|exists:projects,id',
@@ -32,6 +36,7 @@ class PayrollService
         ];
 
         $validator = Validator::make($data, $rules);
+
         if ($validator->fails()) {
             throw new \Illuminate\Validation\ValidationException($validator);
         }
@@ -208,8 +213,9 @@ class PayrollService
         $cost = Cost::where('payroll_id', $payroll->id)->first();
         
         $empName = $payroll->user ? $payroll->user->name : '';
-        $monthStr = $payroll->period_start ? $payroll->period_start->format('m/Y') : '';
+        $monthStr = $payroll->period_start ? \Carbon\Carbon::parse($payroll->period_start)->format('m/Y') : '';
         $costName = "Phiếu lương - {$empName} - Tháng {$monthStr}";
+
         
         // Find labor cost group (NC - Nhân công)
         $costGroup = CostGroup::where('code', 'NC')->active()->first();
