@@ -134,7 +134,6 @@
         :loading="isRefreshing"
         :custom-row="(record) => ({
           onClick: (event) => {
-            if (!getDetailUrl(record)) return;
             const path = event.composedPath();
             const isInteractive = path.some(el => 
               el.tagName === 'BUTTON' || 
@@ -148,10 +147,14 @@
               ))
             );
             if (!isInteractive) {
-              navigateToDetail(record);
+              if (getDetailUrl(record)) {
+                navigateToDetail(record);
+              } else {
+                openDetailDrawer(record);
+              }
             }
           },
-          style: getDetailUrl(record) ? 'cursor: pointer' : ''
+          style: 'cursor: pointer'
         })"
       >
       <template #bodyCell="{ column, record }">
@@ -1196,7 +1199,8 @@ const getDetailUrl = (record) => {
     equipment_rental_return: pid ? `/projects/${pid}?tab=equipment&id=${id}` : null,
     asset_usage: pid ? `/projects/${pid}?tab=equipment&id=${id}` : null,
     asset_usage_return: pid ? `/projects/${pid}?tab=equipment&id=${id}` : null,
-    equipment_purchase: null,
+    equipment_purchase: `/equipment?tab=approvals&id=${id}`,
+    payroll: `/hr/payrolls?id=${id}`,
     equipment_inventory: `/equipment?id=${id}`,
     attendance: pid ? `/projects/${pid}?tab=attendance&id=${id}` : `/hr/attendance?id=${id}`,
     maintenance: pid ? `/projects/${pid}?tab=technical&id=${id}` : null,
@@ -1245,6 +1249,7 @@ const approveUrlMap = {
   equipment_inventory_management: (r) => `/equipment/${r.id}/approve-management`,
   equipment_inventory_accountant: (r) => `/equipment/${r.id}/confirm-accountant`,
   attendance: (r) => `/approvals/attendance/${r.id}/approve`,
+  payroll: (r) => `/approvals/payroll/${r.id}/approve`,
   maintenance: (r) => `/approvals/maintenance/${r.id}/approve`,
   warranty: (r) => `/approvals/warranty/${r.id}/approve`,
 }
@@ -1322,6 +1327,7 @@ const approveLabels = {
   equipment_inventory_management: 'BĐH duyệt nhập kho thiết bị',
   equipment_inventory_accountant: 'KT xác nhận chi & nhập kho',
   attendance: 'Duyệt chấm công',
+  payroll: 'Duyệt phiếu lương',
   maintenance: 'Duyệt bảo trì',
   warranty: 'Duyệt bảo hành',
 }
@@ -1401,6 +1407,7 @@ const rejectUrlMap = {
   equipment_inventory_management: (r) => `/equipment/${r.id}/reject`,
   equipment_inventory_accountant: (r) => `/equipment/${r.id}/reject`,
   attendance: (r) => `/approvals/attendance/${r.id}/reject`,
+  payroll: (r) => `/approvals/payroll/${r.id}/reject`,
   maintenance: (r) => `/approvals/maintenance/${r.id}/reject`,
   warranty: (r) => `/approvals/warranty/${r.id}/reject`,
 }

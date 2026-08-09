@@ -576,7 +576,10 @@
               </a-select>
             </div>
             <div class="flex items-center justify-end">
-              <!-- Removed manual cost creation to maintain DB integrity as per request -->
+              <a-button v-if="can('cost.create')" type="primary" size="small" class="rounded-lg" @click="openCostModal(null)">
+                <template #icon><PlusOutlined /></template>
+                Tạo phiếu chi
+              </a-button>
             </div>
           </div>
 
@@ -1326,6 +1329,7 @@
               <a-button size="small" :type="financeView === 'pnl' ? 'primary' : 'default'" @click="financeView = 'pnl'">Lãi / Lỗ</a-button>
               <a-button size="small" :type="financeView === 'bva' ? 'primary' : 'default'" @click="financeView = 'bva'">NS vs Thực chi</a-button>
               <a-button size="small" :type="financeView === 'debt' ? 'primary' : 'default'" @click="financeView = 'debt'">Công nợ NTP</a-button>
+              <a-button size="small" :type="financeView === 'materials_summary' ? 'primary' : 'default'" @click="financeView = 'materials_summary'">Vật tư</a-button>
               <a-button size="small" :type="financeView === 'warranty' ? 'primary' : 'default'" @click="financeView = 'warranty'">Bảo hành</a-button>
               <a-button size="small" type="primary" ghost @click="loadFinanceData()" :loading="financeLoading"><template #icon><CalendarOutlined /></template>Refresh</a-button>
             </div>
@@ -1646,6 +1650,59 @@
                 </div>
               </div>
             </div>
+          </div>
+
+          <!-- Materials Summary (Tổng hợp Vật tư chi tiết) -->
+          <div v-else-if="financeView === 'materials_summary'">
+            <div v-if="materialsSummaryData.length" class="space-y-3">
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+                <div class="bg-white p-3 rounded-xl border border-gray-100 shadow-sm">
+                  <div class="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-1">Tổng loại vật tư</div>
+                  <div class="text-xl font-bold text-blue-600">{{ materialsSummaryData.length }}</div>
+                </div>
+                <div class="bg-white p-3 rounded-xl border border-gray-100 shadow-sm">
+                  <div class="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-1">Tổng phiếu nhập (đã duyệt)</div>
+                  <div class="text-xl font-bold text-emerald-600">{{ materialBills.filter(b => b.status === 'approved').length }}</div>
+                </div>
+                <div class="bg-white p-3 rounded-xl border border-gray-100 shadow-sm">
+                  <div class="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-1">Tổng chi phí vật tư</div>
+                  <div class="text-xl font-bold text-red-500">{{ fmt(materialsSummaryData.reduce((s, m) => s + m.total_amount, 0)) }}</div>
+                </div>
+              </div>
+              <a-table 
+                :columns="materialsSummaryCols" 
+                :data-source="materialsSummaryData" 
+                :pagination="{ pageSize: 20, showTotal: (t) => t + ' loại vật tư' }" 
+                row-key="key" 
+                size="small" 
+                class="crm-table"
+              >
+                <template #bodyCell="{ column, record, index }">
+                  <template v-if="column.key === 'stt'">{{ index + 1 }}</template>
+                  <template v-else-if="column.key === 'name'">
+                    <span class="font-medium text-gray-800">{{ record.name }}</span>
+                  </template>
+                  <template v-else-if="column.key === 'unit'">{{ record.unit || '—' }}</template>
+                  <template v-else-if="column.key === 'total_quantity'">
+                    <span class="font-semibold text-blue-600">{{ Number(record.total_quantity).toLocaleString('vi-VN') }}</span>
+                  </template>
+                  <template v-else-if="column.key === 'avg_unit_price'">{{ fmt(record.avg_unit_price) }}</template>
+                  <template v-else-if="column.key === 'total_amount'">
+                    <span class="font-bold text-red-500">{{ fmt(record.total_amount) }}</span>
+                  </template>
+                </template>
+                <template #summary>
+                  <a-table-summary fixed>
+                    <a-table-summary-row class="bg-gray-50 font-bold">
+                      <a-table-summary-cell :index="0" :col-span="4" class="text-right font-bold text-gray-700">TỔNG CỘNG</a-table-summary-cell>
+                      <a-table-summary-cell :index="4"></a-table-summary-cell>
+                      <a-table-summary-cell :index="5" class="text-red-600 font-bold">{{ fmt(materialsSummaryData.reduce((s, m) => s + m.total_amount, 0)) }}</a-table-summary-cell>
+                    </a-table-summary-row>
+                  </a-table-summary>
+                </template>
+              </a-table>
+            </div>
+            <a-empty v-else description="Chưa có phiếu vật tư nào được duyệt" />
           </div>
 
           <!-- Warranty -->
@@ -9185,7 +9242,12 @@ const isTabVisible = (tabKey) => {
 }
 
 const visibleCostGroups = computed(() => {
-  return (props.costGroups || []).filter(g => isTabVisible(`cost_group_${g.id}`))
+  return (props.costGroups || []).filter(g => {
+    if (!isTabVisible(`cost_group_${g.id}`)) return false
+    // Hide tabs with zero items (client feedback: "nếu = 0 thì ko hiện")
+    if (g.code === 'NC') return (laborSubcontractorPayments.value?.length || 0) > 0
+    return getBillsForGroup(g.id).length > 0
+  })
 })
 
 // Map activeTab to correct group (for when tab clicked directly)
@@ -9442,6 +9504,39 @@ const bvaData = ref({})
 const debtData = ref({})
 const warrantyData = ref({})
 const financeError = ref('')
+
+// Materials Summary (Tổng hợp vật tư chi tiết) — aggregates all approved material bill items
+const materialsSummaryCols = [
+  { title: 'STT', key: 'stt', width: 50, align: 'center' },
+  { title: 'Tên vật tư', key: 'name', ellipsis: true },
+  { title: 'Đơn vị', key: 'unit', width: 80, align: 'center' },
+  { title: 'Tổng SL', key: 'total_quantity', width: 100, align: 'right' },
+  { title: 'Đơn giá TB', key: 'avg_unit_price', width: 120, align: 'right' },
+  { title: 'Tổng tiền', key: 'total_amount', width: 140, align: 'right' },
+]
+const materialsSummaryData = computed(() => {
+  const approvedBills = materialBills.value.filter(b => b.status === 'approved')
+  const map = {}
+  approvedBills.forEach(bill => {
+    (bill.items || []).forEach(item => {
+      const key = (item.name || '').trim().toLowerCase() + '||' + (item.unit || '').trim().toLowerCase()
+      if (!key || key === '||') return
+      if (!map[key]) {
+        map[key] = { key, name: item.name, unit: item.unit || '', total_quantity: 0, total_amount: 0, count: 0 }
+      }
+      const qty = Number(item.quantity) || 0
+      const price = Number(item.unit_price) || 0
+      const amount = Number(item.amount) || (qty * price)
+      map[key].total_quantity += qty
+      map[key].total_amount += amount
+      map[key].count += 1
+    })
+  })
+  return Object.values(map).map(m => ({
+    ...m,
+    avg_unit_price: m.total_quantity > 0 ? Math.round(m.total_amount / m.total_quantity) : 0,
+  })).sort((a, b) => b.total_amount - a.total_amount)
+})
 
 const pnlChartData = computed(() => {
   const categories = Object.keys(pnlData.value?.costs?.by_category || {})
