@@ -638,7 +638,7 @@ const selectedKeys = computed(() => {
   if (url.startsWith('/hr')) return ['employees']
   if (url.startsWith('/finance/company-costs')) return ['company-costs']
   if (url.startsWith('/finance')) return ['finance']
-  if (url.startsWith('/admin/petty-cash')) return ['petty-cash']
+  if (url.startsWith('/petty-cash') || url.startsWith('/admin/petty-cash')) return ['petty-cash']
   if (url.startsWith('/operations')) return ['operations-dashboard']
 
   if (url.startsWith('/cost-groups')) return ['cost-groups']
@@ -820,7 +820,7 @@ const handleMenuClick = ({ key }) => {
     'operations-dashboard': '/operations',
     shareholders: '/operations/shareholders',
     'company-assets': '/operations/assets',
-    'petty-cash': '/admin/petty-cash',
+    'petty-cash': '/petty-cash',
     notifications: '/notifications',
 
     settings: '/settings',

@@ -260,6 +260,7 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
     });
 
     // Petty Cash (Quản lý Tiền mặt)
+    Route::get('/admin/petty-cash', fn() => redirect('/petty-cash'));
     Route::prefix('petty-cash')->name('petty-cash.')->group(function () {
         Route::get('/', [CrmPettyCashController::class, 'index'])->name('index');
         Route::post('/', [CrmPettyCashController::class, 'store'])->name('store');

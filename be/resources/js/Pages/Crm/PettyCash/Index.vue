@@ -386,11 +386,11 @@ const categoryLabels = {
 }
 
 const applyFilters = () => {
-  router.get('/admin/petty-cash', localFilters, { preserveState: true, replace: true })
+  router.get('/petty-cash', localFilters, { preserveState: true, replace: true })
 }
 
 const handleTableChange = (pag) => {
-  router.get('/admin/petty-cash', { ...localFilters, page: pag.current }, { preserveState: true, replace: true })
+  router.get('/petty-cash', { ...localFilters, page: pag.current }, { preserveState: true, replace: true })
 }
 
 const openCreateModal = (type = 'outflow') => {
@@ -407,7 +407,7 @@ const openDetail = (record) => {
 }
 
 const handleSubmit = () => {
-  form.post('/admin/petty-cash', {
+  form.post('/petty-cash', {
     onSuccess: () => {
       showModal.value = false
       message.success('Đã lập phiếu tiền mặt thành công')
@@ -416,7 +416,7 @@ const handleSubmit = () => {
 }
 
 const handleApprove = (record) => {
-  router.post(`/admin/petty-cash/${record.id}/approve`, {}, {
+  router.post(`/petty-cash/${record.id}/approve`, {}, {
     onSuccess: () => {
       showDetailDrawer.value = false
       message.success('Đã duyệt & cập nhật quỹ tiền mặt')
@@ -430,7 +430,7 @@ const openRejectModal = (record) => {
     title: 'Từ chối phê duyệt phiếu tiền mặt',
     content: 'Nhập lý do từ chối:',
     onOk() {
-      router.post(`/admin/petty-cash/${record.id}/reject`, { rejection_reason: reason }, {
+      router.post(`/petty-cash/${record.id}/reject`, { rejection_reason: reason }, {
         onSuccess: () => {
           showDetailDrawer.value = false
           message.success('Đã từ chối phiếu')
@@ -441,13 +441,13 @@ const openRejectModal = (record) => {
 }
 
 const handleDelete = (record) => {
-  router.delete(`/admin/petty-cash/${record.id}`, {
+  router.delete(`/petty-cash/${record.id}`, {
     onSuccess: () => message.success('Đã xóa phiếu'),
   })
 }
 
 const exportExcel = () => {
-  window.open(`/admin/petty-cash/export?${new URLSearchParams(localFilters).toString()}`, '_blank')
+  window.open(`/petty-cash/export?${new URLSearchParams(localFilters).toString()}`, '_blank')
 }
 
 const fmtMoney = (val) => {
