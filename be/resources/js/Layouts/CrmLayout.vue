@@ -638,7 +638,9 @@ const selectedKeys = computed(() => {
   if (url.startsWith('/hr')) return ['employees']
   if (url.startsWith('/finance/company-costs')) return ['company-costs']
   if (url.startsWith('/finance')) return ['finance']
+  if (url.startsWith('/admin/petty-cash')) return ['petty-cash']
   if (url.startsWith('/operations')) return ['operations-dashboard']
+
   if (url.startsWith('/cost-groups')) return ['cost-groups']
   if (url.startsWith('/materials')) return ['materials']
   if (url.startsWith('/equipment') || url.startsWith('/operations/assets')) return ['equipment']
@@ -730,8 +732,10 @@ const menuItems = computed(() => {
         { key: 'operations-dashboard', label: 'Tổng quan dòng tiền', perm: 'operations.dashboard.view' },
         { key: 'shareholders', label: 'Nguồn vốn / Cổ đông', perm: 'shareholder.view' },
         { key: 'company-costs', label: 'Chi phí công ty', perm: 'company_cost.view' },
+        { key: 'petty-cash', label: 'Quản lý Tiền mặt', perm: 'operations.dashboard.view' },
       ],
     },
+
     {
       key: 'hr-group',
       icon: () => h(TeamOutlined),
@@ -816,7 +820,9 @@ const handleMenuClick = ({ key }) => {
     'operations-dashboard': '/operations',
     shareholders: '/operations/shareholders',
     'company-assets': '/operations/assets',
+    'petty-cash': '/admin/petty-cash',
     notifications: '/notifications',
+
     settings: '/settings',
     roles: '/roles',
     files: '/files',

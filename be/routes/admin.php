@@ -109,8 +109,10 @@ use App\Http\Controllers\Admin\CrmSubcontractorController;
 use App\Http\Controllers\Admin\CrmSupplierController;
 use App\Http\Controllers\Admin\CrmAcceptanceTemplateController;
 use App\Http\Controllers\Admin\CrmAiChatController;
+use App\Http\Controllers\Admin\CrmPettyCashController;
 
 Route::name('crm.')->middleware(['auth:admin'])->group(function () {
+
     // Dashboard
     Route::get('/', [CrmDashboardController::class, 'index'])->name('dashboard');
     Route::get('/dashboard', [CrmDashboardController::class, 'index']);
@@ -256,6 +258,18 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         Route::post('/restore', [CrmActivityLogController::class, 'restoreRecord'])->name('restore');
         Route::get('/export', [CrmActivityLogController::class, 'export'])->name('export');
     });
+
+    // Petty Cash (Quản lý Tiền mặt)
+    Route::prefix('petty-cash')->name('petty-cash.')->group(function () {
+        Route::get('/', [CrmPettyCashController::class, 'index'])->name('index');
+        Route::post('/', [CrmPettyCashController::class, 'store'])->name('store');
+        Route::put('/{id}', [CrmPettyCashController::class, 'update'])->name('update');
+        Route::delete('/{id}', [CrmPettyCashController::class, 'destroy'])->name('destroy');
+        Route::post('/{id}/approve', [CrmPettyCashController::class, 'approve'])->name('approve');
+        Route::post('/{id}/reject', [CrmPettyCashController::class, 'reject'])->name('reject');
+        Route::get('/export', [CrmPettyCashController::class, 'export'])->name('export');
+    });
+
 
 
     // User Guide (Hướng dẫn sử dụng)
