@@ -591,7 +591,7 @@
               {{ s === 'all' ? 'Tất cả' : s === 'draft' ? 'Nháp' : s === 'pending' ? 'Chờ duyệt' : s === 'approved' ? 'Đã duyệt' : 'Từ chối' }}
             </button>
           </div>
-          <a-table :columns="costCols" :data-source="filteredCosts" :pagination="{ pageSize: 10, showTotal: (t) => `${t} phiếu` }" row-key="id" size="small" class="crm-table hover-row" :custom-row="(record) => ({ onClick: () => openCostDetail(record), style: 'cursor: pointer' })">
+          <a-table :columns="costCols" :data-source="filteredCosts" :pagination="{ pageSize: 10, showTotal: (t) => `${t} phiếu` }" row-key="id" size="small" class="crm-table hover-row" :custom-row="(record) => ({ onClick: () => viewCostDrawer(record), style: 'cursor: pointer' })">
             <template #bodyCell="{ column, record }">
               <template v-if="column.key === 'name'">
                 <div class="flex items-center gap-1.5 min-w-0">
