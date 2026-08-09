@@ -295,10 +295,17 @@ class ApprovalQueryService
         // Helper: pluck approvable models from grouped collection
         $pluckModels = fn($class) => ($grouped[$class] ?? collect())->pluck('approvable')->filter();
 
-        // Costs — split by approval level
-        $allCosts = $pluckModels(Cost::class);
+        // Costs — split by approval level (ALWAYS exclude linked costs which have dedicated approval handlers)
+        $allCosts = $pluckModels(Cost::class)->filter(function ($c) {
+            return is_null($c->material_bill_id ?? null)
+                && is_null($c->subcontractor_payment_id ?? null)
+                && is_null($c->payroll_id ?? null)
+                && is_null($c->additional_cost_id ?? null)
+                && is_null($c->equipment_rental_id ?? null);
+        });
         $data['costs_management'] = $allCosts->filter(fn($c) => str_contains($c->status ?? '', 'management'));
         $data['costs_accountant'] = $allCosts->filter(fn($c) => str_contains($c->status ?? '', 'accountant'));
+
 
         // Acceptances — split by workflow_status
         $allAcceptances = $pluckModels(Acceptance::class);
@@ -393,6 +400,10 @@ class ApprovalQueryService
         return Cost::whereIn('status', $statuses)
             ->whereNull('material_bill_id')
             ->whereNull('subcontractor_payment_id')
+            ->whereNull('payroll_id')
+            ->whereNull('additional_cost_id')
+            ->whereNull('equipment_rental_id')
+
             ->when(!$canSeeAllProjects, function ($q) use ($projectIds) {
                 // For non-Global/SuperAdmins: 
                 // 1. Show Project Costs they belong to.

@@ -109,9 +109,18 @@ trait Approvable
      * Helper to sync this model with the approvals table.
      * This should be called whenever a model enters an approval stage.
      */
-    public function syncApproval(array $options = []): Approval
+    public function syncApproval(array $options = []): ?Approval
     {
+        // Skip creating Approval records for linked Cost models to prevent duplicate approval requests in Approval Center
+        if ($this instanceof \App\Models\Cost) {
+            if ($this->material_bill_id || $this->subcontractor_payment_id || $this->payroll_id || $this->additional_cost_id || $this->equipment_rental_id) {
+                Approval::where('approvable_type', get_class($this))->where('approvable_id', $this->id)->delete();
+                return null;
+            }
+        }
+
         \Illuminate\Support\Facades\Log::info("Approvable: Syncing approval for " . get_class($this) . " #{$this->id}");
+
         $userId = $options['user_id'] ?? (auth()->id() ?? $this->user_id ?? $this->creator_id ?? $this->created_by ?? (\App\Models\User::first()?->id ?? 1));
         $projectId = $options['project_id'] ?? $this->project_id;
         $status = $options['status'] ?? 'pending';
