@@ -37,6 +37,11 @@ class MigrateApprovals extends Command
             Cost::whereIn('status', ['pending', 'pending_management_approval', 'pending_accountant_approval'])
                 ->whereNull('material_bill_id')
                 ->whereNull('subcontractor_payment_id')
+                ->whereNull('payroll_id')
+                ->whereNull('additional_cost_id')
+                ->whereNull('equipment_rental_id')
+                ->whereNull('equipment_purchase_id')
+                ->whereNull('attendance_id')
                 ->get(),
             'Costs'
         );

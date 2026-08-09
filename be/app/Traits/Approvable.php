@@ -113,7 +113,7 @@ trait Approvable
     {
         // Skip creating Approval records for linked Cost models to prevent duplicate approval requests in Approval Center
         if ($this instanceof \App\Models\Cost) {
-            if ($this->material_bill_id || $this->subcontractor_payment_id || $this->payroll_id || $this->additional_cost_id || $this->equipment_rental_id) {
+            if ($this->material_bill_id || $this->subcontractor_payment_id || $this->payroll_id || $this->additional_cost_id || $this->equipment_rental_id || $this->equipment_purchase_id || $this->attendance_id) {
                 Approval::where('approvable_type', get_class($this))->where('approvable_id', $this->id)->delete();
                 return null;
             }

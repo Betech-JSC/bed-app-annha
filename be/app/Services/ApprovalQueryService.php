@@ -301,7 +301,9 @@ class ApprovalQueryService
                 && is_null($c->subcontractor_payment_id ?? null)
                 && is_null($c->payroll_id ?? null)
                 && is_null($c->additional_cost_id ?? null)
-                && is_null($c->equipment_rental_id ?? null);
+                && is_null($c->equipment_rental_id ?? null)
+                && is_null($c->equipment_purchase_id ?? null)
+                && is_null($c->attendance_id ?? null);
         });
         $data['costs_management'] = $allCosts->filter(fn($c) => str_contains($c->status ?? '', 'management'));
         $data['costs_accountant'] = $allCosts->filter(fn($c) => str_contains($c->status ?? '', 'accountant'));
@@ -403,6 +405,8 @@ class ApprovalQueryService
             ->whereNull('payroll_id')
             ->whereNull('additional_cost_id')
             ->whereNull('equipment_rental_id')
+            ->whereNull('equipment_purchase_id')
+            ->whereNull('attendance_id')
 
             ->when(!$canSeeAllProjects, function ($q) use ($projectIds) {
                 // For non-Global/SuperAdmins: 
