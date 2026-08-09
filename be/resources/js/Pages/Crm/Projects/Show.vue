@@ -10006,7 +10006,8 @@ const openCostDetail = (c) => {
     activeTab.value = 'attendance'
     return
   }
-  // Standalone cost: do nothing on row click, use eye icon to view
+  // Standalone cost: open detail drawer
+  viewCostDrawer(c)
 }
 // Always open the cost detail drawer (for eye icon)
 const viewCostDrawer = (c) => { costDetailRecord.value = c; showCostDetail.value = true }
