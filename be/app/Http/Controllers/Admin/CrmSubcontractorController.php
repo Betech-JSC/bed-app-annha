@@ -183,93 +183,9 @@ class CrmSubcontractorController extends Controller
                 'created_by' => $user->id,
             ]);
 
-            if ($request->input('create_cost') && $request->input('cost_group_id')) {
-                \App\Models\Cost::create([
-                    'project_id' => $validated['project_id'],
-                    'subcontractor_id' => $subcontractor->id,
-                    'name' => "Hợp đồng thầu phụ: " . $subcontractor->name,
-                    'amount' => $subcontractor->total_quote,
-                    'cost_date' => $subcontractor->progress_start_date ?: now(),
-                    'cost_group_id' => $request->input('cost_group_id'),
-                    'category' => 'other',
-                    'status' => 'draft',
-                    'created_by' => $user->id,
-                ]);
-            }
+            // Note: Standalone Cost records with total_quote (contract value) are not created here.
+            // Subcontractor payment vouchers (Phiếu chi) are synced automatically via SubcontractorPayment models (đợt thanh toán thực tế).
 
-            // Handle file attachments upload on store
-            app(\App\Services\AttachmentService::class)->handleCrmUpload(
-                $request,
-                $subcontractor,
-                "subcontractors/{$validated['project_id']}/{$subcontractor->id}",
-                false
-            );
-        });
-
-        return redirect()->back()->with('success', 'Đã thêm nhà thầu phụ.');
-    }
-
-    public function update(Request $request, $id)
-    {
-        $user = Auth::guard('admin')->user();
-        $this->crmRequire($user, Permissions::SUBCONTRACTOR_UPDATE);
-        $sub = Subcontractor::findOrFail($id);
-
-        $validated = $request->validate([
-            'global_subcontractor_id' => 'nullable|exists:global_subcontractors,id',
-            'name' => 'required_without:global_subcontractor_id|string|max:255',
-            'category' => 'nullable|string|max:255',
-            'total_quote' => 'required|numeric|min:0',
-            'bank_name' => 'nullable|string|max:255',
-            'bank_account_number' => 'nullable|string|max:255',
-            'bank_account_name' => 'nullable|string|max:255',
-            'progress_start_date' => 'nullable|date',
-            'progress_end_date' => 'nullable|date|after_or_equal:progress_start_date',
-            'progress_status' => 'nullable|in:not_started,in_progress,completed,delayed',
-            'create_cost' => 'nullable|boolean',
-            'cost_group_id' => 'nullable|exists:cost_groups,id',
-        ]);
-
-        if (!empty($validated['global_subcontractor_id'])) {
-            $gs = GlobalSubcontractor::findOrFail($validated['global_subcontractor_id']);
-            $validated['name'] = $gs->name;
-            $validated['bank_name'] = $validated['bank_name'] ?? $gs->bank_name;
-            $validated['bank_account_number'] = $validated['bank_account_number'] ?? $gs->bank_account_number;
-            $validated['bank_account_name'] = $validated['bank_account_name'] ?? $gs->bank_account_name;
-        }
-
-        DB::transaction(function () use ($sub, $validated, $request, $user) {
-            $subData = collect($validated)->except(['create_cost', 'cost_group_id'])->toArray();
-            $sub->update([
-                ...$subData,
-                'updated_by' => $user->id,
-            ]);
-
-            // Sync Cost record:
-            if ($request->input('create_cost') && $request->input('cost_group_id')) {
-                $cost = \App\Models\Cost::where('subcontractor_id', $sub->id)->first();
-                if ($cost) {
-                    $cost->update([
-                        'cost_group_id' => $request->input('cost_group_id'),
-                        'amount' => $sub->total_quote,
-                        'name' => "Hợp đồng thầu phụ: " . $sub->name,
-                    ]);
-                } else {
-                    \App\Models\Cost::create([
-                        'project_id' => $sub->project_id,
-                        'subcontractor_id' => $sub->id,
-                        'name' => "Hợp đồng thầu phụ: " . $sub->name,
-                        'amount' => $sub->total_quote,
-                        'cost_date' => $sub->progress_start_date ?: now(),
-                        'cost_group_id' => $request->input('cost_group_id'),
-                        'category' => 'other',
-                        'status' => 'draft',
-                        'created_by' => $user->id,
-                    ]);
-                }
-            } else {
-                \App\Models\Cost::where('subcontractor_id', $sub->id)->delete();
-            }
 
             // Handle file deletions
             app(\App\Services\AttachmentService::class)->handleDeletedRequest($request, $sub);
