@@ -81,7 +81,7 @@ class CrmEquipmentController extends Controller
             }
             $equipment = $query->orderByDesc('created_at')->paginate(20)->withQueryString();
         } elseif ($tab === 'activity_logs') {
-            $query = \App\Models\ActivityLog::with('user:id,name,email,avatar');
+            $query = \App\Models\ActivityLog::with('user:id,name,email,image as avatar');
             if ($search) {
                 $query->where(function ($q) use ($search) {
                     $q->where('action', 'like', "%{$search}%")
