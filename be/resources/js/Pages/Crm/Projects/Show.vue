@@ -996,14 +996,28 @@
                   <a-tag class="rounded-full bg-blue-50 text-blue-600 border-none px-2 py-0.5 text-[11px] font-semibold ml-1">{{ group.items.length }} hạng mục con</a-tag>
                 </div>
                 <!-- Render Parent Acceptance Status if it exists -->
-                <div v-if="group.parentAcceptance" class="flex items-center gap-2">
+                <div v-if="group.parentAcceptance" class="flex items-center gap-2" @click.stop>
                   <span class="text-xs text-gray-400 font-medium">Nghiệm thu nhóm:</span>
                   <a-tag :color="acceptStatusColors[group.parentAcceptance.workflow_status] || 'default'" 
                          class="rounded-full text-xs m-0 border-none font-medium px-2.5 shadow-sm cursor-pointer hover:opacity-80 transition-all"
                          @click="openAcceptDetailModal(group.parentAcceptance)">
                     {{ acceptStatusLabels[group.parentAcceptance.workflow_status] || group.parentAcceptance.workflow_status }}
                   </a-tag>
+                  <a-popconfirm
+                    v-if="can('acceptance.delete')"
+                    title="Xóa nghiệm thu & reset tiến độ?"
+                    description="Xóa bản ghi nghiệm thu này và cập nhật lại tiến độ công việc về trạng thái làm lại (0%)?"
+                    ok-text="Xóa"
+                    cancel-text="Hủy"
+                    :ok-button-props="{ danger: true }"
+                    @confirm="deleteAccept(group.parentAcceptance)"
+                  >
+                    <a-button type="text" danger size="small" class="opacity-80 hover:opacity-100 p-1 flex items-center" title="Xóa nghiệm thu & reset tiến độ">
+                      <template #icon><DeleteOutlined /></template>
+                    </a-button>
+                  </a-popconfirm>
                 </div>
+
               </div>
 
               <!-- Acceptance cards -->
@@ -6884,10 +6898,16 @@
           <a-tooltip title="Sửa" v-if="can('acceptance.update') && !isAcceptanceLocked">
             <a-button type="text" size="small" class="hover:bg-blue-50" @click="openEditAcceptModal(acceptDetailStage)"><EditOutlined /></a-button>
           </a-tooltip>
-          <a-popconfirm v-if="can('acceptance.delete') && ['draft','rejected'].includes(acceptDetailStage?.workflow_status)" 
-                        title="Xóa phiếu nghiệm thu này?" @confirm="deleteAccept(acceptDetailStage); showAcceptDetailDrawer = false">
-            <a-button type="text" size="small" danger class="hover:bg-red-50"><DeleteOutlined /></a-button>
+          <a-popconfirm v-if="can('acceptance.delete')" 
+                        title="Xóa phiếu nghiệm thu & reset tiến độ?" 
+                        description="Xóa nghiệm thu này và cập nhật lại tiến độ công việc về trạng thái làm lại (0%)?"
+                        ok-text="Xóa"
+                        cancel-text="Hủy"
+                        :ok-button-props="{ danger: true }"
+                        @confirm="deleteAccept(acceptDetailStage); showAcceptDetailDrawer = false">
+            <a-button type="text" size="small" danger class="hover:bg-red-50" title="Xóa nghiệm thu & làm lại tiến độ"><DeleteOutlined /></a-button>
           </a-popconfirm>
+
           <a-button type="text" size="small" @click="showAcceptDetailDrawer = false" class="hover:bg-gray-100"><CloseOutlined /></a-button>
         </div>
       </div>
@@ -9616,8 +9636,16 @@ const acceptanceGroups = computed(() => {
     }
   })
   
+  // Fallback: If a group has parentAcceptance but items is empty, add parentAcceptance to items so it renders as an actionable card
+  Object.values(groups).forEach(g => {
+    if (g.parentAcceptance && !g.items.length) {
+      g.items.push(g.parentAcceptance)
+    }
+  })
+  
   return Object.values(groups)
 })
+
 
 // ============ TABLE COLUMNS ============
 const costCols = [
