@@ -1330,19 +1330,20 @@
               <a-button size="small" type="primary" ghost @click="loadFinanceData()" :loading="financeLoading"><template #icon><CalendarOutlined /></template>Refresh</a-button>
             </div>
             <div v-if="financeView === 'cashflow'" class="flex gap-2">
-              <a :href="`/admin/projects/${project.id}/finance/cashflow/export`" target="_blank">
+              <a :href="`/projects/${project.id}/finance/cashflow/export`" target="_blank">
                 <a-button size="small" type="default" class="flex items-center text-emerald-600 border-emerald-200 hover:text-emerald-700 hover:border-emerald-300">
                   <template #icon><DownloadOutlined /></template>Xuất data Dòng tiền
                 </a-button>
               </a>
             </div>
             <div v-if="financeView === 'pnl' && pnlData.revenue" class="flex gap-2">
-              <a :href="`/admin/projects/${project.id}/finance/pnl/export`" target="_blank">
+              <a :href="`/projects/${project.id}/finance/pnl/export`" target="_blank">
                 <a-button size="small" type="default" class="flex items-center text-emerald-600 border-emerald-200 hover:text-emerald-700 hover:border-emerald-300">
                   <template #icon><DownloadOutlined /></template>Xuất báo cáo Lãi/Lỗ
                 </a-button>
               </a>
             </div>
+
 
           </div>
 
@@ -2238,7 +2239,8 @@
               <span class="text-xs text-gray-400 font-medium italic">
                 * Thực dùng dựa trên các mặt hàng từ phiếu nhập vật tư đã được phê duyệt.
               </span>
-              <a :href="`/admin/projects/${project.id}/materials/export`" target="_blank">
+              <a :href="`/projects/${project.id}/materials/export`" target="_blank">
+
                 <a-button type="primary" size="small" ghost>
                   <template #icon><DownloadOutlined /></template>Xuất file Excel
                 </a-button>
