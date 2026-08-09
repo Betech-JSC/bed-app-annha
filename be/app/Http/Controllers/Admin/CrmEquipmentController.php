@@ -80,7 +80,24 @@ class CrmEquipmentController extends Controller
                 });
             }
             $equipment = $query->orderByDesc('created_at')->paginate(20)->withQueryString();
+        } elseif ($tab === 'activity_logs') {
+            $query = \App\Models\ActivityLog::with('user:id,name,email,avatar');
+            if ($search) {
+                $query->where(function ($q) use ($search) {
+                    $q->where('action', 'like', "%{$search}%")
+                        ->orWhere('description', 'like', "%{$search}%")
+                        ->orWhere('subject_type', 'like', "%{$search}%")
+                        ->orWhereHas('user', function ($uq) use ($search) {
+                            $uq->where('name', 'like', "%{$search}%");
+                        });
+                });
+            }
+            if ($status = $request->query('status')) {
+                $query->where('action', $status);
+            }
+            $equipment = $query->orderByDesc('created_at')->paginate(20)->withQueryString();
         } else {
+
             if ($tab === 'approvals') {
                 $query = EquipmentPurchase::with(['creator:id,name', 'approver:id,name', 'confirmer:id,name', 'project:id,name', 'supplier:id,name', 'items', 'attachments']);
                 if ($search) {

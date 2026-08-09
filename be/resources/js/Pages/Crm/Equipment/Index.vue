@@ -33,10 +33,11 @@
       <a-tab-pane key="catalog" tab="Danh mục thiết bị" />
       <a-tab-pane key="exports" tab="Xuất tài sản cty" />
       <a-tab-pane key="usages" tab="Xuất chi phí" />
+      <a-tab-pane key="activity_logs" tab="Nhật ký thao tác" />
     </a-tabs>
 
     <div class="px-4 py-3 border-b border-gray-100 flex items-center gap-4 flex-wrap bg-gray-50/30">
-      <a-input-search v-model:value="filters.search" placeholder="Tìm thiết bị..." class="max-w-xs" allow-clear @search="applyFilters" @change="debounceSearch" />
+      <a-input-search v-model:value="filters.search" placeholder="Tìm thiết bị, từ khóa..." class="max-w-xs" allow-clear @search="applyFilters" @change="debounceSearch" />
       <a-select v-if="filters.tab !== 'catalog' && filters.tab !== 'exports'" v-model:value="filters.status" placeholder="Tất cả trạng thái" allow-clear style="width: 180px" @change="applyFilters">
         <template v-if="filters.tab === 'approvals'">
           <a-select-option value="draft">Nháp</a-select-option>
@@ -52,12 +53,21 @@
           <a-select-option value="returned">Đã trả</a-select-option>
           <a-select-option value="rejected">Từ chối</a-select-option>
         </template>
+        <template v-else-if="filters.tab === 'activity_logs'">
+          <a-select-option value="created">Thêm mới</a-select-option>
+          <a-select-option value="updated">Cập nhật</a-select-option>
+          <a-select-option value="deleted">Đã xóa</a-select-option>
+          <a-select-option value="restored">Khôi phục</a-select-option>
+          <a-select-option value="approved">Phê duyệt</a-select-option>
+          <a-select-option value="rejected">Từ chối</a-select-option>
+        </template>
         <template v-else>
           <a-select-option value="available">Trong kho</a-select-option>
           <a-select-option value="in_use">Đang sử dụng</a-select-option>
           <a-select-option value="maintenance">Bảo trì</a-select-option>
           <a-select-option value="retired">Thanh lý</a-select-option>
         </template>
+
       </a-select>
     </div>
 
@@ -248,6 +258,47 @@
             </a-button>
           </div>
         </template>
+
+        <!-- Activity Log Columns -->
+        <template v-else-if="column.key === 'log_time'">
+          <div class="text-xs font-semibold text-gray-700">
+            {{ fmtDateTime(record.created_at) }}
+          </div>
+        </template>
+        <template v-else-if="column.key === 'log_action'">
+          <div class="flex justify-center">
+            <a-tag :color="logActionColors[record.action] || 'default'" class="rounded-full px-2.5 py-0.5 text-[11px] font-bold border-none">
+              {{ logActionLabels[record.action] || record.action }}
+            </a-tag>
+          </div>
+        </template>
+        <template v-else-if="column.key === 'log_user'">
+          <div class="flex items-center gap-2">
+            <div class="w-6 h-6 rounded-full bg-blue-600 text-white font-bold text-[10px] flex items-center justify-center">
+              {{ (record.user?.name || 'S').charAt(0).toUpperCase() }}
+            </div>
+            <span class="text-xs font-medium text-gray-700">{{ record.user?.name || 'Hệ thống' }}</span>
+          </div>
+        </template>
+        <template v-else-if="column.key === 'log_subject'">
+          <div class="text-xs text-gray-700">
+            <span class="font-bold">{{ logModelLabels[record.subject_type] || record.subject_type?.split('\\').pop() || 'Hệ thống' }}</span>
+            <span v-if="record.subject_id" class="text-gray-400 font-mono ml-1">#{{ record.subject_id }}</span>
+          </div>
+        </template>
+        <template v-else-if="column.key === 'log_desc'">
+          <div class="text-xs text-gray-600 max-w-[320px] truncate" :title="record.description">
+            {{ record.description || 'Thao tác dữ liệu' }}
+          </div>
+        </template>
+        <template v-else-if="column.key === 'log_actions'">
+          <div class="flex justify-center">
+            <a-button type="text" size="small" class="hover:bg-blue-50 text-blue-600 rounded-lg" @click="viewLogDetail(record)" title="Xem chi tiết thao tác">
+              <EyeOutlined />
+            </a-button>
+          </div>
+        </template>
+
       </template>
     </a-table>
   </div>
@@ -1056,7 +1107,38 @@
       </a-form-item>
     </a-form>
   </a-modal>
+
+  <!-- Modal Xem Chi Tiết Nhật Ký Thao Tác -->
+  <a-modal v-model:open="showLogDetailModal" title="Chi tiết nhật ký thao tác" :footer="null" :width="640">
+    <div v-if="selectedLog" class="space-y-4 py-2">
+      <div class="flex items-center justify-between bg-gray-50 p-3 rounded-xl border border-gray-100">
+        <div>
+          <div class="text-[11px] text-gray-400 font-medium">Thời gian</div>
+          <div class="text-xs font-bold text-gray-800">{{ fmtDateTime(selectedLog.created_at) }}</div>
+        </div>
+        <div>
+          <div class="text-[11px] text-gray-400 font-medium">Hành động</div>
+          <a-tag :color="logActionColors[selectedLog.action] || 'default'" class="font-bold border-none text-xs rounded-full">
+            {{ logActionLabels[selectedLog.action] || selectedLog.action }}
+          </a-tag>
+        </div>
+        <div>
+          <div class="text-[11px] text-gray-400 font-medium">Người thực hiện</div>
+          <div class="text-xs font-semibold text-gray-700">{{ selectedLog.user?.name || 'Hệ thống' }}</div>
+        </div>
+      </div>
+      <div>
+        <div class="text-xs font-semibold text-gray-600 mb-1">Nội dung / Mô tả:</div>
+        <div class="text-xs text-gray-800 bg-blue-50/50 p-3 rounded-xl border border-blue-100 font-medium">{{ selectedLog.description || 'Thao tác dữ liệu' }}</div>
+      </div>
+      <div v-if="selectedLog.properties">
+        <div class="text-xs font-semibold text-gray-600 mb-1">Chi tiết dữ liệu thay đổi:</div>
+        <pre class="bg-gray-900 text-green-400 p-3 rounded-xl text-xs overflow-x-auto max-h-60 font-mono">{{ JSON.stringify(selectedLog.properties, null, 2) }}</pre>
+      </div>
+    </div>
+  </a-modal>
 </template>
+
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
@@ -1195,6 +1277,16 @@ const columns = computed(() => {
       { title: 'Thao tác', key: 'actions', width: 100, align: 'center' },
     ]
   }
+  if (filters.value.tab === 'activity_logs') {
+    return [
+      { title: 'Thời gian', key: 'log_time', width: 160 },
+      { title: 'Hành động', key: 'log_action', width: 130, align: 'center' },
+      { title: 'Người thực hiện', key: 'log_user', width: 160 },
+      { title: 'Đối tượng', key: 'log_subject', width: 180 },
+      { title: 'Nội dung chi tiết', key: 'log_desc', width: 320 },
+      { title: 'Thao tác', key: 'log_actions', width: 90, align: 'center' },
+    ]
+  }
   return [
     { title: 'Tài sản', key: 'name', width: 260 },
     { title: 'Loại', key: 'category', dataIndex: 'category', width: 100 },
@@ -1205,6 +1297,38 @@ const columns = computed(() => {
     { title: '', key: 'actions', width: 60, align: 'center' },
   ]
 })
+
+const logActionLabels = {
+  created: 'Thêm mới', updated: 'Cập nhật', deleted: 'Đã xóa', restored: 'Khôi phục',
+  approved: 'Phê duyệt', rejected: 'Từ chối', force_deleted: 'Xóa vĩnh viễn', submit: 'Gửi duyệt'
+}
+const logActionColors = {
+  created: 'green', updated: 'blue', deleted: 'red', restored: 'cyan',
+  approved: 'emerald', rejected: 'volcano', force_deleted: 'magenta', submit: 'orange'
+}
+const logModelLabels = {
+  'App\\Models\\Equipment': 'Tài sản',
+  'App\\Models\\EquipmentPurchase': 'Phiếu mua thiết bị',
+  'App\\Models\\AssetUsage': 'Xuất chi phí / Mượn',
+  'App\\Models\\GlobalEquipment': 'Thiết bị mẫu',
+  'App\\Models\\MaterialBill': 'Phiếu nhập vật tư',
+  'App\\Models\\Project': 'Dự án',
+  'App\\Models\\User': 'Người dùng',
+}
+
+const showLogDetailModal = ref(false)
+const selectedLog = ref(null)
+const viewLogDetail = (log) => {
+  selectedLog.value = log
+  showLogDetailModal.value = true
+}
+
+const fmtDateTime = (d) => {
+  if (!d) return '—'
+  const date = new Date(d)
+  return date.toLocaleString('vi-VN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+}
+
 
 const statusLabels = {
   draft: 'Nháp', pending_management: 'Chờ BĐH', pending_accountant: 'Chờ KT',
