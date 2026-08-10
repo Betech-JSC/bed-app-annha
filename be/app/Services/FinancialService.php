@@ -81,8 +81,8 @@ class FinancialService
             throw new \Exception('Chỉ có thể gửi duyệt chi phí ở trạng thái nháp.');
         }
 
-        // Business Rule: Mandatory attachments
-        if ($cost->attachments()->count() === 0) {
+        // Business Rule: Mandatory attachments (checks own + parent entity attachments)
+        if (!$cost->hasAnyAttachments()) {
             throw new \Exception('Bắt buộc phải upload ít nhất một chứng từ trước khi gửi duyệt.');
         }
 
@@ -132,7 +132,7 @@ class FinancialService
             throw new \Exception('Chi phí không ở trạng thái chờ Kế toán xác nhận.');
         }
 
-        if ($cost->attachments()->count() === 0) {
+        if (!$cost->hasAnyAttachments()) {
             throw new \Exception('Bắt buộc phải có ít nhất một chứng từ trước khi Kế toán duyệt.');
         }
 

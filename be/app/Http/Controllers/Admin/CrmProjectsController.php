@@ -1991,7 +1991,7 @@ class CrmProjectsController extends Controller
                     'project_id' => $project->id,
                     'subcontractor_id' => $subcontractor->id,
                     'name' => "Hợp đồng thầu phụ: " . $subcontractor->name,
-                    'amount' => $subcontractor->total_quote,
+                    'amount' => 0, // Placeholder — thanh toán thực tế sẽ qua phiếu SubcontractorPayment
                     'cost_date' => $subcontractor->progress_start_date ?: now(),
                     'cost_group_id' => $request->input('cost_group_id'),
                     'category' => 'other',
@@ -2042,15 +2042,15 @@ class CrmProjectsController extends Controller
                 if ($cost) {
                     $cost->update([
                         'cost_group_id' => $request->input('cost_group_id'),
-                        'amount' => $sub->total_quote,
                         'name' => "Hợp đồng thầu phụ: " . $sub->name,
+                        // Không đồng bộ amount từ total_quote — giá trị thực tế qua phiếu thanh toán
                     ]);
                 } else {
                     \App\Models\Cost::create([
                         'project_id' => $sub->project_id,
                         'subcontractor_id' => $sub->id,
                         'name' => "Hợp đồng thầu phụ: " . $sub->name,
-                        'amount' => $sub->total_quote,
+                        'amount' => 0, // Placeholder — thanh toán thực tế sẽ qua phiếu SubcontractorPayment
                         'cost_date' => $sub->progress_start_date ?: now(),
                         'cost_group_id' => $request->input('cost_group_id'),
                         'category' => 'other',

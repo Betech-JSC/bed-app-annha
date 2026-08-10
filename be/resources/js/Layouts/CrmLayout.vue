@@ -719,7 +719,7 @@ const menuItems = computed(() => {
       icon: () => h(ToolOutlined),
       label: 'Tài nguyên & Kho',
       children: [
-        { key: 'materials', label: 'Vật tư xây dựng', perm: 'material.view' },
+        { key: 'materials', label: 'Danh mục chi phí', perm: 'material.view' },
         { key: 'equipment', label: 'Kho tài sản & Thiết bị', perm: 'company_asset.view' },
         { key: 'suppliers', label: 'Nhà cung cấp', icon: () => h(ShopOutlined), perm: 'suppliers.view' },
       ],

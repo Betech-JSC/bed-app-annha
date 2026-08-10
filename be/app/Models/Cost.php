@@ -265,6 +265,61 @@ class Cost extends Model
         return $ownAttachments->concat($parentAttachments)->unique('id')->values();
     }
 
+    /**
+     * Check if this cost has any attachments — either its own or from linked parent entities.
+     * Used for validation before submitting/approving to avoid false negatives
+     * when attachments are stored on the parent (MaterialBill, SubcontractorPayment, etc.)
+     */
+    public function hasAnyAttachments(): bool
+    {
+        // 1. Own attachments
+        if ($this->attachments()->count() > 0) {
+            return true;
+        }
+
+        // 2. Linked Material Bill
+        if ($this->material_bill_id) {
+            $bill = $this->materialBill;
+            if ($bill && $bill->attachments()->count() > 0) {
+                return true;
+            }
+        }
+
+        // 3. Linked Subcontractor Payment
+        if ($this->subcontractor_payment_id) {
+            $subPay = $this->subcontractorPayment;
+            if ($subPay && $subPay->attachments()->count() > 0) {
+                return true;
+            }
+        }
+
+        // 4. Linked Additional Cost
+        if ($this->additional_cost_id) {
+            $addCost = $this->additionalCost;
+            if ($addCost && $addCost->attachments()->count() > 0) {
+                return true;
+            }
+        }
+
+        // 5. Linked Equipment Rental
+        if ($this->equipment_rental_id) {
+            $rental = $this->equipmentRental;
+            if ($rental && $rental->attachments()->count() > 0) {
+                return true;
+            }
+        }
+
+        // 6. Linked Input Invoice
+        if ($this->input_invoice_id) {
+            $invoice = $this->inputInvoice;
+            if ($invoice && $invoice->attachments()->count() > 0) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public function getIsApprovedAttribute(): bool
     {
         return $this->status === 'approved';

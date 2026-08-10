@@ -32,7 +32,7 @@ class CrmPayrollController extends Controller
         $admin = Auth::guard('admin')->user();
         $this->crmRequire($admin, Permissions::HR_SALARY_VIEW);
 
-        $query = Payroll::with(['user:id,name,email', 'project:id,name,code', 'managementApprover:id,name', 'accountantApprover:id,name']);
+        $query = Payroll::with(['user:id,name,email', 'project:id,name,code', 'managementApprover:id,name', 'accountantApprover:id,name', 'attachments']);
 
         // Filter by search (employee name)
         if ($search = $request->query('search')) {

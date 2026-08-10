@@ -284,12 +284,12 @@ const categories = [
     gradient: 'linear-gradient(135deg, #ea580c, #fb923c)',
     articles: [
       {
-        title: 'Quản lý vật tư',
+        title: 'Quản lý chi phí',
         steps: [
-          'Vào menu <strong>Tài nguyên & Kho</strong> → <strong>Vật tư xây dựng</strong>',
-          'Xem danh sách vật tư với số lượng tồn kho',
-          'Tạo yêu cầu vật tư mới → Gửi duyệt',
-          'Theo dõi lịch sử xuất/nhập vật tư của từng dự án',
+          'Vào menu <strong>Tài nguyên & Kho</strong> → <strong>Danh mục chi phí</strong>',
+          'Xem danh sách danh mục chi phí: vật tư, nhân công, thiết bị, chi phí quản lý',
+          'Tạo danh mục chi phí mới → Liên kết nhóm chi phí',
+          'Khi tạo phiếu chi, chọn từ danh mục đã tạo sẵn thay vì nhập text tự do',
         ],
       },
       {

@@ -1,28 +1,28 @@
 <template>
-  <Head title="Quản lý vật tư" />
+  <Head title="Quản lý chi phí" />
 
-  <PageHeader title="Quản lý vật tư" subtitle="Danh mục vật tư xây dựng — chi phí & số lượng sử dụng">
+  <PageHeader title="Quản lý chi phí" subtitle="Danh mục chi phí — vật tư, nhân công, thiết bị & chi phí quản lý">
     <template #actions>
       <a-button type="primary" size="large" @click="openCreateModal">
         <template #icon><PlusOutlined /></template>
-        Thêm vật tư
+        Thêm chi phí mới
       </a-button>
     </template>
   </PageHeader>
 
   <div class="crm-stats-grid" style="grid-template-columns: 1fr;">
-    <StatCard label="Tổng vật tư" :value="stats.total" icon="ToolOutlined" variant="primary" />
+    <StatCard label="Tổng danh mục chi phí" :value="stats.total" icon="ToolOutlined" variant="primary" />
   </div>
 
   <div class="crm-content-card">
     <div class="p-4 border-b border-gray-100 flex items-center gap-4 flex-wrap">
-      <a-input-search v-model:value="filters.search" placeholder="Tìm vật tư..." class="max-w-xs" allow-clear @search="applyFilters" @change="debounceSearch" />
+      <a-input-search v-model:value="filters.search" placeholder="Tìm chi phí..." class="max-w-xs" allow-clear @search="applyFilters" @change="debounceSearch" />
       <a-select v-model:value="filters.cost_group_id" placeholder="Nhóm chi phí" allow-clear style="width: 180px" @change="applyFilters">
         <a-select-option v-for="g in costGroups" :key="g.id" :value="g.id">{{ g.name }}</a-select-option>
       </a-select>
     </div>
 
-    <a-table :columns="columns" :data-source="materials.data" :pagination="{ current: materials.current_page, total: materials.total, pageSize: materials.per_page, showTotal: (t) => `${t} vật tư` }" :loading="loading" row-key="id" size="small" class="crm-table" @change="handleTableChange">
+    <a-table :columns="columns" :data-source="materials.data" :pagination="{ current: materials.current_page, total: materials.total, pageSize: materials.per_page, showTotal: (t) => `${t} danh mục` }" :loading="loading" row-key="id" size="small" class="crm-table" @change="handleTableChange">
       <template #bodyCell="{ column, record }">
         <template v-if="column.key === 'name'">
           <div><div class="font-semibold">{{ record.name }}</div><div class="text-xs text-gray-400">{{ record.code }}</div></div>
@@ -37,7 +37,7 @@
         <template v-else-if="column.key === 'actions'">
           <div class="flex items-center gap-1">
             <a-button type="text" size="small" @click="openEditModal(record)"><template #icon><EditOutlined /></template></a-button>
-            <a-popconfirm title="Xóa vật tư?" @confirm="deleteMaterial(record)">
+            <a-popconfirm title="Xóa danh mục chi phí?" @confirm="deleteMaterial(record)">
               <a-button type="text" size="small" danger><template #icon><DeleteOutlined /></template></a-button>
             </a-popconfirm>
           </div>
@@ -47,10 +47,10 @@
   </div>
 
   <!-- Modal -->
-  <a-modal v-model:open="showModal" :title="editing ? 'Chỉnh sửa vật tư' : 'Thêm vật tư mới'" :width="600" @ok="handleSubmit" @cancel="resetForm" ok-text="Lưu" cancel-text="Hủy" class="crm-modal" centered destroy-on-close>
+  <a-modal v-model:open="showModal" :title="editing ? 'Chỉnh sửa danh mục chi phí' : 'Thêm danh mục chi phí mới'" :width="600" @ok="handleSubmit" @cancel="resetForm" ok-text="Lưu" cancel-text="Hủy" class="crm-modal" centered destroy-on-close>
     <a-form layout="vertical" class="mt-4">
       <a-row :gutter="16">
-        <a-col :span="16"><a-form-item label="Tên vật tư" required><a-input v-model:value="form.name" size="large" /></a-form-item></a-col>
+        <a-col :span="16"><a-form-item label="Tên chi phí" required><a-input v-model:value="form.name" size="large" /></a-form-item></a-col>
         <a-col :span="8"><a-form-item label="Mã"><a-input v-model:value="form.code" size="large" disabled placeholder="Tự động" /></a-form-item></a-col>
       </a-row>
       <a-row :gutter="16">
@@ -64,8 +64,8 @@
           </a-form-item>
         </a-col>
         <a-col :span="12">
-          <a-form-item label="Nhóm vật tư (Liên kết chi phí)">
-            <a-select v-model:value="form.cost_group_id" placeholder="Chọn nhóm vật tư..." size="large" show-search option-filter-prop="label">
+          <a-form-item label="Nhóm chi phí (Liên kết)">
+            <a-select v-model:value="form.cost_group_id" placeholder="Chọn nhóm chi phí..." size="large" show-search option-filter-prop="label">
               <a-select-option v-for="g in costGroups" :key="g.id" :value="g.id" :label="g.name">{{ g.name }}</a-select-option>
             </a-select>
           </a-form-item>
@@ -93,10 +93,10 @@ const editing = ref(null)
 const filters = ref({ search: props.filters?.search || '', cost_group_id: props.filters?.cost_group_id ? Number(props.filters.cost_group_id) : undefined })
 
 const columns = [
-  { title: 'Vật tư', key: 'name', width: 250 },
+  { title: 'Chi phí', key: 'name', width: 250 },
   { title: 'Đơn vị', dataIndex: 'unit', width: 100 },
   { title: 'Danh mục', dataIndex: 'category', width: 140 },
-  { title: 'Nhóm vật tư', key: 'cost_group', width: 180 },
+  { title: 'Nhóm chi phí', key: 'cost_group', width: 180 },
   { title: 'Đơn giá', key: 'price', align: 'right', width: 150 },
   { title: '', key: 'actions', width: 100, align: 'center' },
 ]
