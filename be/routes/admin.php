@@ -651,6 +651,7 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
     Route::prefix('materials')->name('materials.')->group(function () {
         Route::get('/', [CrmMaterialsController::class, 'index'])->name('index');
         Route::post('/', [CrmMaterialsController::class, 'store'])->name('store');
+        Route::get('/{id}/price-history', [CrmMaterialsController::class, 'priceHistory'])->name('price-history');
         Route::put('/{id}', [CrmMaterialsController::class, 'update'])->name('update');
         Route::delete('/{id}', [CrmMaterialsController::class, 'destroy'])->name('destroy');
     });
