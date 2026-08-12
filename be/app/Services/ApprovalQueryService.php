@@ -708,9 +708,20 @@ class ApprovalQueryService
             }
             if ($type === 'all' || $type === 'management' || $type === 'equipment_purchase') {
                 foreach ($data['equipment_purchases_management'] ?? [] as $p) {
+                    if (!$p->relationLoaded('items')) {
+                        $p->load('items');
+                    }
+                    $itemNames = $p->items->map(fn($item) => "{$item->name} ({$item->quantity} " . ($item->unit ?: 'cái') . ")")->implode(', ');
+                    if (empty($itemNames)) {
+                        $itemNames = 'Mua thiết bị mới';
+                    }
+                    if (mb_strlen($itemNames) > 120) {
+                        $itemNames = mb_substr($itemNames, 0, 117) . '...';
+                    }
                     $items[] = [
-                        'id' => $p->id, 'type' => 'equipment_purchase', 'title' => 'Mua TB mới: ' . ($p->project?->name ?? 'Dự án'),
-                        'subtitle' => 'Tổng cộng: ' . number_format($p->total_amount, 0) . 'đ', 'amount' => (float) $p->total_amount,
+                        'id' => $p->id, 'type' => 'equipment_purchase', 'title' => 'Mua TB mới: ' . $itemNames,
+                        'subtitle' => $p->project_id ? (($p->project->code ?? '') . ' - ' . ($p->project->name ?? 'Dự án')) : 'Kho thiết bị công ty',
+                        'amount' => (float) $p->total_amount,
                         'status' => $p->status, 'status_label' => $this->getStatusLabel($p->status),
                         'created_by' => $p->creator->name ?? 'N/A', 'created_at' => $p->created_at->toISOString(),
                         'project_id' => $p->project_id, 'can_approve' => $canApproveManagement,
@@ -834,9 +845,20 @@ class ApprovalQueryService
             }
             if ($type === 'all' || $type === 'accountant' || $type === 'equipment_purchase') {
                 foreach ($data['equipment_purchases_accountant'] ?? [] as $p) {
+                    if (!$p->relationLoaded('items')) {
+                        $p->load('items');
+                    }
+                    $itemNames = $p->items->map(fn($item) => "{$item->name} ({$item->quantity} " . ($item->unit ?: 'cái') . ")")->implode(', ');
+                    if (empty($itemNames)) {
+                        $itemNames = 'Mua thiết bị mới';
+                    }
+                    if (mb_strlen($itemNames) > 120) {
+                        $itemNames = mb_substr($itemNames, 0, 117) . '...';
+                    }
                     $items[] = [
-                        'id' => $p->id, 'type' => 'equipment_purchase', 'title' => 'Mua TB mới: ' . ($p->project?->name ?? 'Dự án'),
-                        'subtitle' => 'Tổng cộng: ' . number_format($p->total_amount, 0) . 'đ', 'amount' => (float) $p->total_amount,
+                        'id' => $p->id, 'type' => 'equipment_purchase', 'title' => 'Mua TB mới: ' . $itemNames,
+                        'subtitle' => $p->project_id ? (($p->project->code ?? '') . ' - ' . ($p->project->name ?? 'Dự án')) : 'Kho thiết bị công ty',
+                        'amount' => (float) $p->total_amount,
                         'status' => $p->status, 'status_label' => $this->getStatusLabel($p->status),
                         'created_by' => $p->creator->name ?? 'N/A', 'created_at' => $p->created_at->toISOString(),
                         'project_id' => $p->project_id, 'can_approve' => $canApproveAccountant,
@@ -1144,7 +1166,17 @@ class ApprovalQueryService
                 $recentActions->push(['id' => $item->id, 'type' => 'equipment_rental', 'title' => 'Thuê TB: ' . ($item->equipment_name ?: ($item->equipment->name ?? 'N/A')), 'subtitle' => $item->project->name ?? 'Dự án', 'amount' => (float) ($item->total_cost ?? 0), 'status' => $item->status, 'status_label' => $this->getStatusLabel($item->status), 'created_at' => $item->updated_at->toISOString(), 'approval_level' => 'history']);
             }
             foreach ($recent['equipment_purchases'] ?? [] as $item) {
-                $recentActions->push(['id' => $item->id, 'type' => 'equipment_purchase', 'title' => 'Mua TB: ' . ($item->project?->name ?? "#{$item->id}"), 'subtitle' => number_format($item->total_amount ?? 0, 0) . 'đ', 'amount' => (float) ($item->total_amount ?? 0), 'status' => $item->status, 'status_label' => $this->getStatusLabel($item->status), 'created_at' => $item->updated_at->toISOString(), 'approval_level' => 'history']);
+                if (!$item->relationLoaded('items')) {
+                    $item->load('items');
+                }
+                $itemNames = $item->items->map(fn($it) => "{$it->name} ({$it->quantity} " . ($it->unit ?: 'cái') . ")")->implode(', ');
+                if (empty($itemNames)) {
+                    $itemNames = 'Mua thiết bị mới';
+                }
+                if (mb_strlen($itemNames) > 100) {
+                    $itemNames = mb_substr($itemNames, 0, 97) . '...';
+                }
+                $recentActions->push(['id' => $item->id, 'type' => 'equipment_purchase', 'title' => 'Mua TB: ' . $itemNames, 'subtitle' => $item->project_id ? (($item->project->code ?? '') . ' - ' . ($item->project->name ?? 'Dự án')) : 'Kho thiết bị công ty', 'amount' => (float) ($item->total_amount ?? 0), 'status' => $item->status, 'status_label' => $this->getStatusLabel($item->status), 'created_at' => $item->updated_at->toISOString(), 'approval_level' => 'history']);
             }
         }
 

@@ -1293,12 +1293,29 @@ class CrmApprovalController extends Controller
 
     private function formatEquipmentPurchaseItem(\App\Models\EquipmentPurchase $purchase): array
     {
+        if (!$purchase->relationLoaded('items')) {
+            $purchase->load('items');
+        }
+        if (!$purchase->relationLoaded('project')) {
+            $purchase->load('project');
+        }
+
+        $itemNames = $purchase->items->map(fn($item) => "{$item->name} ({$item->quantity} " . ($item->unit ?: 'cái') . ")")->implode(', ');
+        if (empty($itemNames)) {
+            $itemNames = 'Mua thiết bị mới';
+        }
+        if (mb_strlen($itemNames) > 120) {
+            $itemNames = mb_substr($itemNames, 0, 117) . '...';
+        }
+
         return [
             'id' => $purchase->id,
             'type' => 'equipment_purchase',
             'type_label' => 'Mua thiết bị',
-            'title' => 'Mua TB mới: ' . ($purchase->project?->name ?? 'Dự án'),
-            'subtitle' => 'Tổng: ' . number_format($purchase->total_amount, 0) . 'đ',
+            'title' => 'Mua TB mới: ' . $itemNames,
+            'subtitle' => $purchase->project_id 
+                ? (($purchase->project->code ?? '') . ' - ' . ($purchase->project->name ?? 'Dự án'))
+                : 'Kho thiết bị công ty',
             'amount' => (float) $purchase->total_amount,
             'status' => $purchase->status,
             'status_label' => $purchase::STATUS_LABELS[$purchase->status] ?? $purchase->status,
