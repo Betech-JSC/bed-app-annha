@@ -2882,7 +2882,24 @@
         </div>
       </a-form-item>
       <a-row :gutter="16">
-        <a-col :span="8"><a-form-item label="Vật tư"><a-input v-model:value="costForm.material_id" size="large" placeholder="Mã vật tư" /></a-form-item></a-col>
+        <a-col :span="8">
+          <a-form-item label="Vật tư">
+            <a-select 
+              v-model:value="costForm.material_id" 
+              size="large" 
+              class="w-full" 
+              allow-clear 
+              show-search 
+              option-filter-prop="label" 
+              placeholder="Chọn vật tư..."
+              @change="handleCostMaterialChange"
+            >
+              <a-select-option v-for="m in (materials || [])" :key="m.id" :value="m.id" :label="m.name">
+                {{ m.name }} ({{ m.code }})
+              </a-select-option>
+            </a-select>
+          </a-form-item>
+        </a-col>
         <a-col :span="8"><a-form-item label="Số lượng"><a-input-number v-model:value="costForm.quantity" :min="0" size="large" class="w-full" /></a-form-item></a-col>
         <a-col :span="8"><a-form-item label="Đơn vị"><a-input v-model:value="costForm.unit" size="large" placeholder="VD: m², kg..." /></a-form-item></a-col>
       </a-row>
@@ -9517,21 +9534,66 @@ const materialsSummaryCols = [
 const materialsSummaryData = computed(() => {
   const approvedBills = materialBills.value.filter(b => b.status === 'approved')
   const map = {}
+
+  // 1. Initialize map with all materials from props.materials to show everything
+  if (props.materials && props.materials.length) {
+    props.materials.forEach(m => {
+      const key = (m.name || '').trim().toLowerCase() + '||' + (m.unit || '').trim().toLowerCase()
+      if (!key || key === '||') return
+      map[key] = {
+        key,
+        name: m.name,
+        unit: m.unit || '',
+        total_quantity: 0,
+        total_amount: 0,
+        count: 0
+      }
+    })
+  }
+
+  // 2. Accumulate approved purchase bills
   approvedBills.forEach(bill => {
     (bill.items || []).forEach(item => {
-      const key = (item.name || '').trim().toLowerCase() + '||' + (item.unit || '').trim().toLowerCase()
+      const matName = item.material?.name || item.name || ''
+      const matUnit = item.material?.unit || item.unit || ''
+      const key = matName.trim().toLowerCase() + '||' + matUnit.trim().toLowerCase()
       if (!key || key === '||') return
+      
       if (!map[key]) {
-        map[key] = { key, name: item.name, unit: item.unit || '', total_quantity: 0, total_amount: 0, count: 0 }
+        map[key] = { key, name: matName, unit: matUnit, total_quantity: 0, total_amount: 0, count: 0 }
       }
       const qty = Number(item.quantity) || 0
       const price = Number(item.unit_price) || 0
-      const amount = Number(item.amount) || (qty * price)
+      const amount = Number(item.total_price) || Number(item.amount) || (qty * price)
+      
       map[key].total_quantity += qty
       map[key].total_amount += amount
       map[key].count += 1
     })
   })
+
+  // 3. Accumulate approved direct costs that have material_id (and no material_bill_id to avoid double counting)
+  const approvedCosts = (costs.value || []).filter(c => c.status === 'approved' && c.material_id && !c.material_bill_id)
+  approvedCosts.forEach(cost => {
+    const material = props.materials.find(m => m.id === cost.material_id)
+    if (!material) return
+    
+    const matName = material.name
+    const matUnit = material.unit || cost.unit || ''
+    const key = matName.trim().toLowerCase() + '||' + matUnit.trim().toLowerCase()
+    if (!key || key === '||') return
+    
+    if (!map[key]) {
+      map[key] = { key, name: matName, unit: matUnit, total_quantity: 0, total_amount: 0, count: 0 }
+    }
+    const qty = Number(cost.quantity) || 0
+    const amount = Number(cost.amount) || 0
+    
+    map[key].total_quantity += qty
+    map[key].total_amount += amount
+    map[key].count += 1
+  })
+
   return Object.values(map).map(m => ({
     ...m,
     avg_unit_price: m.total_quantity > 0 ? Math.round(m.total_amount / m.total_quantity) : 0,
@@ -9973,6 +10035,16 @@ const appendFormEntries = (formData, formObj, parentKey = null) => {
 const showCostModal = ref(false)
 const editingCost = ref(null)
 const costForm = ref({ name: '', amount: null, cost_date: null, cost_group_id: null, budget_item_id: null, subcontractor_id: null, material_id: null, quantity: null, unit: '', description: '', deleted_attachment_ids: [] })
+const handleCostMaterialChange = (val) => {
+  if (!val) {
+    costForm.value.unit = ''
+    return
+  }
+  const mat = props.materials.find(m => m.id === val)
+  if (mat) {
+    costForm.value.unit = mat.unit || ''
+  }
+}
 const toggleDeleteAttachment = (form, id) => {
   if (!form.deleted_attachment_ids) form.deleted_attachment_ids = []
   const idx = form.deleted_attachment_ids.indexOf(id)
