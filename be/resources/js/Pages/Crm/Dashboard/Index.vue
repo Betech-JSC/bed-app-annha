@@ -40,16 +40,27 @@
     <div class="kpi-banner__bg"></div>
     <div class="kpi-banner__content">
       <div class="kpi-item">
-        <div class="kpi-label">Tổng doanh thu</div>
-        <div class="kpi-value">{{ fmt(stats.totalRevenue) }}</div>
-        <div class="kpi-sub kpi-sub--blue">Kỳ này: {{ fmt(periodStats?.revenue) }}</div>
-        <div v-if="compareMode && prevPeriodStats" class="kpi-delta" :class="deltaClass(periodStats?.revenue, prevPeriodStats?.revenue)">
-          {{ deltaText(periodStats?.revenue, prevPeriodStats?.revenue) }}
+        <div class="kpi-label">Dòng tiền ròng</div>
+        <div class="kpi-value" :class="stats.netCashFlow >= 0 ? 'kpi-value--green' : 'kpi-value--red'">
+          {{ fmt(stats.netCashFlow) }}
+        </div>
+        <div class="kpi-sub kpi-sub--blue">Kỳ này: {{ fmt(periodStats?.netCashFlow) }}</div>
+        <div v-if="compareMode && prevPeriodStats" class="kpi-delta" :class="deltaClass(periodStats?.netCashFlow, prevPeriodStats?.netCashFlow)">
+          {{ deltaText(periodStats?.netCashFlow, prevPeriodStats?.netCashFlow) }}
         </div>
       </div>
       <div class="kpi-sep"></div>
       <div class="kpi-item">
-        <div class="kpi-label">Tổng chi phí</div>
+        <div class="kpi-label">Tổng thực thu</div>
+        <div class="kpi-value kpi-value--cyan">{{ fmt(stats.paidPayments) }}</div>
+        <div class="kpi-sub kpi-sub--blue">Kỳ này: {{ fmt(periodStats?.paidPayments) }}</div>
+        <div v-if="compareMode && prevPeriodStats" class="kpi-delta" :class="deltaClass(periodStats?.paidPayments, prevPeriodStats?.paidPayments)">
+          {{ deltaText(periodStats?.paidPayments, prevPeriodStats?.paidPayments) }}
+        </div>
+      </div>
+      <div class="kpi-sep"></div>
+      <div class="kpi-item">
+        <div class="kpi-label">Tổng thực chi</div>
         <div class="kpi-value kpi-value--amber">{{ fmt(stats.totalCosts) }}</div>
         <div class="kpi-sub kpi-sub--amber">Kỳ này: {{ fmt(periodStats?.costs) }}</div>
         <div v-if="compareMode && prevPeriodStats" class="kpi-delta" :class="deltaClass(prevPeriodStats?.costs, periodStats?.costs)">
@@ -58,15 +69,13 @@
       </div>
       <div class="kpi-sep"></div>
       <div class="kpi-item">
-        <div class="kpi-label">Lợi nhuận</div>
-        <div class="kpi-value kpi-value--green">{{ fmt(stats.profit) }}</div>
-        <div class="kpi-sub" :class="stats.profitMargin >= 0 ? 'kpi-sub--green' : 'kpi-sub--red'">Biên LN: {{ stats.profitMargin }}%</div>
-      </div>
-      <div class="kpi-sep"></div>
-      <div class="kpi-item">
-        <div class="kpi-label">Thu thực tế</div>
-        <div class="kpi-value kpi-value--cyan">{{ fmt(stats.paidPayments) }}</div>
-        <div class="kpi-sub kpi-sub--blue">Kỳ này: {{ fmt(periodStats?.paidPayments) }}</div>
+        <div class="kpi-label">Thanh khoản</div>
+        <div class="kpi-value" :class="stats.paidPayments >= stats.totalCosts ? 'text-emerald-400' : 'text-rose-400'">
+          {{ (stats.paidPayments / (stats.totalCosts || 1)).toFixed(2) }}x
+        </div>
+        <div class="kpi-sub" :class="stats.paidPayments >= stats.totalCosts ? 'kpi-sub--green' : 'kpi-sub--red'">
+          {{ stats.paidPayments >= stats.totalCosts ? 'An toàn ✅' : 'Thâm hụt ⚠️' }}
+        </div>
       </div>
     </div>
   </div>
@@ -116,8 +125,8 @@
   <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
     <StatCard :value="stats.totalEmployees" label="Nhân viên" :icon="TeamOutlined" variant="primary" />
     <StatCard :value="stats.pendingCosts" label="Chi phí chờ duyệt" :icon="ExclamationCircleOutlined" variant="danger" :suffix="` (${fmtCompact(stats.pendingCostsAmount)})`" />
-    <StatCard :value="fmtCompact(stats.totalSubcontractorDebt)" label="Công nợ NTP" icon="DollarOutlined" variant="warning" format="text" />
-    <StatCard :value="stats.totalEquipment" label="Thiết bị" :icon="ToolOutlined" variant="success" :suffix="` (${stats.activeEquipment} hoạt động)`" />
+    <StatCard :value="fmtCompact(stats.totalPayables)" label="Nợ phải trả (NTP+NCC)" icon="DollarOutlined" variant="danger" format="text" />
+    <StatCard :value="fmtCompact(stats.totalReceivables)" label="Nợ phải thu (Khách)" icon="DollarOutlined" variant="warning" format="text" />
   </div>
 
   <!-- CHARTS ROW 1: Revenue Line (2/3) + Project Status Donut (1/3) -->
@@ -154,18 +163,31 @@
     </ChartCard>
     <div class="crm-content-card">
       <div class="crm-content-card__header">
-        <h3 class="crm-content-card__title"><span class="icon-badge icon-badge--primary"><RocketOutlined /></span> Tiến độ dự án</h3>
+        <h3 class="crm-content-card__title">
+          <span class="icon-badge icon-badge--primary"><RocketOutlined /></span> Tiến độ & Chi tiêu
+        </h3>
       </div>
-      <div class="p-4 space-y-3 overflow-y-auto" style="max-height: 310px;">
-        <div v-for="p in projectProgress" :key="p.id" class="flex items-center gap-3 cursor-pointer hover:bg-gray-50 rounded-lg p-2 transition-colors" @click="router.visit(`/projects/${p.id}`)">
-          <div class="flex-1 min-w-0">
-            <div class="text-sm font-semibold text-gray-800 truncate">{{ p.name }}</div>
-            <div class="text-xs text-gray-400">{{ p.manager }} · {{ p.end_date || '—' }}</div>
+      <div class="p-4 space-y-4 overflow-y-auto" style="max-height: 310px;">
+        <div v-for="p in projectProgress" :key="p.id" class="border-b border-slate-50 pb-3 last:border-0 last:pb-0 cursor-pointer hover:bg-slate-50 rounded-lg p-2 transition-colors" @click="router.visit(`/projects/${p.id}`)">
+          <div class="flex items-center justify-between mb-1.5">
+            <div class="text-sm font-semibold text-gray-800 truncate max-w-[180px]">{{ p.name }}</div>
+            <a-tag :color="p.financial_health === 'danger' ? 'red' : p.financial_health === 'warning' ? 'orange' : 'green'" class="rounded-lg text-[10px]">
+              {{ p.financial_health === 'danger' ? 'Vượt NS 🚨' : p.financial_health === 'warning' ? 'Cận biên ⚠️' : 'An toàn ✅' }}
+            </a-tag>
           </div>
-          <div class="w-24 flex-shrink-0">
-            <a-progress :percent="p.progress" :size="6" :stroke-color="p.is_overdue ? '#EF4444' : p.progress >= 80 ? '#10B981' : '#1B4F72'" :show-info="false" />
+          <div class="space-y-1">
+            <div class="flex items-center justify-between text-xs text-gray-500">
+              <span>Tiến độ thi công:</span>
+              <span class="font-bold text-slate-700">{{ p.progress }}%</span>
+            </div>
+            <a-progress :percent="p.progress" :size="4" stroke-color="#1B4F72" :show-info="false" />
+            
+            <div class="flex items-center justify-between text-xs text-gray-500 mt-1">
+              <span>Tiêu hao ngân sách:</span>
+              <span class="font-bold" :class="p.financial_health === 'danger' ? 'text-red-500' : 'text-slate-700'">{{ p.cost_percentage }}%</span>
+            </div>
+            <a-progress :percent="p.cost_percentage" :size="4" :stroke-color="p.financial_health === 'danger' ? '#EF4444' : '#F59E0B'" :show-info="false" />
           </div>
-          <span class="text-xs font-bold w-10 text-right" :class="p.is_overdue ? 'text-red-500' : 'text-gray-600'">{{ p.progress }}%</span>
         </div>
         <div v-if="!projectProgress?.length" class="text-center text-gray-400 py-8 text-sm">Không có dự án đang thi công</div>
       </div>
@@ -227,15 +249,20 @@
       </a-table>
     </div>
 
-    <!-- Subcontractor Debt (takes 1/3) -->
+    <!-- Partner Debts (takes 1/3) -->
     <div class="crm-content-card">
       <div class="crm-content-card__header">
-        <h3 class="crm-content-card__title"><span class="icon-badge icon-badge--warning"><DollarOutlined /></span> Công nợ NTP</h3>
+        <h3 class="crm-content-card__title"><span class="icon-badge icon-badge--warning"><DollarOutlined /></span> Công nợ đối tác</h3>
       </div>
-      <a-table :columns="debtCols" :data-source="subcontractorDebt" :pagination="false" row-key="id" class="crm-table" size="small">
+      <a-table :columns="debtCols" :data-source="partnerDebts" :pagination="false" row-key="id" class="crm-table" size="small">
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'name'">
             <span class="font-medium text-xs text-gray-800 truncate block max-w-[140px]" :title="record.name">{{ record.name }}</span>
+          </template>
+          <template v-if="column.key === 'type'">
+            <a-tag :color="record.type === 'NCC' ? 'blue' : 'purple'" class="text-[10px] rounded-lg">
+              {{ record.type }}
+            </a-tag>
           </template>
           <template v-if="column.key === 'debt'">
             <span class="font-bold text-xs text-red-600">{{ fmtCompact(record.debt) }}</span>
@@ -334,6 +361,7 @@ const props = defineProps({
   projectProgress: Array,
   pendingCostsList: Array,
   subcontractorDebt: Array,
+  partnerDebts: Array,
   filters: Object,
   projectsList: Array,
   recentActivities: Array,
@@ -509,9 +537,9 @@ const lineOpts = computed(() => ({
 const revenueChartData = computed(() => ({
   labels: props.charts?.revenueChart?.labels || [],
   datasets: [
-    { label: 'Doanh thu', data: props.charts?.revenueChart?.revenue || [], borderColor: '#1B4F72', backgroundColor: 'rgba(27,79,114,0.1)', fill: true, borderWidth: 3 },
-    { label: 'Chi phí', data: props.charts?.revenueChart?.cost || [], borderColor: '#E74C3C', backgroundColor: 'rgba(231,76,60,0.08)', fill: true, borderWidth: 2, borderDash: [5, 5] },
-    { label: 'Lợi nhuận', data: props.charts?.revenueChart?.profit || [], borderColor: '#10B981', backgroundColor: 'rgba(16,185,129,0.1)', fill: true, borderWidth: 2 },
+    { label: 'Dòng tiền vào (Thực thu)', data: props.charts?.revenueChart?.revenue || [], borderColor: '#10B981', backgroundColor: 'rgba(16,185,129,0.08)', fill: true, borderWidth: 3 },
+    { label: 'Dòng tiền ra (Thực chi)', data: props.charts?.revenueChart?.cost || [], borderColor: '#EF4444', backgroundColor: 'rgba(239,68,68,0.05)', fill: true, borderWidth: 2, borderDash: [5, 5] },
+    { label: 'Dòng tiền ròng', data: props.charts?.revenueChart?.profit || [], borderColor: '#3B82F6', backgroundColor: 'rgba(59,130,246,0.08)', fill: true, borderWidth: 2 },
   ]
 }))
 
@@ -568,9 +596,10 @@ const pendingCostCols = [
   { title: 'Thao tác', key: 'action', width: 160, align: 'center' }
 ]
 const debtCols = [
-  { title: 'Nhà thầu', key: 'name', width: 130 },
+  { title: 'Đối tác', key: 'name', width: 130 },
+  { title: 'Loại', key: 'type', width: 60 },
   { title: 'Còn nợ', key: 'debt', align: 'right', width: 90 },
-  { title: 'Thanh toán', key: 'paid_pct', width: 100 },
+  { title: 'Đã trả', key: 'paid_pct', width: 100 },
 ]
 const projectCols = [
   { title: 'Tên dự án', key: 'name', width: 260 },
@@ -649,6 +678,10 @@ const statusClass = (s) => ({ planning: 'crm-tag--pending', in_progress: 'crm-ta
 .kpi-value--green {
   color: #34d399;
   text-shadow: 0 2px 12px rgba(52, 211, 153, 0.35);
+}
+.kpi-value--red {
+  color: #f87171;
+  text-shadow: 0 2px 12px rgba(239, 68, 68, 0.35);
 }
 .kpi-value--cyan {
   color: #22d3ee;

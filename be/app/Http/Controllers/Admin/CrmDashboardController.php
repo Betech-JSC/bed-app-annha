@@ -83,8 +83,67 @@ class CrmDashboardController extends Controller
         $paidPayments = $paidPaymentsQuery->sum('amount');
 
 
+        // Actual Cash Out (Thực chi)
+        $totalApprovedCosts = (float) ($metrics['stats']['totalCosts'] ?? 0);
+        // Net Cash Flow (Dòng tiền ròng tích lũy)
+        $netCashFlow = (float) ($paidPayments - $totalApprovedCosts);
+        // Liquidity Index (Hệ số thanh khoản)
+        $liquidityRatio = $totalApprovedCosts > 0 ? (float) ($paidPayments / $totalApprovedCosts) : 0;
+
+        // Receivables (Khách nợ)
+        $totalReceivables = max(0.0, (float) ($metrics['stats']['totalRevenue'] ?? 0) - (float) $paidPayments);
+
+        // Supplier debt
+        $supplierQuery = \App\Models\Supplier::query();
+        if ($projectId && $projectId !== 'all') {
+            $supplierQuery->whereHas('acceptances', function($q) use ($projectId) {
+                $q->where('project_id', $projectId)->where('status', 'approved');
+            })->orWhereHas('contracts', function($q) use ($projectId) {
+                $q->where('project_id', $projectId);
+            });
+        }
+        $totalSupplierDebt = max(0.0, (float) $supplierQuery->get()->sum(fn($s) => $s->remaining_debt));
+
         // Subcontractor debt
         $subDebtData = $this->getSubcontractorDebtSummary($projectId);
+        
+        // Payables (Thợ & NCC nợ)
+        $totalPayables = (float) $subDebtData['total'] + $totalSupplierDebt;
+
+        // Combine subcontractor and supplier debts into partnerDebts list
+        $supplierDebtsList = \App\Models\Supplier::query();
+        if ($projectId && $projectId !== 'all') {
+            $supplierDebtsList->whereHas('acceptances', function($q) use ($projectId) {
+                $q->where('project_id', $projectId)->where('status', 'approved');
+            })->orWhereHas('contracts', function($q) use ($projectId) {
+                $q->where('project_id', $projectId);
+            });
+        }
+        $supplierDebtsList = $supplierDebtsList->get()
+            ->map(fn($s) => [
+                'id' => $s->id,
+                'name' => mb_strlen($s->name) > 25 ? mb_substr($s->name, 0, 25) . '...' : $s->name,
+                'type' => 'NCC',
+                'debt' => (float) $s->remaining_debt,
+                'total_quote' => (float) $s->total_debt,
+                'paid' => (float) $s->total_paid,
+            ])
+            ->filter(fn($s) => $s['debt'] > 0);
+
+        $subcontractorDebtsList = collect($subDebtData['details'])->map(fn($s) => [
+            'id' => $s['id'],
+            'name' => $s['name'],
+            'type' => 'NTP',
+            'debt' => (float) $s['debt'],
+            'total_quote' => (float) $s['total_quote'],
+            'paid' => (float) $s['paid'],
+        ]);
+
+        $partnerDebts = $supplierDebtsList->concat($subcontractorDebtsList)
+            ->sortByDesc('debt')
+            ->take(8)
+            ->values()
+            ->toArray();
 
         // Project progress for active projects
         $projectProgress = $this->getActiveProjectProgress($projectId);
@@ -135,6 +194,9 @@ class CrmDashboardController extends Controller
         // Recent Activities
         $recentActivities = $this->getRecentActivities($projectId);
 
+        // Actual Cash Flow Trend for 12 months
+        $revenueChart = $this->getActualCashFlowTrend(12, $projectId);
+
         // RENDER
         return Inertia::render('Crm/Dashboard/Index', [
             'stats' => array_merge($metrics['stats'], [
@@ -144,9 +206,14 @@ class CrmDashboardController extends Controller
                 'totalEquipment' => $totalEquipment,
                 'activeEquipment' => $activeEquipment,
                 'paidPayments' => (float) $paidPayments,
-                'totalSubcontractorDebt' => (float) $subDebtData['total'],
+                'netCashFlow' => $netCashFlow,
+                'liquidityRatio' => $liquidityRatio,
+                'totalSupplierDebt' => $totalSupplierDebt,
+                'totalReceivables' => $totalReceivables,
+                'totalPayables' => $totalPayables,
             ]),
             'charts' => array_merge($metrics['charts'], [
+                'revenueChart' => $revenueChart,
                 'costStatus' => $this->getCostStatusStats($projectId),
                 'newProjects' => $this->getNewProjectsTrend(),
                 'topProjectsCost' => $this->getTopProjectsByCost($projectId),
@@ -157,6 +224,7 @@ class CrmDashboardController extends Controller
             'projectProgress' => $projectProgress,
             'pendingCostsList' => $pendingCostsList,
             'subcontractorDebt' => $subDebtData['details'],
+            'partnerDebts' => $partnerDebts,
             'recentProjects' => $recentProjects,
             'projectsList' => $projectsList,
             'recentActivities' => $recentActivities,
@@ -259,6 +327,7 @@ class CrmDashboardController extends Controller
             'profit' => (float) ($revenue - $costs),
             'profitMargin' => $revenue > 0 ? round(($revenue - $costs) / $revenue * 100, 1) : 0,
             'paidPayments' => (float) $paidPayments,
+            'netCashFlow' => (float) ($paidPayments - $costs),
             'newProjects' => $newProjects,
             'completedProjects' => $completedProjects,
         ];
@@ -310,18 +379,79 @@ class CrmDashboardController extends Controller
         if ($projectId && $projectId !== 'all') {
             $query->where('id', $projectId);
         }
-        return $query->with(['progress:id,project_id,overall_percentage', 'projectManager:id,name'])
+        return $query->with([
+                'progress:id,project_id,overall_percentage',
+                'projectManager:id,name',
+                'contract:id,project_id,contract_value'
+            ])
+            ->withSum(['costs' => fn($q) => $q->where('status', 'approved')], 'amount')
             ->take(8)
             ->get()
-            ->map(fn($p) => [
-                'id' => $p->id,
-                'name' => mb_strlen($p->name) > 28 ? mb_substr($p->name, 0, 28) . '...' : $p->name,
-                'code' => $p->code,
-                'progress' => (float) ($p->progress->overall_percentage ?? 0),
-                'manager' => $p->projectManager->name ?? '—',
-                'end_date' => $p->end_date?->format('d/m/Y'),
-                'is_overdue' => $p->end_date && $p->end_date->isPast(),
-            ])->toArray();
+            ->map(function ($p) {
+                $progress = (float) ($p->progress->overall_percentage ?? 0);
+                $contractValue = (float) ($p->contract->contract_value ?? 0);
+                $costSpent = (float) ($p->costs_sum_amount ?? 0);
+                
+                $costPercentage = $contractValue > 0 ? ($costSpent / $contractValue) * 100 : 0;
+                
+                $financialHealth = 'healthy';
+                if ($costPercentage > $progress + 10) {
+                    $financialHealth = 'danger';
+                } elseif ($costPercentage > $progress) {
+                    $financialHealth = 'warning';
+                }
+
+                return [
+                    'id' => $p->id,
+                    'name' => mb_strlen($p->name) > 28 ? mb_substr($p->name, 0, 28) . '...' : $p->name,
+                    'code' => $p->code,
+                    'progress' => $progress,
+                    'cost_percentage' => round($costPercentage, 1),
+                    'financial_health' => $financialHealth,
+                    'manager' => $p->projectManager->name ?? '—',
+                    'end_date' => $p->end_date?->format('d/m/Y'),
+                    'is_overdue' => $p->end_date && $p->end_date->isPast(),
+                ];
+            })->toArray();
+    }
+
+    private function getActualCashFlowTrend(int $months = 12, $projectId = null): array
+    {
+        $now = Carbon::now();
+        $labels = [];
+        $revenue = [];
+        $cost = [];
+        $profit = [];
+
+        for ($i = $months - 1; $i >= 0; $i--) {
+            $m = $now->copy()->subMonths($i);
+            $labels[] = 'T' . $m->format('m/y');
+            $monthStart = $m->copy()->startOfMonth();
+            $monthEnd = $m->copy()->endOfMonth();
+
+            $revenueQuery = ProjectPayment::whereIn('status', ['paid', 'confirmed'])
+                ->whereBetween('paid_date', [$monthStart, $monthEnd]);
+            
+            $costQuery = Cost::where('status', 'approved')
+                ->whereBetween('cost_date', [$monthStart, $monthEnd]);
+
+            if ($projectId && $projectId !== 'all') {
+                $revenueQuery->where('project_id', $projectId);
+                $costQuery->where('project_id', $projectId);
+            } else {
+                $revenueQuery->whereHas('project', fn($q) => $q->where('status', '!=', 'cancelled'));
+                $costQuery->whereHas('project', fn($q) => $q->where('status', '!=', 'cancelled'));
+            }
+
+            $revVal = (float) ($revenueQuery->sum('amount') ?: 0);
+            $costVal = (float) ($costQuery->sum('amount') ?: 0);
+
+            $revenue[] = $revVal;
+            $cost[] = $costVal;
+            $profit[] = $revVal - $costVal; // Net Cash Flow
+        }
+
+        return compact('labels', 'revenue', 'cost', 'profit');
     }
 
     // ══════════════════════════════════════════════════════════════
