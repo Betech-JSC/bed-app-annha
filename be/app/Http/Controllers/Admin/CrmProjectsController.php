@@ -268,7 +268,7 @@ class CrmProjectsController extends Controller
                     ->with([
                         'creator:id,name',
                         'costGroup:id,name,code',
-                        'subcontractor:id,name',
+                        'subcontractor:id,name,total_quote,total_paid,payment_status',
                         'attachments:id,attachable_id,attachable_type,file_name,original_name,file_size,file_url,mime_type,description',
                         'managementApprover:id,name',
                         'accountantApprover:id,name',
@@ -1995,7 +1995,7 @@ class CrmProjectsController extends Controller
                     'cost_date' => $subcontractor->progress_start_date ?: now(),
                     'cost_group_id' => $request->input('cost_group_id'),
                     'category' => 'other',
-                    'status' => 'draft',
+                    'status' => 'pending',
                     'created_by' => $user->id,
                 ]);
             }

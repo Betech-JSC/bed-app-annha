@@ -604,9 +604,22 @@
                   </a-tooltip>
                 </div>
               </template>
-              <template v-else-if="column.key === 'amount'"><span class="font-semibold text-red-500">{{ fmt(record.amount) }}</span></template>
+              <template v-else-if="column.key === 'amount'">
+                <span :class="record.subcontractor_id && !record.subcontractor_payment_id ? 'text-gray-700 font-semibold' : 'text-red-500 font-semibold'">
+                  {{ renderCostAmount(record) }}
+                </span>
+              </template>
               <template v-else-if="column.key === 'status'">
-                <a-tag :color="costStatusColors[record.status]" class="rounded-full text-xs">{{ costStatusLabels[record.status] || record.status }}</a-tag>
+                <template v-if="getSubcontractorCostStatus(record)">
+                  <a-tag :color="getSubcontractorCostStatus(record).color" class="rounded-full text-xs">
+                    {{ getSubcontractorCostStatus(record).label }}
+                  </a-tag>
+                </template>
+                <template v-else>
+                  <a-tag :color="costStatusColors[record.status]" class="rounded-full text-xs">
+                    {{ costStatusLabels[record.status] || record.status }}
+                  </a-tag>
+                </template>
               </template>
               <template v-else-if="column.key === 'creator'">
                 <div class="text-[11px]">
@@ -8657,6 +8670,31 @@ const fmt = (v) => v ? new Intl.NumberFormat('vi-VN', { style: 'currency', curre
 const fmtMoney = fmt
 const fmtDate = (d) => d ? dayjs.utc(d).local().format('DD/MM/YYYY') : '—'
 const fmtDateTime = (d) => d ? dayjs.utc(d).local().format('DD/MM/YYYY HH:mm') : '—'
+
+const getSubcontractorCostStatus = (record) => {
+  if (!record.subcontractor_id || record.subcontractor_payment_id) {
+    return null
+  }
+  const sub = subcontractors.value.find(s => s.id === record.subcontractor_id)
+  if (!sub) return null
+  return {
+    label: sub.payment_status === 'completed' ? 'Đã thanh toán' : 'Đang tạm ứng',
+    color: sub.payment_status === 'completed' ? 'green' : 'orange'
+  }
+}
+
+const renderCostAmount = (record) => {
+  if (record.subcontractor_id && !record.subcontractor_payment_id) {
+    const sub = subcontractors.value.find(s => s.id === record.subcontractor_id)
+    if (sub) {
+      const fQuote = new Intl.NumberFormat('vi-VN').format(sub.total_quote || 0)
+      const fPaid = new Intl.NumberFormat('vi-VN').format(sub.total_paid || 0)
+      return `${fQuote}/${fPaid} đ`
+    }
+  }
+  return fmt(record.amount)
+}
+
 const isAccepted = (task) => {
   if (!task) return false
   // Backend now sets status = 'pending_acceptance' when task is at 100%
@@ -10177,7 +10215,17 @@ const openCostDetail = (c) => {
   viewCostDrawer(c)
 }
 // Always open the cost detail drawer (for eye icon)
-const viewCostDrawer = (c) => { costDetailRecord.value = c; showCostDetail.value = true }
+const viewCostDrawer = (c) => {
+  if (c.subcontractor_id && !c.subcontractor_payment_id) {
+    const sub = subcontractors.value.find(s => s.id === c.subcontractor_id)
+    if (sub) {
+      openSubDetail(sub)
+      return
+    }
+  }
+  costDetailRecord.value = c
+  showCostDetail.value = true
+}
 const openPaymentDetail = (p) => { paymentDetailRecord.value = p; showPaymentDetail.value = true }
 
 // Budget Item Options for cost form selector

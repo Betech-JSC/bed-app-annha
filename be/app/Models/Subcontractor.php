@@ -151,7 +151,11 @@ class Subcontractor extends Model
             $this->payment_status = 'pending';
         }
         
-        return $this->save();
+        $saved = $this->save();
+        if ($saved) {
+            $this->syncMainCostStatus();
+        }
+        return $saved;
     }
 
     /**
@@ -171,7 +175,27 @@ class Subcontractor extends Model
             $this->payment_status = 'pending';
         }
 
-        return $this->save();
+        $saved = $this->save();
+        if ($saved) {
+            $this->syncMainCostStatus();
+        }
+        return $saved;
+    }
+
+    public function syncMainCostStatus(): void
+    {
+        $mainCost = \App\Models\Cost::where('subcontractor_id', $this->id)
+            ->whereNull('subcontractor_payment_id')
+            ->first();
+            
+        if ($mainCost) {
+            if ($this->payment_status === 'completed') {
+                $mainCost->status = 'approved';
+            } else {
+                $mainCost->status = 'pending';
+            }
+            $mainCost->save();
+        }
     }
 
     public function approve(?User $user = null): bool
@@ -212,6 +236,19 @@ class Subcontractor extends Model
         });
 
         static::saving(function ($subcontractor) {
+            // Tự động tính toán trạng thái thanh toán của NTP dựa trên total_paid và total_quote
+            if ($subcontractor->total_quote > 0) {
+                if ($subcontractor->total_paid >= $subcontractor->total_quote) {
+                    $subcontractor->payment_status = 'completed';
+                } elseif ($subcontractor->total_paid > 0) {
+                    $subcontractor->payment_status = 'partial';
+                } else {
+                    $subcontractor->payment_status = 'pending';
+                }
+            } else {
+                $subcontractor->payment_status = 'pending';
+            }
+
             // Nếu không có global_subcontractor_id nhưng có name (người dùng nhập tên trực tiếp)
             if (empty($subcontractor->global_subcontractor_id) && !empty($subcontractor->name)) {
                 $nameTrimmed = trim($subcontractor->name);
@@ -264,13 +301,13 @@ class Subcontractor extends Model
                         $updateData['category'] = $subcontractor->category;
                     }
                     if (!empty($subcontractor->bank_name) && $subcontractor->bank_name !== $gs->bank_name) {
-                        $updateData['bank_name'] = $subcontractor->bank_name;
+                        $updateData['bank_name'] = $gs->bank_name;
                     }
                     if (!empty($subcontractor->bank_account_number) && $subcontractor->bank_account_number !== $gs->bank_account_number) {
-                        $updateData['bank_account_number'] = $subcontractor->bank_account_number;
+                        $updateData['bank_account_number'] = $gs->bank_account_number;
                     }
                     if (!empty($subcontractor->bank_account_name) && $subcontractor->bank_account_name !== $gs->bank_account_name) {
-                        $updateData['bank_account_name'] = $subcontractor->bank_account_name;
+                        $updateData['bank_account_name'] = $gs->bank_account_name;
                     }
                     
                     if (!empty($updateData)) {
@@ -278,6 +315,10 @@ class Subcontractor extends Model
                     }
                 }
             }
+        });
+
+        static::saved(function ($subcontractor) {
+            $subcontractor->syncMainCostStatus();
         });
     }
 }
