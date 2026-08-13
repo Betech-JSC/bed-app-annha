@@ -394,6 +394,7 @@ import {
   CodeOutlined,
   HistoryOutlined,
   QuestionCircleOutlined,
+  CalendarOutlined,
 
   BookOutlined,
   ApartmentOutlined,
@@ -636,6 +637,7 @@ const selectedKeys = computed(() => {
   if (url.includes('/salary')) return ['my-payroll']
   if (url.includes('type=customer')) return ['customers']
   if (url.startsWith('/hr')) return ['employees']
+  if (url.startsWith('/monthly-plans')) return ['monthly-plans']
   if (url.startsWith('/finance/company-costs')) return ['company-costs']
   if (url.startsWith('/finance')) return ['finance']
   if (url.startsWith('/petty-cash') || url.startsWith('/admin/petty-cash')) return ['petty-cash']
@@ -733,6 +735,7 @@ const menuItems = computed(() => {
         { key: 'shareholders', label: 'Nguồn vốn / Cổ đông', perm: 'shareholder.view' },
         { key: 'company-costs', label: 'Chi phí công ty', perm: 'company_cost.view' },
         { key: 'petty-cash', label: 'Quản lý Tiền mặt', perm: 'operations.dashboard.view' },
+        { key: 'monthly-plans', label: 'Kế hoạch & CV tháng', icon: () => h(CalendarOutlined), perm: 'monthly_plan.view' },
       ],
     },
 
@@ -821,6 +824,7 @@ const handleMenuClick = ({ key }) => {
     shareholders: '/operations/shareholders',
     'company-assets': '/operations/assets',
     'petty-cash': '/petty-cash',
+    'monthly-plans': '/monthly-plans',
     notifications: '/notifications',
 
     settings: '/settings',

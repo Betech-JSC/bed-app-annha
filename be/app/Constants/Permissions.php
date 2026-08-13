@@ -445,6 +445,12 @@ class Permissions
     public const SETTINGS_VIEW = 'settings.view';
 
     // ===================================================================
+    // MONTHLY PLAN MODULE
+    // ===================================================================
+    public const MONTHLY_PLAN_VIEW = 'monthly_plan.view';
+    public const MONTHLY_PLAN_MANAGE = 'monthly_plan.manage';
+
+    // ===================================================================
     // HELPER METHODS
     // ===================================================================
 
@@ -778,6 +784,10 @@ class Permissions
             self::WARRANTY_DELETE,
             self::WARRANTY_APPROVE,
             self::WARRANTY_REVERT,
+
+            // Monthly Plan
+            self::MONTHLY_PLAN_VIEW,
+            self::MONTHLY_PLAN_MANAGE,
         ];
     }
 
@@ -1097,6 +1107,10 @@ class Permissions
                 self::WARRANTY_DELETE,
                 self::WARRANTY_APPROVE,
                 self::WARRANTY_REVERT,
+            ],
+            'monthly_plan' => [
+                self::MONTHLY_PLAN_VIEW,
+                self::MONTHLY_PLAN_MANAGE,
             ],
         ];
     }

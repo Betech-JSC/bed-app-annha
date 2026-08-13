@@ -69,6 +69,7 @@ use App\Http\Controllers\Api\EquipmentRentalController;
 use App\Http\Controllers\Api\EquipmentPurchaseController;
 use App\Http\Controllers\Api\AssetUsageController;
 use App\Http\Controllers\Api\EquipmentCategoryController;
+use App\Http\Controllers\Api\ApiMonthlyPlanController;
 
 Route::middleware('throttle:10,1')->group(function () {
     Route::post('login', [AuthController::class, 'login']);
@@ -790,6 +791,13 @@ Route::middleware('auth:sanctum')->group(function () {
         ->name('attachments.show');
     Route::delete('/attachments/{id}', [AttachmentController::class, 'destroy'])
         ->name('attachments.destroy');
+
+    // Monthly Plans & General Tasks
+    Route::prefix('monthly-plans')->group(function () {
+        Route::get('/', [ApiMonthlyPlanController::class, 'index']);
+        Route::get('/{id}', [ApiMonthlyPlanController::class, 'show']);
+        Route::put('/{planId}/tasks/{taskId}/status', [ApiMonthlyPlanController::class, 'updateTaskStatus']);
+    });
 });
 
 // ===================================================================

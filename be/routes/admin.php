@@ -110,6 +110,7 @@ use App\Http\Controllers\Admin\CrmSupplierController;
 use App\Http\Controllers\Admin\CrmAcceptanceTemplateController;
 use App\Http\Controllers\Admin\CrmAiChatController;
 use App\Http\Controllers\Admin\CrmPettyCashController;
+use App\Http\Controllers\Admin\CrmMonthlyPlanController;
 
 Route::name('crm.')->middleware(['auth:admin'])->group(function () {
 
@@ -718,6 +719,20 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         Route::delete('/assets/{id}', [CrmOperationsController::class, 'destroyAsset'])->name('assets.destroy');
         Route::post('/assets/{id}/assign', [CrmOperationsController::class, 'assignAsset'])->name('assets.assign');
         Route::post('/assets/run-depreciation', [CrmOperationsController::class, 'runDepreciation'])->name('assets.depreciation');
+    });
+
+    // Monthly Plans & General Tasks
+    Route::prefix('monthly-plans')->name('monthly-plans.')->group(function () {
+        Route::get('/', [CrmMonthlyPlanController::class, 'index'])->name('index');
+        Route::post('/', [CrmMonthlyPlanController::class, 'store'])->name('store');
+        Route::get('/{id}', [CrmMonthlyPlanController::class, 'show'])->name('show');
+        Route::put('/{id}', [CrmMonthlyPlanController::class, 'update'])->name('update');
+        Route::delete('/{id}', [CrmMonthlyPlanController::class, 'destroy'])->name('destroy');
+        Route::post('/{planId}/tasks', [CrmMonthlyPlanController::class, 'storeTask'])->name('tasks.store');
+        Route::put('/{planId}/tasks/{taskId}', [CrmMonthlyPlanController::class, 'updateTask'])->name('tasks.update');
+        Route::put('/{planId}/tasks/{taskId}/status', [CrmMonthlyPlanController::class, 'updateTaskStatus'])->name('tasks.status');
+        Route::put('/{planId}/tasks/{taskId}/evaluate', [CrmMonthlyPlanController::class, 'evaluateTask'])->name('tasks.evaluate');
+        Route::delete('/{planId}/tasks/{taskId}', [CrmMonthlyPlanController::class, 'destroyTask'])->name('tasks.destroy');
     });
 });
 
