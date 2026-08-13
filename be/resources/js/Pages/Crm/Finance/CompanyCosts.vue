@@ -43,7 +43,7 @@
           <a-select-option value="draft">Nháp</a-select-option>
           <a-select-option value="pending_management_approval">Chờ BĐH</a-select-option>
           <a-select-option value="pending_accountant_approval">Chờ KT</a-select-option>
-          <a-select-option value="approved">Đã duyệt</a-select-option>
+          <a-select-option value="approved">Đã thanh toán</a-select-option>
           <a-select-option value="rejected">Từ chối</a-select-option>
         </a-select>
         <a-select v-model:value="localFilters.expense_category" style="width: 170px;" size="large" @change="applyFilters" placeholder="Phân loại" allow-clear>
@@ -671,7 +671,7 @@ const statusLabel = (s) => ({
   draft: 'Nháp',
   pending_management_approval: 'Chờ BĐH',
   pending_accountant_approval: 'Chờ KT',
-  approved: 'Đã duyệt',
+  approved: 'Đã thanh toán',
   rejected: 'Từ chối',
 })[s] || s
 

@@ -9722,7 +9722,7 @@ const loadFinanceData = async () => {
 // Status maps
 const statusLabels = { planning: 'Lập kế hoạch', in_progress: 'Đang thi công', completed: 'Hoàn thành', cancelled: 'Đã hủy' }
 const statusColors = { planning: 'blue', in_progress: 'processing', completed: 'green', cancelled: 'default' }
-const costStatusLabels = { draft: 'Nháp', pending: 'Chờ duyệt', pending_management_approval: 'Chờ BĐH duyệt', pending_accountant_approval: 'Chờ KT xác nhận', approved: 'Đã duyệt', rejected: 'Từ chối', cancelled: 'Đã hủy' }
+const costStatusLabels = { draft: 'Nháp', pending: 'Chờ duyệt', pending_management_approval: 'Chờ BĐH duyệt', pending_accountant_approval: 'Chờ KT xác nhận', approved: 'Đã thanh toán', rejected: 'Từ chối', cancelled: 'Đã hủy' }
 const costStatusColors = { draft: 'default', pending: 'orange', pending_management_approval: 'orange', pending_accountant_approval: 'blue', approved: 'green', rejected: 'red', cancelled: 'default' }
 const severityColors = { low: 'green', medium: 'orange', major: 'red', critical: 'volcano', high: 'red' }
 const severityLabels = { low: 'Thấp', medium: 'Trung bình', major: 'Nghiêm trọng', critical: 'Rất nghiêm trọng', high: 'Cao' }

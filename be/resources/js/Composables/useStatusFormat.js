@@ -23,7 +23,7 @@ export const COST_STATUS = {
   draft: { label: 'Nháp', color: '#9CA3AF', tag: 'crm-tag--cancelled' },
   pending_management_approval: { label: 'Chờ BĐH duyệt', color: '#F59E0B', tag: 'crm-tag--pending' },
   pending_accountant_approval: { label: 'Chờ KT xác nhận', color: '#3B82F6', tag: 'crm-tag--active' },
-  approved: { label: 'Đã duyệt', color: '#10B981', tag: 'crm-tag--completed' },
+  approved: { label: 'Đã thanh toán', color: '#10B981', tag: 'crm-tag--completed' },
   rejected: { label: 'Từ chối', color: '#EF4444', tag: 'crm-tag--overdue' },
 }
 

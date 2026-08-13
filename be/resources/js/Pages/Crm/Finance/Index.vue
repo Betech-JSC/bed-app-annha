@@ -67,7 +67,9 @@
           <span class="font-semibold text-red-500">{{ formatCurrency(record.amount) }}</span>
         </template>
         <template v-else-if="column.key === 'status'">
-          <a-tag :color="statusColors[record.status]" class="rounded-full">{{ statusLabels[record.status] || record.status }}</a-tag>
+          <a-tag :color="statusColors[record.status]" class="rounded-full">
+            {{ record.status === 'approved' ? 'Đã thanh toán' : (statusLabels[record.status] || record.status) }}
+          </a-tag>
         </template>
         <template v-else-if="column.key === 'creator'">
           {{ record.creator?.name || '—' }}
