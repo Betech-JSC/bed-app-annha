@@ -32,7 +32,7 @@
       <a-tab-pane key="assets" tab="Danh sách tài sản" />
       <a-tab-pane key="catalog" tab="Danh mục thiết bị" />
       <a-tab-pane key="exports" tab="Xuất tài sản cty" />
-      <a-tab-pane key="usages" tab="Xuất chi phí" />
+      <a-tab-pane key="usages" tab="Theo dõi mượn/trả" />
       <a-tab-pane key="activity_logs" tab="Nhật ký thao tác" />
     </a-tabs>
 
@@ -158,13 +158,22 @@
         </template>
         <template v-else-if="column.key === 'qty_price'">
           <div class="text-right">
-            <div class="font-bold text-gray-700">{{ record.quantity || 1 }} <span class="text-[10px] text-gray-400 font-normal uppercase">{{ record.unit || 'cái' }}</span></div>
+            <div class="font-bold text-gray-700">
+              <span v-if="filters.tab === 'exports'">{{ record.remaining_quantity ?? record.quantity }}</span>
+              <span v-else>{{ record.quantity || 1 }}</span>
+              <span class="text-[10px] text-gray-400 font-normal uppercase ml-1">{{ record.unit || 'cái' }}</span>
+            </div>
             <div class="text-[11px] text-gray-400">{{ formatCurrency(record.purchase_price) }}/đv</div>
           </div>
         </template>
         <template v-else-if="column.key === 'total'">
           <div class="text-right">
-            <span class="font-extra-bold text-emerald-600 text-sm">{{ formatCurrency((record.quantity || 1) * (record.purchase_price || 0)) }}</span>
+            <span class="font-extra-bold text-emerald-600 text-sm" v-if="filters.tab === 'exports'">
+              {{ formatCurrency((record.remaining_quantity ?? record.quantity ?? 1) * (record.purchase_price || 0)) }}
+            </span>
+            <span class="font-extra-bold text-emerald-600 text-sm" v-else>
+              {{ formatCurrency((record.quantity || 1) * (record.purchase_price || 0)) }}
+            </span>
           </div>
         </template>
         <template v-else-if="column.key === 'status'">
@@ -818,7 +827,7 @@
             </div>
           </div>
           <!-- Non-image files -->
-          <a v-for="file in nonImageAttachments" :key="file.id" :href="`/storage/${file.file_path}`" target="_blank" class="flex items-center justify-between p-3 rounded-xl bg-gray-50 border border-gray-100 group hover:border-blue-200 transition-colors cursor-pointer">
+          <a v-for="file in nonImageAttachments" :key="file.id" :href="`/files/${file.id}/download`" target="_blank" class="flex items-center justify-between p-3 rounded-xl bg-gray-50 border border-gray-100 group hover:border-blue-200 transition-colors cursor-pointer">
             <div class="flex items-center gap-3">
               <div class="w-9 h-9 rounded-lg flex items-center justify-center text-lg bg-blue-50 text-blue-500">
                 <FileOutlined />
@@ -849,7 +858,7 @@
             </div>
           </div>
           <!-- Non-image files -->
-          <a v-for="file in afterNonImageAttachments" :key="file.id" :href="`/storage/${file.file_path}`" target="_blank" class="flex items-center justify-between p-3 rounded-xl bg-gray-50 border border-gray-100 group hover:border-emerald-200 transition-colors cursor-pointer">
+          <a v-for="file in afterNonImageAttachments" :key="file.id" :href="`/files/${file.id}/download`" target="_blank" class="flex items-center justify-between p-3 rounded-xl bg-gray-50 border border-gray-100 group hover:border-emerald-200 transition-colors cursor-pointer">
             <div class="flex items-center gap-3">
               <div class="w-9 h-9 rounded-lg flex items-center justify-center text-lg bg-emerald-50 text-emerald-500">
                 <FileOutlined />
@@ -877,7 +886,7 @@
         </div>
         <div class="flex gap-2">
           <a-button @click="showDetailDrawer = false">Đóng</a-button>
-          <a-button v-if="filters.tab === 'assets' && selectedItem.status === 'available' && !selectedItem.project_id" type="primary" class="!bg-emerald-600 !border-emerald-600 hover:!bg-emerald-700" @click="openExportModal(selectedItem)"><ExportOutlined /> Xuất tài sản</a-button>
+          <a-button v-if="(filters.tab === 'assets' || filters.tab === 'exports') && selectedItem.status === 'available' && !selectedItem.project_id" type="primary" class="!bg-emerald-600 !border-emerald-600 hover:!bg-emerald-700" @click="openExportModal(selectedItem)"><ExportOutlined /> Xuất tài sản</a-button>
           <a-button v-if="(selectedItem.status === 'draft' || filters.tab === 'assets') && filters.tab !== 'usages'" @click="openEditModal(selectedItem)"><EditOutlined /> Sửa</a-button>
           <a-button v-if="selectedItem.status === 'draft' && filters.tab !== 'usages'" type="primary" @click="submitItem(selectedItem)"><SendOutlined /> Gửi duyệt</a-button>
           <a-button v-if="selectedItem.status === 'pending_management' && can('equipment.approve') && filters.tab !== 'usages'" type="primary" class="!bg-green-500 !border-green-500 hover:!bg-green-600" @click="approveItem(selectedItem)"><CheckCircleOutlined /> BĐH Duyệt</a-button>
@@ -988,15 +997,15 @@
           <PaperClipOutlined class="text-gray-400" /> Tệp chứng từ gốc ({{ confirmEquipmentTarget.attachments.filter(att => att.description !== 'after').length }})
         </div>
         <div class="space-y-1.5 max-h-[120px] overflow-y-auto">
-          <div v-for="att in confirmEquipmentTarget.attachments.filter(att => att.description !== 'after')" :key="att.id" 
+          <a v-for="att in confirmEquipmentTarget.attachments.filter(att => att.description !== 'after')" :key="att.id" 
                class="flex items-center justify-between p-2 rounded-lg border border-gray-100 bg-white hover:border-blue-300 transition-all cursor-pointer shadow-sm group"
-               @click="window.open(att.file_url || `/storage/${att.file_path}`, '_blank')">
+               :href="`/files/${att.id}/download`" target="_blank">
             <div class="flex items-center gap-2 min-w-0">
                <FileOutlined class="text-gray-400 text-xs" />
                <span class="text-[10px] text-gray-700 font-medium truncate max-w-[280px] hover:text-blue-600">{{ att.original_name || att.file_name }}</span>
             </div>
             <EyeOutlined class="text-[10px] text-gray-300 group-hover:text-blue-500" />
-          </div>
+          </a>
         </div>
       </div>
 
@@ -1051,7 +1060,7 @@
       <div class="bg-emerald-50 p-3 rounded-xl border border-emerald-100 flex items-center gap-3 mb-4">
         <div class="w-10 h-10 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-lg"><InfoCircleOutlined /></div>
         <div class="text-[11px] text-emerald-700 leading-tight">
-          Giao dịch này sẽ cập nhật địa điểm tài sản, ghi nhận chi phí âm (hoàn trả) cho văn phòng công ty và ghi nhận chi phí dương cho dự án nhận.
+          Giao dịch này thuần túy là MƯỢN tài sản để sử dụng tại dự án (KHÔNG ghi nhận chi phí). Thiết bị có thể hoàn trả lại kho tổng công ty khi hoàn thành.
         </div>
       </div>
 
@@ -1065,8 +1074,8 @@
           <span class="font-medium text-gray-700 font-mono">{{ exportTarget.code || 'NO-CODE' }}</span>
         </div>
         <div class="flex justify-between mt-1">
-          <span class="text-gray-400">Tồn kho công ty:</span>
-          <span class="font-bold text-gray-700">{{ exportTarget.quantity }} {{ exportTarget.unit || 'cái' }}</span>
+          <span class="text-gray-400">Khả dụng trong kho:</span>
+          <span class="font-bold text-gray-700">{{ exportTarget.remaining_quantity ?? exportTarget.quantity }} {{ exportTarget.unit || 'cái' }}</span>
         </div>
         <div class="flex justify-between mt-1">
           <span class="text-gray-400">Đơn giá:</span>
@@ -1082,10 +1091,18 @@
         </a-select>
       </a-form-item>
 
+      <a-form-item label="Người nhận bàn giao" required>
+        <a-select v-model:value="exportForm.receiver_id" placeholder="Chọn người nhận bàn giao..." size="large" show-search option-filter-prop="label">
+          <a-select-option v-for="u in props.users" :key="u.id" :value="u.id" :label="u.name">
+            {{ u.name }}
+          </a-select-option>
+        </a-select>
+      </a-form-item>
+
       <a-row :gutter="16">
         <a-col :span="12">
           <a-form-item label="Số lượng xuất" required>
-            <a-input-number v-model:value="exportForm.quantity" :min="1" :max="exportTarget.quantity" class="w-full" size="large" />
+            <a-input-number v-model:value="exportForm.quantity" :min="1" :max="exportTarget.remaining_quantity ?? exportTarget.quantity" class="w-full" size="large" />
           </a-form-item>
         </a-col>
         <a-col :span="12">
@@ -1096,7 +1113,7 @@
       </a-row>
 
       <div class="mt-2 mb-4 flex justify-between items-center bg-blue-50/50 p-3 rounded-xl border border-blue-100">
-        <span class="text-xs font-bold text-gray-500 uppercase tracking-wider">Tổng giá trị luân chuyển:</span>
+        <span class="text-xs font-bold text-gray-500 uppercase tracking-wider">Giá trị tài sản mượn:</span>
         <span class="font-extra-bold text-blue-600 text-base">
           {{ formatCurrency((exportForm.quantity || 1) * (exportTarget.purchase_price || 0)) }}
         </span>
@@ -1150,7 +1167,7 @@ import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined, UploadOutlined
 import { message } from 'ant-design-vue'
 
 defineOptions({ layout: CrmLayout })
-const props = defineProps({ equipment: Object, stats: Object, filters: Object, globalEquipments: Array, projects: Array, suppliers: Array })
+const props = defineProps({ equipment: Object, stats: Object, filters: Object, globalEquipments: Array, projects: Array, suppliers: Array, users: Array })
 
 onMounted(() => {
   const urlParams = new URLSearchParams(window.location.search)
@@ -1188,6 +1205,7 @@ const showExportModal = ref(false)
 const exportTarget = ref(null)
 const exportForm = useForm({
   project_id: undefined,
+  receiver_id: undefined,
   quantity: 1,
   export_date: new Date().toISOString().split('T')[0],
   notes: ''
@@ -1198,6 +1216,7 @@ const openExportModal = (item) => {
   exportForm.reset()
   exportForm.quantity = 1
   exportForm.project_id = undefined
+  exportForm.receiver_id = undefined
   exportForm.notes = ''
   exportForm.export_date = new Date().toISOString().split('T')[0]
   showExportModal.value = true
@@ -1206,6 +1225,10 @@ const openExportModal = (item) => {
 const handleExportSubmit = () => {
   if (!exportForm.project_id) {
     message.error('Vui lòng chọn dự án nhận.')
+    return
+  }
+  if (!exportForm.receiver_id) {
+    message.error('Vui lòng chọn người nhận bàn giao.')
     return
   }
   exportForm.post(`/equipment/${exportTarget.value.id}/export`, {

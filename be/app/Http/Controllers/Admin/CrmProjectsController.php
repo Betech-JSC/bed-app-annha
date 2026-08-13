@@ -3962,22 +3962,11 @@ class CrmProjectsController extends Controller
         }
 
         try {
-            DB::beginTransaction();
-
-            $usage->update([
-                'status' => 'returned',
-                'returned_date' => now()->toDateString(),
-            ]);
-
-            $asset = $usage->asset;
-            if ($asset) {
-                $asset->update(['status' => 'available']);
+            if ($this->equipmentService->confirmReturnUsage($usage, $user)) {
+                return back()->with('success', 'Đã xác nhận trả thiết bị. Thiết bị đã về kho.');
             }
-
-            DB::commit();
-            return back()->with('success', 'Đã xác nhận trả thiết bị. Thiết bị đã về kho.');
+            return back()->with('error', 'Thao tác không thành công.');
         } catch (\Exception $e) {
-            DB::rollBack();
             return back()->with('error', 'Lỗi: ' . $e->getMessage());
         }
     }

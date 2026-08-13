@@ -151,6 +151,7 @@ class CrmEquipmentController extends Controller
 
         $projects = Project::orderBy('name')->get(['id', 'name', 'code']);
         $suppliers = Supplier::orderBy('name')->get(['id', 'name']);
+        $users = \App\Models\User::orderBy('name')->get(['id', 'name']);
 
         return Inertia::render('Crm/Equipment/Index', [
             'equipment' => $equipment,
@@ -158,6 +159,7 @@ class CrmEquipmentController extends Controller
             'globalEquipments' => $globalEquipments,
             'projects'  => $projects,
             'suppliers' => $suppliers,
+            'users'     => $users,
             'filters'   => $request->only(['search', 'status', 'tab']),
         ]);
     }
@@ -475,91 +477,54 @@ class CrmEquipmentController extends Controller
 
         $this->crmRequire($user, Permissions::EQUIPMENT_UPDATE);
 
+        // Tính số lượng khả dụng thực tế trong kho tổng
+        $maxAvailable = $equipment->remaining_quantity;
+
         $request->validate([
             'project_id' => 'required|exists:projects,id',
-            'quantity' => 'required|integer|min:1|max:' . $equipment->quantity,
-            'export_date' => 'nullable|date',
+            'quantity' => 'required|integer|min:1|max:' . $maxAvailable,
+            'export_date' => 'required|date',
+            'receiver_id' => 'required|exists:users,id',
             'notes' => 'nullable|string',
         ]);
 
         $targetProjectId = $request->project_id;
         $exportQuantity = $request->quantity;
-        $exportDate = $request->export_date ?: now()->toDateString();
+        $exportDate = $request->export_date;
+        $receiverId = $request->receiver_id;
         $notes = $request->notes;
 
-        $project = Project::findOrFail($targetProjectId);
-        $totalPrice = $equipment->purchase_price * $exportQuantity;
+        // Kiểm tra quyền tự động duyệt (Kế toán hoặc Super Admin)
+        $hasAccountantPermission = $user && ($user->can(Permissions::COST_APPROVE_ACCOUNTANT) || (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()));
+        $status = $hasAccountantPermission ? 'in_use' : 'pending_accountant';
 
-        $costGroupId = \App\Models\CostGroup::where('code', 'TBMM')
-            ->orWhere('name', 'LIKE', '%Thiết bị%')
-            ->value('id') ?: \App\Models\CostGroup::first()?->id;
-
-        DB::transaction(function () use ($equipment, $project, $targetProjectId, $exportQuantity, $exportDate, $notes, $totalPrice, $user, $costGroupId) {
-            // 1. Update/Split equipment
-            if ($equipment->quantity == $exportQuantity) {
-                $equipment->update([
-                    'project_id' => $targetProjectId,
-                    'status' => 'available',
-                ]);
-            } else {
-                $newEquipment = $equipment->replicate();
-                $newEquipment->uuid = (string) \Illuminate\Support\Str::uuid();
-                if ($newEquipment->code) {
-                    $newEquipment->code = $newEquipment->code . '-' . strtoupper(\Illuminate\Support\Str::random(4));
-                } else {
-                    $newEquipment->code = 'EP-' . strtoupper(\Illuminate\Support\Str::random(6));
-                }
-                $newEquipment->quantity = $exportQuantity;
-                $newEquipment->project_id = $targetProjectId;
-                $newEquipment->status = 'available';
-                $newEquipment->current_value = $equipment->purchase_price * $exportQuantity;
-                $newEquipment->save();
-
-                $equipment->decrement('quantity', $exportQuantity);
-                $equipment->update([
-                    'current_value' => $equipment->purchase_price * $equipment->quantity,
-                ]);
-            }
-
-            // 2. Create Negative Cost for Company
-            \App\Models\Cost::create([
-                'name' => "Xuất tài sản cty: " . $equipment->name . " -> Dự án: " . $project->name,
-                'project_id' => null,
-                'amount' => -$totalPrice,
-                'quantity' => $exportQuantity,
-                'unit' => $equipment->unit ?: 'cái',
-                'cost_date' => $exportDate,
-                'cost_group_id' => $costGroupId,
-                'expense_category' => 'capex',
-                'status' => 'approved',
-                'description' => "Xuất tài sản sang dự án " . $project->name . ". " . $notes,
-                'created_by' => $user->id ?? 1,
-                'management_approved_by' => $user->id ?? 1,
-                'management_approved_at' => now(),
-                'accountant_approved_by' => $user->id ?? 1,
-                'accountant_approved_at' => now(),
-            ]);
-
-            // 3. Create Positive Cost for Project
-            \App\Models\Cost::create([
-                'name' => "Nhận tài sản từ cty: " . $equipment->name,
+        DB::transaction(function () use ($equipment, $targetProjectId, $exportQuantity, $exportDate, $receiverId, $notes, $status, $user) {
+            // Tạo bản ghi phiếu mượn (AssetUsage)
+            \App\Models\AssetUsage::create([
                 'project_id' => $targetProjectId,
-                'amount' => $totalPrice,
+                'equipment_id' => $equipment->id,
                 'quantity' => $exportQuantity,
-                'unit' => $equipment->unit ?: 'cái',
-                'cost_date' => $exportDate,
-                'cost_group_id' => $costGroupId,
-                'expense_category' => 'capex',
-                'status' => 'approved',
-                'description' => "Nhận bàn giao tài sản từ công ty. " . $notes,
-                'created_by' => $user->id ?? 1,
-                'management_approved_by' => $user->id ?? 1,
-                'management_approved_at' => now(),
-                'accountant_approved_by' => $user->id ?? 1,
-                'accountant_approved_at' => now(),
+                'receiver_id' => $receiverId,
+                'received_date' => $exportDate,
+                'notes' => $notes,
+                'status' => $status,
+                'created_by' => $user->id,
+                'confirmed_by' => $status === 'in_use' ? $user->id : null,
+                'confirmed_at' => $status === 'in_use' ? now() : null,
             ]);
+
+            // Nếu tự động duyệt, cập nhật trạng thái thiết bị thành Đang sử dụng (nếu cũ là available)
+            if ($status === 'in_use') {
+                if ($equipment->status === 'available') {
+                    $equipment->update(['status' => 'in_use']);
+                }
+            }
         });
 
-        return back()->with('success', 'Xuất tài sản công ty sang dự án thành công.');
+        if ($status === 'in_use') {
+            return back()->with('success', 'Điều chuyển thiết bị sang dự án thành công (Đã duyệt).');
+        } else {
+            return back()->with('success', 'Đã gửi yêu cầu điều chuyển thiết bị, chờ Kế toán xác nhận.');
+        }
     }
 }
