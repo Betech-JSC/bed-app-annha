@@ -19,7 +19,7 @@ class MaterialBillService
     public function upsert(array $data, ?MaterialBill $bill = null, $user = null): MaterialBill
     {
         $rules = [
-            'project_id'    => $bill ? 'sometimes|exists:projects,id' : 'required|exists:projects,id',
+            'project_id'    => $bill ? 'sometimes|nullable|exists:projects,id' : 'nullable|exists:projects,id',
             'supplier_id'   => 'nullable|exists:suppliers,id',
             'bill_date'     => 'required|date',
             'cost_group_id' => 'nullable|exists:cost_groups,id',
@@ -233,12 +233,17 @@ class MaterialBillService
     }
 
     /**
-     * Generate bill number PVT-XXX.
+     * Generate bill number PVT-XXX or PVT-KHO-XXX.
      */
-    protected function generateBillNumber(string $projectId): string
+    protected function generateBillNumber(?string $projectId): string
     {
-        $lastBill = MaterialBill::where('project_id', $projectId)->count();
-        return 'PVT-' . str_pad($lastBill + 1, 3, '0', STR_PAD_LEFT);
+        if ($projectId) {
+            $lastBill = MaterialBill::where('project_id', $projectId)->count();
+            return 'PVT-' . str_pad($lastBill + 1, 3, '0', STR_PAD_LEFT);
+        } else {
+            $lastBill = MaterialBill::whereNull('project_id')->count();
+            return 'PVT-KHO-' . str_pad($lastBill + 1, 3, '0', STR_PAD_LEFT);
+        }
     }
 
     /**
@@ -246,6 +251,12 @@ class MaterialBillService
      */
     protected function ensureLinkedCost(MaterialBill $bill, $user = null): void
     {
+        if (is_null($bill->project_id)) {
+            // Phiếu mua nhập kho công ty không có bản ghi Cost của dự án
+            Cost::where('material_bill_id', $bill->id)->delete();
+            return;
+        }
+
         $cost = Cost::where('material_bill_id', $bill->id)->first();
         
         $supplierName = $bill->supplier ? $bill->supplier->name : '';

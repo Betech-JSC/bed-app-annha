@@ -971,6 +971,7 @@ const confirmApprovalLoading = ref(false)
 const typeColors = {
   project_cost: 'blue',
   company_cost: 'gold',
+  warehouse_export: 'purple',
   acceptance: 'purple',
   change_request: 'magenta',
   additional_cost: 'orange',
@@ -1040,8 +1041,8 @@ const historyStatusColor = (status) => {
 
 // Types visible per role (for filtering approved/rejected history)
 const roleTypeMap = {
-  management: ['project_cost', 'company_cost', 'additional_cost', 'material_bill', 'budget', 'equipment_rental', 'asset_usage', 'equipment_purchase', 'equipment_inventory', 'maintenance', 'warranty'],
-  accountant: ['project_cost', 'company_cost', 'sub_payment', 'project_payment', 'material_bill', 'equipment_rental', 'asset_usage', 'equipment_purchase'],
+  management: ['project_cost', 'company_cost', 'additional_cost', 'material_bill', 'budget', 'equipment_rental', 'asset_usage', 'equipment_purchase', 'equipment_inventory', 'maintenance', 'warranty', 'warehouse_export'],
+  accountant: ['project_cost', 'company_cost', 'sub_payment', 'project_payment', 'material_bill', 'equipment_rental', 'asset_usage', 'equipment_purchase', 'warehouse_export'],
   project_manager: ['acceptance', 'change_request', 'additional_cost', 'schedule_adjustment', 'defect', 'equipment_rental', 'asset_usage'],
   supervisor: ['acceptance', 'sub_acceptance', 'supplier_acceptance', 'defect'],
   customer: ['acceptance', 'contract', 'project_payment', 'additional_cost', 'maintenance', 'warranty', 'defect'],
@@ -1069,7 +1070,7 @@ const activeItems = computed(() => {
     // Apply category filter
     if (activeCategory.value !== 'all') {
       items = items.filter(i => {
-        if (activeCategory.value === 'finance') return ['project_cost', 'company_cost', 'sub_payment', 'project_payment', 'additional_cost', 'material_bill', 'budget', 'equipment_rental', 'equipment_inventory'].includes(i.type)
+        if (activeCategory.value === 'finance') return ['project_cost', 'company_cost', 'sub_payment', 'project_payment', 'additional_cost', 'material_bill', 'budget', 'equipment_rental', 'equipment_inventory', 'warehouse_export'].includes(i.type)
         if (activeCategory.value === 'acceptance') return ['acceptance', 'sub_acceptance', 'supplier_acceptance', 'warranty'].includes(i.type)
         if (activeCategory.value === 'technical') return ['change_request', 'additional_cost', 'schedule_adjustment', 'defect', 'asset_usage', 'maintenance'].includes(i.type)
         if (activeCategory.value === 'hr') return ['attendance'].includes(i.type)
@@ -1084,7 +1085,7 @@ const activeItems = computed(() => {
   // Filter by category
   if (activeCategory.value !== 'all') {
     items = items.filter(i => {
-      if (activeCategory.value === 'finance') return ['project_cost', 'sub_payment', 'project_payment', 'additional_cost', 'material_bill', 'budget', 'equipment_rental', 'equipment_inventory'].includes(i.type)
+      if (activeCategory.value === 'finance') return ['project_cost', 'sub_payment', 'project_payment', 'additional_cost', 'material_bill', 'budget', 'equipment_rental', 'equipment_inventory', 'warehouse_export'].includes(i.type)
       if (activeCategory.value === 'acceptance') return ['acceptance', 'sub_acceptance', 'supplier_acceptance', 'warranty'].includes(i.type)
       if (activeCategory.value === 'technical') return ['change_request', 'additional_cost', 'schedule_adjustment', 'defect', 'asset_usage', 'maintenance'].includes(i.type)
       if (activeCategory.value === 'hr') return ['attendance'].includes(i.type)
@@ -1201,6 +1202,7 @@ const getDetailUrl = (record) => {
     asset_usage_return: pid ? `/projects/${pid}?tab=equipment&id=${id}` : null,
     equipment_purchase: `/equipment?tab=approvals&id=${id}`,
     payroll: `/hr/payrolls?id=${id}`,
+    warehouse_export: '/warehouse-inventory?tab=export_approvals',
     equipment_inventory: `/equipment?id=${id}`,
     attendance: pid ? `/projects/${pid}?tab=attendance&id=${id}` : `/hr/attendance?id=${id}`,
     maintenance: pid ? `/projects/${pid}?tab=technical&id=${id}` : null,
@@ -1232,6 +1234,7 @@ const approveUrlMap = {
   project_payment: (r) => `/approvals/payment/${r.id}/approve`,
   project_payment_confirm: (r) => `/approvals/payment/${r.id}/confirm`,
   material_bill: (r) => `/approvals/material-bill/${r.id}/approve`,
+  warehouse_export: (r) => `/approvals/warehouse-export/${r.id}/approve`,
   sub_acceptance: (r) => `/approvals/sub-acceptance/${r.id}/approve`,
   supplier_acceptance: (r) => `/approvals/supplier-acceptance/${r.id}/approve`,
   construction_log: (r) => `/approvals/construction-log/${r.id}/approve`,
@@ -1310,6 +1313,7 @@ const approveLabels = {
   project_payment: 'Duyệt thanh toán',
   project_payment_confirm: 'KT xác nhận thanh toán DA',
   material_bill: 'Duyệt phiếu vật tư',
+  warehouse_export: 'Duyệt xuất kho vật tư',
   sub_acceptance: 'Duyệt nghiệm thu NTP',
   supplier_acceptance: 'Duyệt nghiệm thu NCC',
   construction_log: 'Duyệt nhật ký công trường',
@@ -1392,6 +1396,7 @@ const rejectUrlMap = {
   project_payment: (r) => `/approvals/payment/${r.id}/reject`,
   project_payment_confirm: (r) => `/approvals/payment/${r.id}/reject`,
   material_bill: (r) => `/approvals/material-bill/${r.id}/reject`,
+  warehouse_export: (r) => `/approvals/warehouse-export/${r.id}/reject`,
   sub_acceptance: (r) => `/approvals/sub-acceptance/${r.id}/reject`,
   supplier_acceptance: (r) => `/approvals/supplier-acceptance/${r.id}/reject`,
   construction_log: (r) => `/approvals/construction-log/${r.id}/reject`,

@@ -253,6 +253,7 @@ class ApprovalCenterController extends Controller
         $modelMap = [
             'project_cost' => Cost::class,
             'material_bill' => 'App\\Models\\MaterialBill',
+            'warehouse_export' => 'App\\Models\\MaterialTransaction',
             'acceptance' => Acceptance::class,
             'change_request' => ChangeRequest::class,
             'additional_cost' => AdditionalCost::class,
@@ -272,6 +273,7 @@ class ApprovalCenterController extends Controller
         $permission = match ($type) {
             'company_cost', 'project_cost' => $this->getCostPermission($id),
             'material_bill' => Permissions::MATERIAL_APPROVE,
+            'warehouse_export' => Permissions::MATERIAL_APPROVE,
             'acceptance' => $this->getAcceptancePermission($id),
             'change_request' => Permissions::CHANGE_REQUEST_APPROVE,
             'additional_cost' => Permissions::ADDITIONAL_COST_APPROVE,

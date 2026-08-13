@@ -107,6 +107,7 @@ class CrmApprovalController extends Controller
                 ->concat(($data['equipment_purchases_management'] ?? collect([]))->filter(fn($i) => $this->crmCan($user, Permissions::COST_APPROVE_MANAGEMENT, $i->project))->map(fn($i) => array_merge($this->formatEquipmentPurchaseItem($i), ['_approveType' => 'equipment_purchase_management'])))
                 ->concat(($data['equipment_inventory_management'] ?? collect([]))->filter(fn($i) => $this->crmCan($user, Permissions::COST_APPROVE_MANAGEMENT, $i->project))->map(fn($i) => array_merge($this->formatEquipmentInventoryItem($i), ['_approveType' => 'equipment_inventory_management'])))
                 ->concat(($data['payrolls_management'] ?? collect([]))->filter(fn($i) => $this->crmCan($user, Permissions::COST_APPROVE_MANAGEMENT) || $this->crmCan($user, Permissions::HR_SALARY_MANAGE))->map(fn($i) => array_merge($this->formatPayrollItem($i), ['_approveType' => 'payroll'])))
+                ->concat(($data['warehouse_exports'] ?? collect([]))->filter(fn($i) => $userPermissions['can_management'])->map(fn($i) => array_merge($this->formatWarehouseExportItem($i), ['_approveType' => 'warehouse_export'])))
                 ->unique(fn($item) => ($item['type'] ?? '') . '_' . $item['id'])->values() : collect([]),
  
             'accountant' => $userPermissions['can_accountant'] ? collect([])
@@ -119,6 +120,7 @@ class CrmApprovalController extends Controller
                 ->concat(($data['equipment_purchases_accountant'] ?? collect([]))->filter(fn($i) => $this->crmCan($user, Permissions::COST_APPROVE_ACCOUNTANT, $i->project))->map(fn($i) => array_merge($this->formatEquipmentPurchaseItem($i), ['_approveType' => 'equipment_purchase_accountant'])))
                 ->concat(($data['equipment_inventory_accountant'] ?? collect([]))->filter(fn($i) => $this->crmCan($user, Permissions::COST_APPROVE_ACCOUNTANT, $i->project))->map(fn($i) => array_merge($this->formatEquipmentInventoryItem($i), ['_approveType' => 'equipment_inventory_accountant'])))
                 ->concat(($data['payrolls_accountant'] ?? collect([]))->filter(fn($i) => $this->crmCan($user, Permissions::COST_APPROVE_ACCOUNTANT))->map(fn($i) => array_merge($this->formatPayrollItem($i), ['_approveType' => 'payroll_confirm'])))
+                ->concat(($data['warehouse_exports'] ?? collect([]))->filter(fn($i) => $userPermissions['can_accountant'])->map(fn($i) => array_merge($this->formatWarehouseExportItem($i), ['_approveType' => 'warehouse_export'])))
                 ->unique(fn($item) => ($item['type'] ?? '') . '_' . $item['id'])->values() : collect([]),
 
             'project_manager' => $userPermissions['can_pm'] ? collect([])
@@ -822,6 +824,19 @@ class CrmApprovalController extends Controller
         return $this->delegateReject($user, 'equipment_purchase_management', $id, $request->reason); // "type" dictates which block model maps to in ApprovalActionService, equipment_purchase_management works for rejection
     }
 
+    public function approveWarehouseExport(Request $request, $id)
+    {
+        $user = Auth::guard('admin')->user();
+        return $this->delegateApprove($user, 'warehouse_export', $id);
+    }
+
+    public function rejectWarehouseExport(Request $request, $id)
+    {
+        $request->validate(['reason' => 'required|string|max:500']);
+        $user = Auth::guard('admin')->user();
+        return $this->delegateReject($user, 'warehouse_export', $id, $request->reason);
+    }
+
     // =========================================================================
     // SHARED DELEGATE HELPERS — Single source of truth via ApprovalActionService
     // =========================================================================
@@ -849,6 +864,25 @@ class CrmApprovalController extends Controller
     // =========================================================================
     // FORMAT HELPERS
     // =========================================================================
+
+    private function formatWarehouseExportItem($t): array
+    {
+        return [
+            'id' => $t->id,
+            'type' => 'warehouse_export',
+            'type_label' => 'Yêu cầu xuất kho',
+            'title' => $t->getApprovalSummary(),
+            'subtitle' => $t->targetProject->name ?? 'Dự án nhận',
+            'amount' => (float) $t->total_amount,
+            'status' => $t->status,
+            'status_label' => 'Chờ duyệt xuất kho',
+            'created_by' => $t->creator->name ?? 'N/A',
+            'created_at' => optional($t->created_at)->format('d/m/Y H:i') ?? '',
+            'project_id' => null,
+            'attachments' => [],
+            'attachments_count' => 0,
+        ];
+    }
 
     private function formatItem(Cost $cost): array
     {

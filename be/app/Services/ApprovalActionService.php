@@ -236,6 +236,74 @@ class ApprovalActionService
                     $message = "Đã duyệt ngân sách";
                     break;
 
+                case 'warehouse_export':
+                    $trans = \App\Models\MaterialTransaction::findOrFail($id);
+                    $trans->update([
+                        'status' => 'approved',
+                        'approved_by' => $user->id,
+                        'approved_at' => now(),
+                    ]);
+
+                    // Tạo giao dịch nhập đối ứng cho dự án nhận
+                    \App\Models\MaterialTransaction::create([
+                        'material_id' => $trans->material_id,
+                        'project_id' => $trans->target_project_id,
+                        'type' => 'import',
+                        'quantity' => $trans->quantity,
+                        'unit_price' => $trans->unit_price,
+                        'total_amount' => $trans->total_amount,
+                        'reference_number' => $trans->reference_number ?? 'XUAT-KHO-' . $trans->id,
+                        'transaction_date' => $trans->transaction_date,
+                        'notes' => "Nhập điều chuyển từ Kho công ty. Ghi chú gốc: " . $trans->notes,
+                        'status' => 'approved',
+                        'created_by' => $trans->created_by,
+                        'approved_by' => $user->id,
+                        'approved_at' => now(),
+                    ]);
+
+                    // Tạo bản ghi Cost tự động duyệt cho dự án nhận
+                    $cost = Cost::create([
+                        'project_id' => $trans->target_project_id,
+                        'material_id' => $trans->material_id,
+                        'cost_group_id' => $trans->material?->cost_group_id,
+                        'name' => "Xuất kho vật tư: " . ($trans->material?->name ?? ''),
+                        'amount' => $trans->total_amount,
+                        'quantity' => $trans->quantity,
+                        'unit' => $trans->material?->unit,
+                        'category' => 'construction_materials',
+                        'description' => "Vật tư xuất điều chuyển từ Kho công ty. " . ($trans->notes ? "Ghi chú: {$trans->notes}" : ""),
+                        'cost_date' => $trans->transaction_date ?: now(),
+                        'status' => 'approved',
+                        'created_by' => $trans->created_by,
+                        'management_approved_by' => $user->id,
+                        'management_approved_at' => now(),
+                        'accountant_approved_by' => $user->id,
+                        'accountant_approved_at' => now(),
+                    ]);
+
+                    $trans->update(['cost_id' => $cost->id]);
+
+                    // Đồng bộ tồn kho
+                    $invCompany = \App\Models\MaterialInventory::firstOrCreate([
+                        'project_id' => null,
+                        'material_id' => $trans->material_id,
+                    ]);
+                    $invCompany->syncStock();
+
+                    $invProject = \App\Models\MaterialInventory::firstOrCreate([
+                        'project_id' => $trans->target_project_id,
+                        'material_id' => $trans->material_id,
+                    ]);
+                    $invProject->syncStock();
+
+                    // Đồng bộ ngân sách
+                    $syncService = app(\App\Services\BudgetSyncService::class);
+                    $syncService->syncProjectBudgets($trans->target_project_id);
+
+                    $result = true;
+                    $message = "Đã duyệt yêu cầu xuất kho vật tư";
+                    break;
+
                 case 'equipment_rental_management':
                     $r = EquipmentRental::findOrFail($id);
                     $result = $this->equipmentService->approveRentalByManagement($r, $user);
@@ -379,6 +447,7 @@ class ApprovalActionService
                 case 'project_payment_confirm':
                     $model = ProjectPayment::findOrFail($id); break;
                 case 'material_bill': $model = MaterialBill::findOrFail($id); break;
+                case 'warehouse_export': $model = \App\Models\MaterialTransaction::findOrFail($id); break;
                 case 'sub_acceptance': $model = SubcontractorAcceptance::findOrFail($id); break;
                 case 'supplier_acceptance': $model = SupplierAcceptance::findOrFail($id); break;
                 case 'construction_log': $model = ConstructionLog::findOrFail($id); break;
@@ -438,6 +507,11 @@ class ApprovalActionService
                 $result = true;
             } elseif ($model instanceof ProjectPayment) {
                 $result = $this->financialService->rejectProjectPayment($model, $reason, $user);
+            } elseif ($model instanceof \App\Models\MaterialTransaction) {
+                $model->update([
+                    'status' => 'rejected',
+                ]);
+                $result = true;
             } elseif (method_exists($model, 'reject')) {
                 // Models with signature: reject(string $reason, ?User $user)
                 if ($model instanceof Cost 

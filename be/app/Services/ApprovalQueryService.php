@@ -329,6 +329,7 @@ class ApprovalQueryService
         $data['attendances_pending'] = $pluckModels(Attendance::class);
         $data['maintenances'] = $pluckModels(ProjectMaintenance::class);
         $data['warranties'] = $pluckModels(ProjectWarranty::class);
+        $data['warehouse_exports'] = $pluckModels(\App\Models\MaterialTransaction::class)->filter(fn($t) => $t->type === 'export' && $t->status === 'pending');
 
         // Material Bills — split by approval level
         $allMaterialBills = $pluckModels(MaterialBill::class);
@@ -677,6 +678,28 @@ class ApprovalQueryService
                 }
             }
 
+            if ($type === 'all' || $type === 'management' || $type === 'warehouse_export') {
+                foreach ($data['warehouse_exports'] ?? [] as $t) {
+                    $items[] = [
+                        'id' => $t->id,
+                        'type' => 'warehouse_export',
+                        'title' => $t->getApprovalSummary(),
+                        'subtitle' => $t->targetProject->name ?? 'Dự án nhận',
+                        'amount' => (float) $t->total_amount,
+                        'status' => $t->status,
+                        'status_label' => 'Chờ duyệt xuất kho',
+                        'created_by' => $t->creator->name ?? 'N/A',
+                        'created_at' => $t->created_at->toISOString(),
+                        'project_id' => null,
+                        'can_approve' => $canApproveManagement,
+                        'approval_level' => 'management',
+                        'role_group' => 'management',
+                        'attachments' => [],
+                        'attachments_count' => 0,
+                    ];
+                }
+            }
+
             // Equipment Related (Management)
             if ($type === 'all' || $type === 'management' || $type === 'equipment_rental') {
                 foreach ($data['equipment_rentals_management'] ?? [] as $r) {
@@ -795,6 +818,28 @@ class ApprovalQueryService
                         'approval_level' => 'accountant', 'role_group' => 'accountant',
                         'attachments' => $this->formatAttachments($b),
                         'attachments_count' => $b->attachments->count(),
+                    ];
+                }
+            }
+
+            if ($type === 'all' || $type === 'accountant' || $type === 'warehouse_export') {
+                foreach ($data['warehouse_exports'] ?? [] as $t) {
+                    $items[] = [
+                        'id' => $t->id,
+                        'type' => 'warehouse_export',
+                        'title' => $t->getApprovalSummary(),
+                        'subtitle' => $t->targetProject->name ?? 'Dự án nhận',
+                        'amount' => (float) $t->total_amount,
+                        'status' => $t->status,
+                        'status_label' => 'Chờ duyệt xuất kho',
+                        'created_by' => $t->creator->name ?? 'N/A',
+                        'created_at' => $t->created_at->toISOString(),
+                        'project_id' => null,
+                        'can_approve' => $canApproveAccountant,
+                        'approval_level' => 'accountant',
+                        'role_group' => 'accountant',
+                        'attachments' => [],
+                        'attachments_count' => 0,
                     ];
                 }
             }

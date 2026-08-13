@@ -55,22 +55,26 @@ class MaterialInventory extends Model
 
     // --- Methods ---
 
-    /**
-     * Sync current_stock from all MaterialTransactions
-     */
     public function syncStock(): void
     {
-        $imported = MaterialTransaction::where('project_id', $this->project_id)
-            ->where('material_id', $this->material_id)
-            ->where('type', 'import')
-            ->where('status', '!=', 'cancelled')
-            ->sum('quantity');
+        $queryIn = MaterialTransaction::where('material_id', $this->material_id)
+            ->whereIn('type', ['in', 'import'])
+            ->where('status', 'approved');
 
-        $exported = MaterialTransaction::where('project_id', $this->project_id)
-            ->where('material_id', $this->material_id)
-            ->where('type', 'export')
-            ->where('status', '!=', 'cancelled')
-            ->sum('quantity');
+        $queryOut = MaterialTransaction::where('material_id', $this->material_id)
+            ->whereIn('type', ['out', 'export'])
+            ->where('status', 'approved');
+
+        if ($this->project_id) {
+            $queryIn->where('project_id', $this->project_id);
+            $queryOut->where('project_id', $this->project_id);
+        } else {
+            $queryIn->whereNull('project_id');
+            $queryOut->whereNull('project_id');
+        }
+
+        $imported = $queryIn->sum('quantity');
+        $exported = $queryOut->sum('quantity');
 
         $this->current_stock = max(0, $imported - $exported);
         $this->last_updated_at = now();

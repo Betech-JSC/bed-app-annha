@@ -645,6 +645,7 @@ const selectedKeys = computed(() => {
 
   if (url.startsWith('/cost-groups')) return ['cost-groups']
   if (url.startsWith('/materials')) return ['materials']
+  if (url.startsWith('/warehouse-inventory')) return ['warehouse-inventory']
   if (url.startsWith('/equipment') || url.startsWith('/operations/assets')) return ['equipment']
   if (url.startsWith('/reports')) return ['reports']
   if (url.startsWith('/notifications')) return ['notifications']
@@ -722,6 +723,7 @@ const menuItems = computed(() => {
       label: 'Tài nguyên & Kho',
       children: [
         { key: 'materials', label: 'Danh mục chi phí', perm: 'material.view' },
+        { key: 'warehouse-inventory', label: 'Kho vật tư công ty', perm: 'material.view' },
         { key: 'equipment', label: 'Kho tài sản & Thiết bị', perm: 'company_asset.view' },
         { key: 'suppliers', label: 'Nhà cung cấp', icon: () => h(ShopOutlined), perm: 'suppliers.view' },
       ],
@@ -807,6 +809,7 @@ const handleMenuClick = ({ key }) => {
     'company-costs': '/finance/company-costs',
     'cost-groups': '/cost-groups',
     materials: '/materials',
+    'warehouse-inventory': '/warehouse-inventory',
     equipment: '/equipment',
     employees: '/hr/employees?type=employee',
     customers: '/hr/employees?type=customer',

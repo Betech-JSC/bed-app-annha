@@ -179,10 +179,14 @@ class MaterialBill extends Model
             $this->supplier->recordDebt($this->total_amount);
         }
 
-        // 2. Tạo MaterialTransactions (Nhập kho dự án)
+        // 2. Tạo MaterialTransactions (Nhập kho dự án hoặc kho công ty)
         // Kiểm tra xem đã có transaction nào được tạo cho bill này chưa để tránh trùng lặp
         $existingTransactions = MaterialTransaction::where('reference_number', $this->bill_number)
-            ->where('project_id', $this->project_id)
+            ->when($this->project_id, function($q) {
+                $q->where('project_id', $this->project_id);
+            }, function($q) {
+                $q->whereNull('project_id');
+            })
             ->exists();
 
         if (!$existingTransactions) {
@@ -200,12 +204,21 @@ class MaterialBill extends Model
                     'supplier_id' => $this->supplier_id,
                     'reference_number' => $this->bill_number,
                     'transaction_date' => $this->bill_date,
-                    'notes' => "Nhập từ phiếu vật tư #" . ($this->bill_number ?? $this->id),
+                    'notes' => $this->project_id 
+                        ? "Nhập từ phiếu vật tư #" . ($this->bill_number ?? $this->id)
+                        : "Nhập về kho công ty từ phiếu #" . ($this->bill_number ?? $this->id),
                     'status' => 'approved',
                     'created_by' => $this->created_by,
                     'approved_by' => $this->accountant_approved_by,
                     'approved_at' => $this->accountant_approved_at,
                 ]);
+
+                // Sync stock cho kho tương ứng
+                $inv = MaterialInventory::firstOrCreate([
+                    'project_id' => $this->project_id,
+                    'material_id' => $item->material_id,
+                ]);
+                $inv->syncStock();
             }
         }
     }
@@ -216,7 +229,7 @@ class MaterialBill extends Model
      */
     public function syncToCost(): void
     {
-        if ($this->status === 'cancelled') {
+        if ($this->status === 'cancelled' || is_null($this->project_id)) {
             Cost::where('material_bill_id', $this->id)->delete();
             return;
         }

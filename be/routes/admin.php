@@ -101,6 +101,7 @@ use App\Http\Controllers\Admin\CrmEquipmentController;
 use App\Http\Controllers\Admin\CrmGlobalEquipmentController;
 use App\Http\Controllers\Admin\CrmSettingsController;
 use App\Http\Controllers\Admin\CrmApprovalController;
+use App\Http\Controllers\Admin\CrmWarehouseInventoryController;
 use App\Http\Controllers\Admin\CrmRolesController;
 use App\Http\Controllers\Admin\CrmNotificationController;
 use App\Http\Controllers\Admin\CrmFilesController;
@@ -192,6 +193,10 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         // Project Budget (Ngân sách dự án)
         Route::post('/budget/{id}/approve', [CrmApprovalController::class, 'approveBudget'])->name('budget.approve');
         Route::post('/budget/{id}/reject', [CrmApprovalController::class, 'rejectBudget'])->name('budget.reject');
+
+        // Warehouse Export (Xuất kho)
+        Route::post('/warehouse-export/{id}/approve', [CrmApprovalController::class, 'approveWarehouseExport'])->name('warehouse-export.approve');
+        Route::post('/warehouse-export/{id}/reject', [CrmApprovalController::class, 'rejectWarehouseExport'])->name('warehouse-export.reject');
 
         // Equipment Purchase
         Route::post('/equipment-purchase/{id}/approve-management', [CrmApprovalController::class, 'approveEquipmentPurchaseManagement'])->name('equipment-purchase.approve-management');
@@ -655,6 +660,22 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         Route::get('/{id}/price-history', [CrmMaterialsController::class, 'priceHistory'])->name('price-history');
         Route::put('/{id}', [CrmMaterialsController::class, 'update'])->name('update');
         Route::delete('/{id}', [CrmMaterialsController::class, 'destroy'])->name('destroy');
+    });
+
+    // Warehouse Inventory
+    Route::prefix('warehouse-inventory')->name('warehouse-inventory.')->group(function () {
+        Route::get('/', [CrmWarehouseInventoryController::class, 'index'])->name('index');
+        Route::post('/export', [CrmWarehouseInventoryController::class, 'exportStore'])->name('export');
+        
+        // Warehouse Bills CRUD & Approvals
+        Route::post('/bills', [CrmWarehouseInventoryController::class, 'billStore'])->name('bills.store');
+        Route::put('/bills/{id}', [CrmWarehouseInventoryController::class, 'billUpdate'])->name('bills.update');
+        Route::post('/bills/{id}/submit', [CrmWarehouseInventoryController::class, 'billSubmit'])->name('bills.submit');
+        Route::post('/bills/{id}/approve-management', [CrmWarehouseInventoryController::class, 'billApproveManagement'])->name('bills.approve-management');
+        Route::post('/bills/{id}/approve-accountant', [CrmWarehouseInventoryController::class, 'billApproveAccountant'])->name('bills.approve-accountant');
+        Route::post('/bills/{id}/reject', [CrmWarehouseInventoryController::class, 'billReject'])->name('bills.reject');
+        Route::post('/bills/{id}/revert', [CrmWarehouseInventoryController::class, 'billRevert'])->name('bills.revert');
+        Route::delete('/bills/{id}', [CrmWarehouseInventoryController::class, 'billDestroy'])->name('bills.destroy');
     });
 
     // Cost Groups

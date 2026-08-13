@@ -6,12 +6,17 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Str;
 
+use App\Traits\Approvable;
+
 class MaterialTransaction extends Model
 {
+    use Approvable;
+
     protected $fillable = [
         'uuid',
         'material_id',
         'project_id',
+        'target_project_id',
         'cost_id',
         'type',
         'quantity',
@@ -49,6 +54,11 @@ class MaterialTransaction extends Model
         return $this->belongsTo(Project::class);
     }
 
+    public function targetProject(): BelongsTo
+    {
+        return $this->belongsTo(Project::class, 'target_project_id');
+    }
+
     public function supplier(): BelongsTo
     {
         return $this->belongsTo(Supplier::class, 'supplier_id');
@@ -82,6 +92,40 @@ class MaterialTransaction extends Model
                 $transaction->uuid = Str::uuid();
             }
         });
+    }
+
+    // ==================================================================
+    // APPROVAL HELPERS
+    // ==================================================================
+
+    public function isPendingApproval(): bool
+    {
+        return $this->type === 'export' && $this->status === 'pending';
+    }
+
+    public function getApprovalSummary(): string
+    {
+        $targetName = $this->targetProject ? $this->targetProject->name : 'Dự án';
+        $matName = $this->material ? $this->material->name : 'Vật tư';
+        return "Yêu cầu xuất kho: {$matName} (SL: {$this->quantity}) sang {$targetName}";
+    }
+
+    public function getApprovalMetadata(): array
+    {
+        return [
+            'material_name' => $this->material?->name,
+            'material_code' => $this->material?->code,
+            'unit' => $this->material?->unit,
+            'quantity' => $this->quantity,
+            'unit_price' => $this->unit_price,
+            'amount' => $this->total_amount,
+            'target_project_name' => $this->targetProject?->name,
+            'project_id' => $this->project_id,
+            'target_project_id' => $this->target_project_id,
+            'type_label' => 'Yêu cầu xuất kho',
+            'creator' => $this->creator?->name,
+            'notes' => $this->notes,
+        ];
     }
 }
 
