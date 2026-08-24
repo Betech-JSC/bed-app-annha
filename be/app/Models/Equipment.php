@@ -213,6 +213,12 @@ class Equipment extends Model
             if (empty($equipment->uuid)) {
                 $equipment->uuid = Str::uuid();
             }
+            if (empty(trim($equipment->code ?? ''))) {
+                do {
+                    $code = 'TB-' . strtoupper(Str::random(6));
+                } while (static::where('code', $code)->exists());
+                $equipment->code = $code;
+            }
         });
 
         static::deleted(function ($model) {

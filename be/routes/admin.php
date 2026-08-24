@@ -644,6 +644,9 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
     Route::prefix('finance')->name('finance.')->group(function () {
         Route::get('/', [CrmFinanceController::class, 'index'])->name('index');
         Route::get('/company-costs', [CrmFinanceController::class, 'companyCosts'])->name('company-costs');
+        Route::get('/company-costs/{id}', function ($id) {
+            return redirect("/finance/company-costs?id={$id}");
+        })->name('company-costs.show');
         Route::post('/company-costs', [CrmFinanceController::class, 'storeCompanyCost'])->name('company-costs.store');
         Route::put('/company-costs/{id}', [CrmFinanceController::class, 'updateCompanyCost'])->name('company-costs.update');
         Route::delete('/company-costs/{id}', [CrmFinanceController::class, 'destroyCompanyCost'])->name('company-costs.destroy');
@@ -651,6 +654,15 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
         Route::post('/company-costs/{id}/revert', [CrmFinanceController::class, 'revertCompanyCostToDraft'])->name('company-costs.revert');
         Route::post('/company-costs/{id}/approve', [CrmFinanceController::class, 'approveCompanyCost'])->name('company-costs.approve');
         Route::post('/company-costs/{id}/reject', [CrmFinanceController::class, 'rejectCompanyCost'])->name('company-costs.reject');
+    });
+
+    // Top-level alias for company-costs
+    Route::get('/company-costs', function () {
+        $query = request()->getQueryString();
+        return redirect('/finance/company-costs' . ($query ? "?{$query}" : ''));
+    });
+    Route::get('/company-costs/{id}', function ($id) {
+        return redirect("/finance/company-costs?id={$id}");
     });
 
     // Materials

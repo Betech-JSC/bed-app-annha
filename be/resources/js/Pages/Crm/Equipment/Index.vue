@@ -1158,7 +1158,7 @@
 
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { Head, useForm, router, usePage } from '@inertiajs/vue3'
 import CrmLayout from '@/Layouts/CrmLayout.vue'
 import PageHeader from '@/Components/Crm/PageHeader.vue'
@@ -1173,7 +1173,7 @@ onMounted(() => {
   const urlParams = new URLSearchParams(window.location.search)
   const id = urlParams.get('id')
   if (id) {
-    const item = props.equipment.data.find(e => e.id == id)
+    const item = props.equipment?.data?.find(e => e.id == id)
     if (item) {
       openDetail(item)
     }
@@ -1183,6 +1183,15 @@ onMounted(() => {
     openCreateModal()
   }
 })
+
+watch(() => props.equipment, (newVal) => {
+  if (selectedItem.value && newVal?.data) {
+    const updated = newVal.data.find(e => e.id === selectedItem.value.id)
+    if (updated) {
+      selectedItem.value = updated
+    }
+  }
+}, { deep: true })
 
 // Permission helper
 const can = (perm) => {
@@ -1644,8 +1653,22 @@ const resetCatalogForm = () => {
 const openDetail = (item) => { selectedItem.value = item; showDetailDrawer.value = true }
 
 // Workflow actions
-const submitItem = (e) => router.post(`/equipment/${e.id}/submit`, {}, { preserveScroll: true })
-const approveItem = (e) => router.post(`/equipment/${e.id}/approve-management`, {}, { preserveScroll: true })
+const submitItem = (e) => router.post(`/equipment/${e.id}/submit`, {}, {
+  preserveScroll: true,
+  onSuccess: () => {
+    message.success('Đã gửi duyệt phiếu mua thiết bị.')
+    const updated = props.equipment?.data?.find(x => x.id === e.id)
+    if (updated) selectedItem.value = updated
+  }
+})
+const approveItem = (e) => router.post(`/equipment/${e.id}/approve-management`, {}, {
+  preserveScroll: true,
+  onSuccess: () => {
+    message.success('Ban điều hành đã duyệt phiếu mua thiết bị.')
+    const updated = props.equipment?.data?.find(x => x.id === e.id)
+    if (updated) selectedItem.value = updated
+  }
+})
 const confirmItem = (e) => {
   confirmEquipmentTarget.value = e
   confirmEquipmentFiles.value = []

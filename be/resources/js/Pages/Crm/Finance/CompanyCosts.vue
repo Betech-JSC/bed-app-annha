@@ -559,6 +559,7 @@ defineOptions({ layout: CrmLayout })
 
 const props = defineProps({
   costs: Object,
+  selectedCost: Object,
   stats: Object,
   charts: Object,
   costGroups: Array,
@@ -570,9 +571,13 @@ const user = computed(() => usePage().props.auth.user)
 const can = (permission) => user.value?.super_admin || (user.value?.permissions || []).includes(permission)
 
 onMounted(() => {
+  if (props.selectedCost) {
+    showDetail(props.selectedCost)
+    return
+  }
   const urlParams = new URLSearchParams(window.location.search)
   const id = urlParams.get('id')
-  if (id) {
+  if (id && props.costs?.data) {
     const cost = props.costs.data.find(c => c.id == id)
     if (cost) {
       showDetail(cost)

@@ -165,8 +165,16 @@ class CrmFinanceController extends Controller
         // Active cost groups for company costs
         $costGroups = CostGroup::active()->ordered()->get(['id', 'name', 'expense_category']);
 
+        $selectedCost = null;
+        if ($id = $request->get('id')) {
+            $selectedCost = Cost::companyCosts()
+                ->with(['creator:id,name', 'managementApprover:id,name', 'accountantApprover:id,name', 'costGroup:id,name', 'supplier:id,name', 'attachments'])
+                ->find($id);
+        }
+
         return Inertia::render('Crm/Finance/CompanyCosts', [
             'costs' => $costs,
+            'selectedCost' => $selectedCost,
             'costGroups' => $costGroups,
             'stats' => [
                 'totalAmount' => $totalAmount,

@@ -809,7 +809,8 @@ class CrmApprovalController extends Controller
         try {
             // Mandatorily attach uploaded files to the Equipment Purchase
             $request->merge(['description' => 'after']);
-            $this->attachFilesToEntity($request, $purchase, "equipment-purchases/{$purchase->project_id}/{$purchase->id}", true);
+            $projectId = $purchase->project_id ?: 'company';
+            $this->attachFilesToEntity($request, $purchase, "equipment-purchases/{$projectId}/{$purchase->id}", true);
 
             return $this->delegateApprove($user, 'equipment_purchase_accountant', $id);
         } catch (\Exception $e) {

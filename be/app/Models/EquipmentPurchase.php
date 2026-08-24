@@ -64,7 +64,7 @@ class EquipmentPurchase extends Model
     {
         $costGroupId = \App\Models\CostGroup::where('code', 'equipment')
             ->orWhere('name', 'LIKE', '%Thiết bị%')
-            ->value('id') ?: 4;
+            ->value('id') ?: \App\Models\CostGroup::first()?->id;
 
         $costStatus = match($this->status) {
             'draft'              => 'draft',

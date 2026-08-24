@@ -134,7 +134,7 @@ class CostObserver
                         "Chi phí '{$cost->name}' (" . number_format($cost->amount) . " VND) trong dự án '{$projectName}' đã được duyệt.",
                         ['cost_id' => $cost->id, 'project_id' => $cost->project_id],
                         Notification::PRIORITY_MEDIUM,
-                        "/projects/{$cost->project_id}/costs/{$cost->id}",
+                        "/projects/{$cost->project_id}?tab=costs&id={$cost->id}",
                         true
                     );
                 } else {
@@ -148,7 +148,7 @@ class CostObserver
                             "Chi phí '{$cost->name}' (" . number_format($cost->amount) . " VND) đã được KT xác nhận.",
                             ['cost_id' => $cost->id],
                             Notification::PRIORITY_MEDIUM,
-                            "/company-costs/{$cost->id}"
+                            "/finance/company-costs?id={$cost->id}"
                         );
                     }
                 }
@@ -165,7 +165,7 @@ class CostObserver
                         "Chi phí '{$cost->name}' trong dự án '{$projectName}' đã bị từ chối.",
                         ['cost_id' => $cost->id, 'project_id' => $cost->project_id],
                         Notification::PRIORITY_MEDIUM,
-                        "/projects/{$cost->project_id}/costs/{$cost->id}",
+                        "/projects/{$cost->project_id}?tab=costs&id={$cost->id}",
                         true
                     );
                 } else {
@@ -179,7 +179,7 @@ class CostObserver
                             "Chi phí '{$cost->name}' (" . number_format($cost->amount) . " VND) đã bị từ chối." . ($cost->rejected_reason ? " Lý do: {$cost->rejected_reason}" : ''),
                             ['cost_id' => $cost->id],
                             Notification::PRIORITY_HIGH,
-                            "/company-costs/{$cost->id}"
+                            "/finance/company-costs?id={$cost->id}"
                         );
                     }
                 }

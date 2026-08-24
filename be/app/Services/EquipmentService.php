@@ -330,9 +330,18 @@ class EquipmentService
 
             // Side-effect: Create Inventory entries
             foreach ($purchase->items as $item) {
+                $itemCode = !empty(trim($item->code ?? '')) ? trim($item->code) : null;
+                
+                // If code is not provided or already exists in equipment, generate a unique code
+                if (!$itemCode || Equipment::where('code', $itemCode)->exists()) {
+                    do {
+                        $itemCode = 'TB-' . strtoupper(Str::random(6));
+                    } while (Equipment::where('code', $itemCode)->exists());
+                }
+
                 Equipment::create([
                     'name'            => $item->name,
-                    'code'            => $item->code ?? ('EP-' . strtoupper(Str::random(6))),
+                    'code'            => $itemCode,
                     'category'        => 'purchased',
                     'quantity'        => $item->quantity,
                     'purchase_price'  => $item->unit_price,
