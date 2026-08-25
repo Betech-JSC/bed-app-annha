@@ -184,40 +184,25 @@ class CrmFilesController extends Controller
     /**
      * Delete a file
      */
-    public function destroy($id)
+    public function destroy(Request $request, $id)
     {
         $file = Attachment::findOrFail($id);
+        $user = auth('admin')->user() ?: auth()->user();
 
-        if ($file->attachable) {
-            $parent = $file->attachable;
-            $status = $parent->status ?? $parent->approval_status ?? null;
-            if ($status) {
-                $approvedStatuses = [
-                    'pending_accountant', 
-                    'pending_accountant_approval', 
-                    'pending_accountant_confirmation',
-                    'approved', 
-                    'completed', 
-                    'in_use', 
-                    'returned', 
-                    'paid', 
-                    'confirmed', 
-                    'customer_approved', 
-                    'verified',
-                    'supervisor_approved'
-                ];
-                if (in_array($status, $approvedStatuses)) {
-                    return redirect()->back()->with('error', 'Không thể xóa tệp đính kèm của hồ sơ đã được duyệt hoặc đang chờ xác nhận thanh toán.');
-                }
+        // Delete from storage
+        if ($file->file_path) {
+            if (\Illuminate\Support\Facades\Storage::disk('public')->exists($file->file_path)) {
+                \Illuminate\Support\Facades\Storage::disk('public')->delete($file->file_path);
+            } elseif (\Illuminate\Support\Facades\Storage::exists($file->file_path)) {
+                \Illuminate\Support\Facades\Storage::delete($file->file_path);
             }
         }
 
-        // Delete from storage
-        if ($file->file_path && Storage::exists($file->file_path)) {
-            Storage::delete($file->file_path);
-        }
-
         $file->delete();
+
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json(['success' => true, 'message' => 'Đã xóa file thành công.']);
+        }
 
         return redirect()->back()->with('success', 'Đã xóa file thành công.');
     }
@@ -250,23 +235,15 @@ class CrmFilesController extends Controller
         ];
 
         foreach ($files as $file) {
-            if ($file->attachable) {
-                $parent = $file->attachable;
-                $status = $parent->status ?? $parent->approval_status ?? null;
-                if ($status && in_array($status, $approvedStatuses)) {
-                    continue; // Skip deleting files of approved records
+            if ($file->file_path) {
+                if (\Illuminate\Support\Facades\Storage::disk('public')->exists($file->file_path)) {
+                    \Illuminate\Support\Facades\Storage::disk('public')->delete($file->file_path);
+                } elseif (\Illuminate\Support\Facades\Storage::exists($file->file_path)) {
+                    \Illuminate\Support\Facades\Storage::delete($file->file_path);
                 }
-            }
-
-            if ($file->file_path && Storage::exists($file->file_path)) {
-                Storage::delete($file->file_path);
             }
             $file->delete();
             $deletedCount++;
-        }
-
-        if ($deletedCount === 0 && count($validated['ids']) > 0) {
-            return redirect()->back()->with('error', 'Tất cả các tệp chọn đều thuộc hồ sơ đã được duyệt, không thể xóa.');
         }
 
         return redirect()->back()->with('success', 'Đã xóa ' . $deletedCount . ' file.');

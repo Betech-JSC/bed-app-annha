@@ -22,9 +22,14 @@ class CrmMonthlyPlanController extends Controller
         $this->authService = $authService;
     }
 
+    private function getCurrentUser()
+    {
+        return auth('admin')->user() ?: Auth::user();
+    }
+
     public function index(Request $request)
     {
-        $user = Auth::user();
+        $user = $this->getCurrentUser();
         if (!$this->authService->can($user, Permissions::MONTHLY_PLAN_VIEW)) {
             abort(403);
         }
@@ -53,7 +58,7 @@ class CrmMonthlyPlanController extends Controller
 
     public function store(Request $request)
     {
-        $user = Auth::user();
+        $user = $this->getCurrentUser();
         if (!$this->authService->can($user, Permissions::MONTHLY_PLAN_MANAGE)) {
             abort(403);
         }
@@ -85,7 +90,7 @@ class CrmMonthlyPlanController extends Controller
 
     public function show(string $id)
     {
-        $user = Auth::user();
+        $user = $this->getCurrentUser();
         if (!$this->authService->can($user, Permissions::MONTHLY_PLAN_VIEW)) {
             abort(403);
         }
@@ -101,13 +106,13 @@ class CrmMonthlyPlanController extends Controller
             'plan' => $plan,
             'employees' => $employees,
             'canManage' => $this->authService->can($user, Permissions::MONTHLY_PLAN_MANAGE),
-            'currentUserId' => $user->id,
+            'currentUserId' => $user?->id,
         ]);
     }
 
     public function update(Request $request, string $id)
     {
-        $user = Auth::user();
+        $user = $this->getCurrentUser();
         if (!$this->authService->can($user, Permissions::MONTHLY_PLAN_MANAGE)) {
             abort(403);
         }
@@ -126,7 +131,7 @@ class CrmMonthlyPlanController extends Controller
 
     public function storeTask(Request $request, string $planId)
     {
-        $user = Auth::user();
+        $user = $this->getCurrentUser();
         if (!$this->authService->can($user, Permissions::MONTHLY_PLAN_MANAGE)) {
             abort(403);
         }
@@ -148,7 +153,7 @@ class CrmMonthlyPlanController extends Controller
 
     public function updateTask(Request $request, string $planId, string $taskId)
     {
-        $user = Auth::user();
+        $user = $this->getCurrentUser();
         if (!$this->authService->can($user, Permissions::MONTHLY_PLAN_MANAGE)) {
             abort(403);
         }
@@ -168,11 +173,11 @@ class CrmMonthlyPlanController extends Controller
 
     public function updateTaskStatus(Request $request, string $planId, string $taskId)
     {
-        $user = Auth::user();
+        $user = $this->getCurrentUser();
         $task = MonthlyTask::where('monthly_plan_id', $planId)->findOrFail($taskId);
 
         $canUpdate = $this->authService->can($user, Permissions::MONTHLY_PLAN_MANAGE) 
-            || $task->assigned_to === $user->id;
+            || $task->assigned_to === $user?->id;
 
         if (!$canUpdate) {
             abort(403, 'Bạn không có quyền chuyển trạng thái công việc này.');
@@ -189,7 +194,7 @@ class CrmMonthlyPlanController extends Controller
 
     public function evaluateTask(Request $request, string $planId, string $taskId)
     {
-        $user = Auth::user();
+        $user = $this->getCurrentUser();
         if (!$this->authService->can($user, Permissions::MONTHLY_PLAN_MANAGE)) {
             abort(403);
         }
@@ -207,7 +212,7 @@ class CrmMonthlyPlanController extends Controller
 
     public function destroyTask(string $planId, string $taskId)
     {
-        $user = Auth::user();
+        $user = $this->getCurrentUser();
         if (!$this->authService->can($user, Permissions::MONTHLY_PLAN_MANAGE)) {
             abort(403);
         }
@@ -220,7 +225,7 @@ class CrmMonthlyPlanController extends Controller
 
     public function destroy(string $id)
     {
-        $user = Auth::user();
+        $user = $this->getCurrentUser();
         if (!$this->authService->can($user, Permissions::MONTHLY_PLAN_MANAGE)) {
             abort(403);
         }

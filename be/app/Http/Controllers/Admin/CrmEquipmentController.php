@@ -193,14 +193,22 @@ class CrmEquipmentController extends Controller
             // Handle file uploads
             if ($request->hasFile('attachments')) {
                 foreach ($request->file('attachments') as $file) {
+                    $originalName = $file->getClientOriginalName();
+                    $fileSize = $file->getSize();
+                    $exists = $purchase->attachments()
+                        ->where('original_name', $originalName)
+                        ->where('file_size', $fileSize)
+                        ->exists();
+                    if ($exists) continue;
+
                     $path = $file->store('equipment-purchase-attachments', 'public');
                     $purchase->attachments()->create([
                         'file_path'     => $path,
-                        'file_name'     => $file->getClientOriginalName(),
-                        'original_name' => $file->getClientOriginalName(),
+                        'file_name'     => $originalName,
+                        'original_name' => $originalName,
                         'file_url'      => '/storage/' . $path,
                         'mime_type'     => $file->getClientMimeType(),
-                        'file_size'     => $file->getSize(),
+                        'file_size'     => $fileSize,
                         'type'          => $file->getClientOriginalExtension(),
                         'uploaded_by'   => $user->id ?? null,
                     ]);
@@ -242,14 +250,22 @@ class CrmEquipmentController extends Controller
                 // Handle file uploads (append)
                 if ($request->hasFile('attachments')) {
                     foreach ($request->file('attachments') as $file) {
+                        $originalName = $file->getClientOriginalName();
+                        $fileSize = $file->getSize();
+                        $exists = $purchase->attachments()
+                            ->where('original_name', $originalName)
+                            ->where('file_size', $fileSize)
+                            ->exists();
+                        if ($exists) continue;
+
                         $path = $file->store('equipment-purchase-attachments', 'public');
                         $purchase->attachments()->create([
                             'file_path'     => $path,
-                            'file_name'     => $file->getClientOriginalName(),
-                            'original_name' => $file->getClientOriginalName(),
+                            'file_name'     => $originalName,
+                            'original_name' => $originalName,
                             'file_url'      => '/storage/' . $path,
                             'mime_type'     => $file->getClientMimeType(),
-                            'file_size'     => $file->getSize(),
+                            'file_size'     => $fileSize,
                             'type'          => $file->getClientOriginalExtension(),
                             'uploaded_by'   => $user->id ?? null,
                         ]);
@@ -263,14 +279,22 @@ class CrmEquipmentController extends Controller
                 // Handle file uploads
                 if ($request->hasFile('attachments')) {
                     foreach ($request->file('attachments') as $file) {
+                        $originalName = $file->getClientOriginalName();
+                        $fileSize = $file->getSize();
+                        $exists = $eq->attachments()
+                            ->where('original_name', $originalName)
+                            ->where('file_size', $fileSize)
+                            ->exists();
+                        if ($exists) continue;
+
                         $path = $file->store('equipment-attachments', 'public');
                         $eq->attachments()->create([
                             'file_path'     => $path,
-                            'file_name'     => $file->getClientOriginalName(),
-                            'original_name' => $file->getClientOriginalName(),
+                            'file_name'     => $originalName,
+                            'original_name' => $originalName,
                             'file_url'      => '/storage/' . $path,
                             'mime_type'     => $file->getClientMimeType(),
-                            'file_size'     => $file->getSize(),
+                            'file_size'     => $fileSize,
                             'type'          => $file->getClientOriginalExtension(),
                             'uploaded_by'   => $user->id ?? null,
                         ]);
@@ -399,24 +423,38 @@ class CrmEquipmentController extends Controller
                 return back()->with('error', 'Bắt buộc phải có ít nhất một chứng từ trước khi Kế toán duyệt.');
             }
 
-            if ($request->hasFile('files')) {
-                foreach ($request->file('files') as $file) {
-                    $path = $file->store('equipment-purchase-attachments', 'public');
-                    $purchase->attachments()->create([
-                        'file_path'     => $path,
-                        'file_name'     => $file->getClientOriginalName(),
-                        'original_name' => $file->getClientOriginalName(),
-                        'file_url'      => '/storage/' . $path,
-                        'mime_type'     => $file->getClientMimeType(),
-                        'file_size'     => $file->getSize(),
-                        'description'   => 'after', // accountant proof
-                        'type'          => $file->getClientOriginalExtension(),
-                        'uploaded_by'   => $user->id ?? null,
-                    ]);
-                }
-            }
+            DB::transaction(function () use ($request, $purchase, $user) {
+                if ($request->hasFile('files')) {
+                    foreach ($request->file('files') as $file) {
+                        $originalName = $file->getClientOriginalName();
+                        $fileSize = $file->getSize();
 
-            $this->equipmentService->confirmPurchaseByAccountant($purchase, $user);
+                        // Prevent duplicate attachment
+                        $exists = $purchase->attachments()
+                            ->where('original_name', $originalName)
+                            ->where('file_size', $fileSize)
+                            ->where('description', 'after')
+                            ->exists();
+
+                        if ($exists) continue;
+
+                        $path = $file->store('equipment-purchase-attachments', 'public');
+                        $purchase->attachments()->create([
+                            'file_path'     => $path,
+                            'file_name'     => $originalName,
+                            'original_name' => $originalName,
+                            'file_url'      => '/storage/' . $path,
+                            'mime_type'     => $file->getClientMimeType(),
+                            'file_size'     => $fileSize,
+                            'description'   => 'after', // accountant proof
+                            'type'          => $file->getClientOriginalExtension(),
+                            'uploaded_by'   => $user->id ?? null,
+                        ]);
+                    }
+                }
+
+                $this->equipmentService->confirmPurchaseByAccountant($purchase, $user);
+            });
 
             return back()->with('success', 'Kế toán xác nhận và nhập kho thiết bị thành công.');
         } catch (\Exception $e) {

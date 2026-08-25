@@ -37,19 +37,35 @@ class AttachmentService
         $count = 0;
 
         foreach ($request->file($fileKey) as $file) {
+            $originalName = $file->getClientOriginalName();
+            $fileSize = $file->getSize();
+            $desc = $request->input('description') ?? null;
+
+            // Check if identical attachment already exists on this entity
+            $alreadyExists = Attachment::where('attachable_type', get_class($entity))
+                ->where('attachable_id', $entity->id)
+                ->where('original_name', $originalName)
+                ->where('file_size', $fileSize)
+                ->where('description', $desc)
+                ->exists();
+
+            if ($alreadyExists) {
+                continue;
+            }
+
             $path = $file->store($storagePath, 'public');
             Attachment::create([
-                'original_name' => $file->getClientOriginalName(),
-                'file_name' => $file->getClientOriginalName(),
-                'file_path' => $path,
-                'file_url' => '/storage/' . $path,
-                'file_size' => $file->getSize(),
-                'mime_type' => $file->getClientMimeType(),
-                'type' => $request->input('type') ?? $file->getClientOriginalExtension(),
-                'description' => $request->input('description') ?? null,
+                'original_name' => $originalName,
+                'file_name'     => $originalName,
+                'file_path'     => $path,
+                'file_url'      => '/storage/' . $path,
+                'file_size'     => $fileSize,
+                'mime_type'     => $file->getClientMimeType(),
+                'type'          => $request->input('type') ?? $file->getClientOriginalExtension(),
+                'description'   => $desc,
                 'attachable_type' => get_class($entity),
                 'attachable_id' => $entity->id,
-                'uploaded_by' => $user->id ?? null,
+                'uploaded_by'   => $user->id ?? null,
             ]);
             $count++;
         }

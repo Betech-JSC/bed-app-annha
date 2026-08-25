@@ -88,7 +88,7 @@ class Cost extends Model
      */
     public function isCompanyCost(): bool
     {
-        return $this->project_id === null;
+        return is_null($this->project_id);
     }
 
     /**

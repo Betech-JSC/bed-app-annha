@@ -94,7 +94,6 @@ class ProjectWarrantyService
 
         if ($status === 'approved') {
             $update['approved_by'] = $actor->id;
-            $update['approved_at'] = now();
         }
 
         return $entity->update($update);

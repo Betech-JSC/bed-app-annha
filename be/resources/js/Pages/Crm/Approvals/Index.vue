@@ -599,12 +599,22 @@
                </div>
                
                <div class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                 <a :href="file.url" target="_blank" class="p-1.5 hover:bg-blue-50 rounded-lg text-blue-500">
+                 <a :href="file.url" target="_blank" class="p-1.5 hover:bg-blue-50 rounded-lg text-blue-500" title="Xem">
                     <EyeOutlined />
                  </a>
-                 <a :href="file.url" :download="file.name" class="p-1.5 hover:bg-emerald-50 rounded-lg text-emerald-500">
+                 <a :href="file.url" :download="file.name" class="p-1.5 hover:bg-emerald-50 rounded-lg text-emerald-500" title="Tải về">
                     <DownloadOutlined />
                  </a>
+                 <a-popconfirm
+                   title="Xóa tệp đính kèm này?"
+                   ok-text="Xóa"
+                   cancel-text="Hủy"
+                   @confirm="handleDeleteAttachment(file)"
+                 >
+                   <button type="button" class="p-1.5 hover:bg-red-50 rounded-lg text-red-500 transition-colors" title="Xóa tệp">
+                      <DeleteOutlined />
+                   </button>
+                 </a-popconfirm>
                </div>
             </div>
           </div>
@@ -797,7 +807,7 @@
             <input 
               type="file" 
               multiple 
-              @change="e => confirmApprovalFiles = [...(e.target.files || [])]" 
+              @change="handleSelectConfirmApprovalFiles" 
               class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" 
             />
             <div class="flex items-center justify-center gap-2 py-3 px-4 border-2 border-dashed border-blue-100 rounded-xl group-hover:border-blue-400 group-hover:bg-blue-50 transition-all">
@@ -871,6 +881,7 @@ import {
   CreditCardOutlined,
   ExclamationCircleOutlined,
   CloudUploadOutlined,
+  DeleteOutlined,
 } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 
@@ -1469,7 +1480,32 @@ const formatFileSize = (bytes) => {
   return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
 }
 
+const handleSelectConfirmApprovalFiles = (e) => {
+  const newFiles = Array.from(e.target.files || [])
+  const existingMap = new Set(confirmApprovalFiles.value.map(f => `${f.name}-${f.size}`))
+  const uniqueNew = newFiles.filter(f => !existingMap.has(`${f.name}-${f.size}`))
+  confirmApprovalFiles.value = [...confirmApprovalFiles.value, ...uniqueNew]
+  e.target.value = ''
+}
+
+const handleDeleteAttachment = (file) => {
+  router.delete(`/files/${file.id}`, {
+    preserveScroll: true,
+    preserveState: true,
+    onSuccess: () => {
+      message.success('Đã xóa tệp đính kèm.')
+      if (detailItem.value && detailItem.value.attachments) {
+        detailItem.value.attachments = detailItem.value.attachments.filter(a => a.id !== file.id)
+      }
+    },
+    onError: (err) => {
+      message.error(err.error || 'Không thể xóa tệp này.')
+    }
+  })
+}
+
 const confirmApproveAccountant = () => {
+  if (confirmApprovalLoading.value) return
   if (!confirmApprovalFiles.value.length) {
     message.warning('Vui lòng chọn ít nhất một chứng từ chuyển khoản.')
     return

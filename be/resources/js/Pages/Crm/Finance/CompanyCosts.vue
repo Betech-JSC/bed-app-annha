@@ -233,6 +233,21 @@
           </div>
           <div v-if="selectedCost.attachments?.filter(a => a.description !== 'after')?.length" class="grid grid-cols-2 gap-3">
             <div v-for="file in selectedCost.attachments.filter(a => a.description !== 'after')" :key="file.id" class="relative group border border-gray-100 rounded-xl overflow-hidden bg-white hover:border-blue-300 hover:shadow-md transition-all cursor-pointer">
+              <a-popconfirm
+                title="Xóa tệp đính kèm này?"
+                ok-text="Xóa"
+                cancel-text="Hủy"
+                @confirm="handleDeleteAttachment(file)"
+              >
+                <button 
+                  type="button"
+                  class="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-red-500/90 hover:bg-red-600 text-white flex items-center justify-center shadow-md transition-all opacity-0 group-hover:opacity-100 z-10 cursor-pointer"
+                  title="Xóa tệp"
+                  @click.stop
+                >
+                  <DeleteOutlined style="font-size: 11px;" />
+                </button>
+              </a-popconfirm>
               <!-- Image files: clickable preview -->
               <template v-if="file.type === 'image' || file.mime_type?.startsWith('image/')">
                 <a-image
@@ -285,6 +300,21 @@
                 <div class="text-[10px] font-bold text-green-700 tracking-wider">CHỨNG TỪ THANH TOÁN / ỦY NHIỆM CHI:</div>
                 <div class="grid grid-cols-2 gap-2">
                   <div v-for="file in selectedCost.attachments.filter(a => a.description === 'after')" :key="file.id" class="relative group border border-green-100 rounded-lg overflow-hidden bg-white hover:border-green-300 hover:shadow-sm transition-all cursor-pointer">
+                    <a-popconfirm
+                      title="Xóa chứng từ thanh toán này?"
+                      ok-text="Xóa"
+                      cancel-text="Hủy"
+                      @confirm="handleDeleteAttachment(file)"
+                    >
+                      <button 
+                        type="button"
+                        class="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-red-500/90 hover:bg-red-600 text-white flex items-center justify-center shadow-md transition-all opacity-0 group-hover:opacity-100 z-10 cursor-pointer"
+                        title="Xóa chứng từ"
+                        @click.stop
+                      >
+                        <DeleteOutlined style="font-size: 11px;" />
+                      </button>
+                    </a-popconfirm>
                     <template v-if="file.type === 'image' || file.mime_type?.startsWith('image/')">
                       <a-image
                         :src="file.file_url"
@@ -498,7 +528,7 @@
             <input 
               type="file" 
               multiple 
-              @change="e => confirmCostFiles = [...(e.target.files || [])]" 
+              @change="handleSelectConfirmCostFiles" 
               class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" 
             />
             <div class="flex items-center justify-center gap-2 py-3 px-4 border-2 border-dashed border-blue-100 rounded-xl group-hover:border-blue-400 group-hover:bg-blue-50 transition-all">
@@ -732,7 +762,32 @@ const approveCost = (id) => {
   }
 }
 
+const handleSelectConfirmCostFiles = (e) => {
+  const newFiles = Array.from(e.target.files || [])
+  const existingMap = new Set(confirmCostFiles.value.map(f => `${f.name}-${f.size}`))
+  const uniqueNew = newFiles.filter(f => !existingMap.has(`${f.name}-${f.size}`))
+  confirmCostFiles.value = [...confirmCostFiles.value, ...uniqueNew]
+  e.target.value = ''
+}
+
+const handleDeleteAttachment = (file) => {
+  router.delete(`/files/${file.id}`, {
+    preserveScroll: true,
+    preserveState: true,
+    onSuccess: () => {
+      message.success('Đã xóa tệp đính kèm.')
+      if (selectedCost.value && selectedCost.value.attachments) {
+        selectedCost.value.attachments = selectedCost.value.attachments.filter(a => a.id !== file.id)
+      }
+    },
+    onError: (err) => {
+      message.error(err.error || 'Không thể xóa tệp này.')
+    }
+  })
+}
+
 const confirmApproveCompanyCost = () => {
+  if (confirmCostLoading.value) return
   if (!confirmCostFiles.value.length) {
     message.warning('Vui lòng chọn ít nhất một chứng từ chuyển khoản.')
     return

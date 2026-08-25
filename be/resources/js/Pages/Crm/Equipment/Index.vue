@@ -821,23 +821,52 @@
           <div v-if="imageAttachments.length" class="grid grid-cols-3 gap-2 mb-3">
             <div v-for="file in imageAttachments" :key="file.id" class="relative group cursor-pointer rounded-xl overflow-hidden border border-gray-100 aspect-square" @click="previewImage(file)">
               <img :src="`/storage/${file.file_path}`" :alt="file.original_name" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-              <div class="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
+              <div class="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center pointer-events-none">
                 <EyeOutlined class="text-white text-lg opacity-0 group-hover:opacity-100 transition-opacity" />
               </div>
+              <a-popconfirm
+                title="Xóa tệp đính kèm này?"
+                ok-text="Xóa"
+                cancel-text="Hủy"
+                @confirm="handleDeleteAttachment(file)"
+              >
+                <button 
+                  type="button"
+                  class="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-red-500/90 hover:bg-red-600 text-white flex items-center justify-center shadow-md transition-all opacity-0 group-hover:opacity-100 z-10 cursor-pointer"
+                  title="Xóa tệp"
+                  @click.stop
+                >
+                  <DeleteOutlined style="font-size: 11px;" />
+                </button>
+              </a-popconfirm>
             </div>
           </div>
           <!-- Non-image files -->
-          <a v-for="file in nonImageAttachments" :key="file.id" :href="`/files/${file.id}/download`" target="_blank" class="flex items-center justify-between p-3 rounded-xl bg-gray-50 border border-gray-100 group hover:border-blue-200 transition-colors cursor-pointer">
-            <div class="flex items-center gap-3">
-              <div class="w-9 h-9 rounded-lg flex items-center justify-center text-lg bg-blue-50 text-blue-500">
+          <div v-for="file in nonImageAttachments" :key="file.id" class="flex items-center justify-between p-3 rounded-xl bg-gray-50 border border-gray-100 group hover:border-blue-200 transition-colors">
+            <a :href="`/files/${file.id}/download`" target="_blank" class="flex items-center gap-3 min-w-0 flex-1 cursor-pointer">
+              <div class="w-9 h-9 rounded-lg flex items-center justify-center text-lg bg-blue-50 text-blue-500 shrink-0">
                 <FileOutlined />
               </div>
-              <div>
-                <div class="text-xs font-medium text-gray-700 truncate max-w-[260px]">{{ file.original_name }}</div>
+              <div class="min-w-0">
+                <div class="text-xs font-medium text-gray-700 truncate max-w-[240px]">{{ file.original_name }}</div>
               </div>
+            </a>
+            <div class="flex items-center gap-1">
+              <a :href="`/files/${file.id}/download`" target="_blank" class="p-1 text-gray-400 hover:text-blue-500">
+                <DownloadOutlined />
+              </a>
+              <a-popconfirm
+                title="Xóa tệp này?"
+                ok-text="Xóa"
+                cancel-text="Hủy"
+                @confirm="handleDeleteAttachment(file)"
+              >
+                <a-button type="text" danger size="small" class="h-6 w-6 p-0 flex items-center justify-center opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500" title="Xóa tệp">
+                  <DeleteOutlined style="font-size: 11px;" />
+                </a-button>
+              </a-popconfirm>
             </div>
-            <DownloadOutlined class="text-gray-300 group-hover:text-blue-500 transition-colors" />
-          </a>
+          </div>
         </div>
         <a-empty v-else :image="null" description="Không có chứng từ" class="my-0" />
       </div>
@@ -852,23 +881,52 @@
           <div v-if="afterImageAttachments.length" class="grid grid-cols-3 gap-2 mb-3">
             <div v-for="file in afterImageAttachments" :key="file.id" class="relative group cursor-pointer rounded-xl overflow-hidden border border-gray-100 aspect-square" @click="previewImage(file)">
               <img :src="`/storage/${file.file_path}`" :alt="file.original_name" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-              <div class="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
+              <div class="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center pointer-events-none">
                 <EyeOutlined class="text-white text-lg opacity-0 group-hover:opacity-100 transition-opacity" />
               </div>
+              <a-popconfirm
+                title="Xóa chứng từ thanh toán này?"
+                ok-text="Xóa"
+                cancel-text="Hủy"
+                @confirm="handleDeleteAttachment(file)"
+              >
+                <button 
+                  type="button"
+                  class="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-red-500/90 hover:bg-red-600 text-white flex items-center justify-center shadow-md transition-all opacity-0 group-hover:opacity-100 z-10 cursor-pointer"
+                  title="Xóa chứng từ"
+                  @click.stop
+                >
+                  <DeleteOutlined style="font-size: 11px;" />
+                </button>
+              </a-popconfirm>
             </div>
           </div>
           <!-- Non-image files -->
-          <a v-for="file in afterNonImageAttachments" :key="file.id" :href="`/files/${file.id}/download`" target="_blank" class="flex items-center justify-between p-3 rounded-xl bg-gray-50 border border-gray-100 group hover:border-emerald-200 transition-colors cursor-pointer">
-            <div class="flex items-center gap-3">
-              <div class="w-9 h-9 rounded-lg flex items-center justify-center text-lg bg-emerald-50 text-emerald-500">
+          <div v-for="file in afterNonImageAttachments" :key="file.id" class="flex items-center justify-between p-3 rounded-xl bg-gray-50 border border-gray-100 group hover:border-emerald-200 transition-colors">
+            <a :href="`/files/${file.id}/download`" target="_blank" class="flex items-center gap-3 min-w-0 flex-1 cursor-pointer">
+              <div class="w-9 h-9 rounded-lg flex items-center justify-center text-lg bg-emerald-50 text-emerald-500 shrink-0">
                 <FileOutlined />
               </div>
-              <div>
-                <div class="text-xs font-medium text-gray-700 truncate max-w-[260px]">{{ file.original_name }}</div>
+              <div class="min-w-0">
+                <div class="text-xs font-medium text-gray-700 truncate max-w-[240px]">{{ file.original_name }}</div>
               </div>
+            </a>
+            <div class="flex items-center gap-1">
+              <a :href="`/files/${file.id}/download`" target="_blank" class="p-1 text-gray-400 hover:text-emerald-500">
+                <DownloadOutlined />
+              </a>
+              <a-popconfirm
+                title="Xóa tệp này?"
+                ok-text="Xóa"
+                cancel-text="Hủy"
+                @confirm="handleDeleteAttachment(file)"
+              >
+                <a-button type="text" danger size="small" class="h-6 w-6 p-0 flex items-center justify-center opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500" title="Xóa tệp">
+                  <DeleteOutlined style="font-size: 11px;" />
+                </a-button>
+              </a-popconfirm>
             </div>
-            <DownloadOutlined class="text-gray-300 group-hover:text-emerald-500 transition-colors" />
-          </a>
+          </div>
         </div>
       </div>
 
@@ -1021,7 +1079,7 @@
             <input 
               type="file" 
               multiple 
-              @change="e => confirmEquipmentFiles = [...(e.target.files || [])]" 
+              @change="handleSelectConfirmFiles" 
               class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" 
             />
             <div class="flex items-center justify-center gap-2 py-3 px-4 border-2 border-dashed border-blue-100 rounded-xl group-hover:border-blue-400 group-hover:bg-blue-50 transition-all">
@@ -1512,7 +1570,10 @@ const switchToApprovalsAndCreate = () => {
 }
 
 const beforeUpload = (file) => {
-  fileList.value = [...fileList.value, file]
+  const exists = fileList.value.some(f => f.name === file.name && f.size === file.size)
+  if (!exists) {
+    fileList.value = [...fileList.value, file]
+  }
   return false // prevent auto upload
 }
 const handleRemoveFile = (file) => {
@@ -1674,7 +1735,32 @@ const confirmItem = (e) => {
   confirmEquipmentFiles.value = []
   showConfirmEquipmentModal.value = true
 }
+const handleSelectConfirmFiles = (e) => {
+  const newFiles = Array.from(e.target.files || [])
+  const existingMap = new Set(confirmEquipmentFiles.value.map(f => `${f.name}-${f.size}`))
+  const uniqueNew = newFiles.filter(f => !existingMap.has(`${f.name}-${f.size}`))
+  confirmEquipmentFiles.value = [...confirmEquipmentFiles.value, ...uniqueNew]
+  e.target.value = ''
+}
+
+const handleDeleteAttachment = (file) => {
+  router.delete(`/files/${file.id}`, {
+    preserveScroll: true,
+    preserveState: true,
+    onSuccess: () => {
+      message.success('Đã xóa tệp đính kèm.')
+      if (selectedItem.value && selectedItem.value.attachments) {
+        selectedItem.value.attachments = selectedItem.value.attachments.filter(a => a.id !== file.id)
+      }
+    },
+    onError: (err) => {
+      message.error(err.error || 'Không thể xóa tệp này.')
+    }
+  })
+}
+
 const confirmApproveEquipment = () => {
+  if (confirmEquipmentLoading.value) return
   if (!confirmEquipmentFiles.value.length) {
     message.error('Vui lòng đính kèm chứng từ thanh toán.')
     return
