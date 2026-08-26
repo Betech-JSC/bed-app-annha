@@ -1199,7 +1199,7 @@ const getDetailUrl = (record) => {
     sub_payment: pid ? `/projects/${pid}?tab=subcontractors&id=${id}` : null,
     contract: pid ? `/projects/${pid}?tab=contract&id=${id}` : null,
     project_payment: pid ? `/projects/${pid}?tab=payments&id=${id}` : null,
-    material_bill: pid ? `/projects/${pid}?tab=materials&id=${id}` : null,
+    material_bill: pid ? `/projects/${pid}?tab=costs&id=${id}` : null,
     sub_acceptance: pid ? `/projects/${pid}?tab=subcontractors&id=${id}` : null,
     supplier_acceptance: pid ? `/projects/${pid}?tab=subcontractors&id=${id}` : null,
     construction_log: pid ? `/projects/${pid}?tab=logs&id=${id}` : null,

@@ -8779,15 +8779,8 @@ const getInitialTab = () => {
   const urlParams = new URLSearchParams(window.location.search)
   let tabParam = urlParams.get('tab')
   
-  if (tabParam === 'materials' || tabParam === 'material_bills') {
-    const vlxdGroup = (props.costGroups || []).find(g => g.code === 'VLXD')
-    tabParam = vlxdGroup ? `cost_group_${vlxdGroup.id}` : 'costs'
-  } else if (tabParam === 'labor_cost') {
-    const ncGroup = (props.costGroups || []).find(g => g.code === 'NC')
-    tabParam = ncGroup ? `cost_group_${ncGroup.id}` : 'costs'
-  } else if (tabParam === 'management_cost') {
-    const cpqlGroup = (props.costGroups || []).find(g => g.code === 'CPQL')
-    tabParam = cpqlGroup ? `cost_group_${cpqlGroup.id}` : 'costs'
+  if (tabParam === 'materials' || tabParam === 'material_bills' || tabParam === 'labor_cost' || tabParam === 'management_cost') {
+    tabParam = 'costs'
   }
 
   const validTabs = [
@@ -9010,78 +9003,65 @@ const showRiskDetailDrawer = ref(false)
 const riskDetail = ref(null)
 
 // ============ SYNC DRAWERS WITH PROPS ============
-watch(() => props, (newProps) => {
+watch(() => props, () => {
   if (showCostDetail.value && costDetailRecord.value) {
-    const updated = newProps.project?.costs?.find(x => x.id === costDetailRecord.value.id)
-    if (updated) costDetailRecord.value = updated; else showCostDetail.value = false;
+    const updated = (costs.value || []).find(x => x.id === costDetailRecord.value.id)
+    if (updated) costDetailRecord.value = updated
   }
   if (showPaymentDetail.value && paymentDetailRecord.value) {
-    const updated = newProps.project?.payments?.find(x => x.id === paymentDetailRecord.value.id)
-    if (updated) paymentDetailRecord.value = updated; else showPaymentDetail.value = false;
+    const updated = (payments.value || []).find(x => x.id === paymentDetailRecord.value.id)
+    if (updated) paymentDetailRecord.value = updated
   }
   if (showSubDetailDrawer.value && subDetail.value) {
-    const updated = (newProps.teamData?.subcontractors || newProps.project?.subcontractors || []).find(x => x.id === subDetail.value.id)
-    if (updated) subDetail.value = updated; else showSubDetailDrawer.value = false;
+    const updated = (subcontractors.value || []).find(x => x.id === subDetail.value.id)
+    if (updated) subDetail.value = updated
   }
   if (showSubPaymentDetailDrawer.value && subPaymentDetail.value) {
-    const subs = newProps.teamData?.subcontractors || newProps.project?.subcontractors || []
-    let found = null
-    for (const sub of subs) {
-      if (sub.payments) {
-        const p = sub.payments.find(x => x.id === subPaymentDetail.value.id)
-        if (p) {
-          found = { ...p, subcontractor_name: sub.name, subcontractor: sub }
-          break
-        }
-      }
-    }
-    if (found) {
-      subPaymentDetail.value = found
-    } else {
-      showSubPaymentDetailDrawer.value = false
-    }
+    const p = (allSubcontractorPayments.value || []).find(x => x.id === subPaymentDetail.value.id)
+    if (p) subPaymentDetail.value = p
   }
   if (showMaterialDetailDrawer.value && materialDetail.value) {
-    const updated = newProps.materialBills?.find(x => x.id === materialDetail.value.id)
-    if (updated) materialDetail.value = updated; else showMaterialDetailDrawer.value = false;
+    const updated = (materialBills.value || []).find(x => x.id === materialDetail.value.id)
+    if (updated) materialDetail.value = updated
+  }
+  if (showRentalDetailDrawer.value && selectedRental.value) {
+    const updated = (equipmentRentals.value || []).find(x => x.id === selectedRental.value.id)
+    if (updated) selectedRental.value = updated
   }
   if (showEquipmentDetailDrawer.value && equipmentDetail.value) {
-    const updated = newProps.projectEquipment?.find(x => x.id === equipmentDetail.value.id)
-    if (updated) equipmentDetail.value = updated; else showEquipmentDetailDrawer.value = false;
+    const updated = (allEquipment.value || []).find(x => x.id === equipmentDetail.value.id)
+    if (updated) equipmentDetail.value = updated
   }
   if (showAdditionalCostDetailDrawer.value && additionalCostDetail.value) {
-    const updated = newProps.project?.additional_costs?.find(x => x.id === additionalCostDetail.value.id)
-    if (updated) additionalCostDetail.value = updated; else showAdditionalCostDetailDrawer.value = false;
+    const updated = (additionalCosts.value || []).find(x => x.id === additionalCostDetail.value.id)
+    if (updated) additionalCostDetail.value = updated
   }
   if (showInvoiceDetailDrawer.value && invoiceDetail.value) {
-    const updated = newProps.project?.invoices?.find(x => x.id === invoiceDetail.value.id)
-    if (updated) invoiceDetail.value = updated; else showInvoiceDetailDrawer.value = false;
+    const updated = (invoices.value || []).find(x => x.id === invoiceDetail.value.id)
+    if (updated) invoiceDetail.value = updated
   }
   if (showDefectDetailDrawer.value && defectDetail.value) {
-    const updated = newProps.project?.defects?.find(x => x.id === defectDetail.value.id)
-    if (updated) defectDetail.value = updated; else showDefectDetailDrawer.value = false;
+    const updated = (defects.value || []).find(x => x.id === defectDetail.value.id)
+    if (updated) defectDetail.value = updated
   }
   if (showChangeRequestDetailDrawer.value && changeRequestDetail.value) {
-    const updated = newProps.project?.change_requests?.find(x => x.id === changeRequestDetail.value.id)
-    if (updated) changeRequestDetail.value = updated; else showChangeRequestDetailDrawer.value = false;
+    const updated = (changeRequests.value || []).find(x => x.id === changeRequestDetail.value.id)
+    if (updated) changeRequestDetail.value = updated
   }
   if (showRiskDetailDrawer.value && riskDetail.value) {
-    const updated = newProps.project?.risks?.find(x => x.id === riskDetail.value.id)
-    if (updated) riskDetail.value = updated; else showRiskDetailDrawer.value = false;
+    const updated = (risks.value || []).find(x => x.id === riskDetail.value.id)
+    if (updated) riskDetail.value = updated
   }
   if (showLogDetailDrawer.value && logDetailRecord.value) {
-    const logs = newProps.project?.construction_logs || newProps.project?.constructionLogs || []
-    const updated = logs.find(x => x.id === logDetailRecord.value.id)
-    if (updated) logDetailRecord.value = updated; else showLogDetailDrawer.value = false;
+    const updated = (logs.value || []).find(x => x.id === logDetailRecord.value.id)
+    if (updated) logDetailRecord.value = updated
   }
   if (showContractDetail.value && contractDetailRecord.value) {
-    const updated = newProps.project?.contract
-    if (updated) contractDetailRecord.value = updated; else showContractDetail.value = false;
+    const updated = contract.value
+    if (updated) contractDetailRecord.value = updated
   }
-  // Sync acceptance detail drawer & its defects when props update
   if (showAcceptDetailDrawer.value && acceptDetailStage.value) {
-    const allAcceptances = newProps.monitorData?.acceptances || []
-    const updated = allAcceptances.find(x => x.id === acceptDetailStage.value.id)
+    const updated = (acceptanceStages.value || []).find(x => x.id === acceptDetailStage.value.id)
     if (updated) {
       acceptDetailStage.value = updated
       acceptDetailDefects.value = updated.defects || []
@@ -9126,8 +9106,8 @@ const checkAndOpenUrlTarget = () => {
   const tabParam = urlParams.get('tab')
   if (!openId) return
 
-  // 1. Material Bill (tab=materials, tab=material_bills, or cost_group_*)
-  if (tabParam === 'materials' || tabParam === 'material_bills' || (activeTab.value && activeTab.value.startsWith('cost_group_'))) {
+  // 1. Material Bill (either via tab=materials/costs or matching bill id)
+  if (tabParam === 'materials' || tabParam === 'material_bills' || tabParam === 'costs' || activeTab.value === 'costs' || (activeTab.value && activeTab.value.startsWith('cost_group_'))) {
     const bill = (materialBills.value || []).find(b => b.id == openId)
     if (bill) {
       openMaterialDetail(bill)
@@ -10274,17 +10254,12 @@ const approveCostAcct = (c) => {
 
 // Drawer Openers
 const openCostDetail = (c) => {
-  // Smart routing: if this cost is linked to another module, navigate + open detail
+  // If linked to a material bill, open the material bill drawer directly
   if (c.material_bill_id) {
     const bill = materialBills.value.find(b => b.id === c.material_bill_id)
     if (bill) {
-      // Navigate to the correct cost_group tab for this bill
-      const groupId = bill.cost_group_id || bill.cost_group?.id
-      const targetTab = groupId ? `cost_group_${groupId}` : 'costs'
-      activeTab.value = targetTab
-      nextTick(() => openMaterialDetail(bill))
+      openMaterialDetail(bill)
     } else {
-      // Fallback: open cost drawer directly
       viewCostDrawer(c)
     }
     return
