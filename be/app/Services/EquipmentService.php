@@ -351,6 +351,7 @@ class EquipmentService
                     'project_id'      => $purchase->project_id,
                     'supplier_id'     => $purchase->supplier_id,
                     'purchase_date'   => $purchase->purchase_date ?: now()->toDateString(),
+                    'created_by'      => $user->id,
                 ]);
             }
 

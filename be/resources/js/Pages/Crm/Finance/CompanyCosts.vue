@@ -742,7 +742,12 @@ const applyFilters = () => {
   router.visit(`/finance/company-costs?${buildQuery()}`, { preserveState: true })
 }
 
-const filterOption = (input, option) => option.label?.toLowerCase().includes(input.toLowerCase())
+const filterOption = (input, option) => {
+  if (!input || !input.trim()) return true
+  const query = input.trim().toLowerCase()
+  const label = (option.label || option.props?.label || option.value || '').toString().toLowerCase()
+  return label.includes(query)
+}
 
 // ============================================================
 // CHARTS

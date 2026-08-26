@@ -819,7 +819,7 @@
         <div v-if="imageAttachments.length || nonImageAttachments.length" class="space-y-2">
           <!-- Image previews -->
           <div v-if="imageAttachments.length" class="grid grid-cols-3 gap-2 mb-3">
-            <div v-for="file in imageAttachments" :key="file.id" class="relative group cursor-pointer rounded-xl overflow-hidden border border-gray-100 aspect-square" @click="previewImage(file)">
+            <div v-for="file in imageAttachments" :key="file.id" class="relative group cursor-pointer rounded-xl overflow-hidden border border-gray-100 aspect-square" @click="openFilePreview(file)">
               <img :src="`/storage/${file.file_path}`" :alt="file.original_name" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
               <div class="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center pointer-events-none">
                 <EyeOutlined class="text-white text-lg opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -842,17 +842,20 @@
             </div>
           </div>
           <!-- Non-image files -->
-          <div v-for="file in nonImageAttachments" :key="file.id" class="flex items-center justify-between p-3 rounded-xl bg-gray-50 border border-gray-100 group hover:border-blue-200 transition-colors">
-            <a :href="`/files/${file.id}/download`" target="_blank" class="flex items-center gap-3 min-w-0 flex-1 cursor-pointer">
+          <div v-for="file in nonImageAttachments" :key="file.id" class="flex items-center justify-between p-3 rounded-xl bg-gray-50 border border-gray-100 group hover:border-blue-200 transition-colors cursor-pointer" @click="openFilePreview(file)">
+            <div class="flex items-center gap-3 min-w-0 flex-1">
               <div class="w-9 h-9 rounded-lg flex items-center justify-center text-lg bg-blue-50 text-blue-500 shrink-0">
                 <FileOutlined />
               </div>
               <div class="min-w-0">
-                <div class="text-xs font-medium text-gray-700 truncate max-w-[240px]">{{ file.original_name }}</div>
+                <div class="text-xs font-medium text-gray-700 truncate max-w-[240px] group-hover:text-blue-600">{{ file.original_name }}</div>
               </div>
-            </a>
+            </div>
             <div class="flex items-center gap-1">
-              <a :href="`/files/${file.id}/download`" target="_blank" class="p-1 text-gray-400 hover:text-blue-500">
+              <a-button type="text" size="small" @click.stop="openFilePreview(file)" class="h-6 w-6 p-0 flex items-center justify-center text-blue-500 hover:text-blue-700" title="Xem trước">
+                <EyeOutlined style="font-size: 11px;" />
+              </a-button>
+              <a :href="`/files/${file.id}/download`" target="_blank" class="p-1 text-gray-400 hover:text-blue-500" title="Tải về" @click.stop>
                 <DownloadOutlined />
               </a>
               <a-popconfirm
@@ -1055,15 +1058,15 @@
           <PaperClipOutlined class="text-gray-400" /> Tệp chứng từ gốc ({{ confirmEquipmentTarget.attachments.filter(att => att.description !== 'after').length }})
         </div>
         <div class="space-y-1.5 max-h-[120px] overflow-y-auto">
-          <a v-for="att in confirmEquipmentTarget.attachments.filter(att => att.description !== 'after')" :key="att.id" 
+          <div v-for="att in confirmEquipmentTarget.attachments.filter(att => att.description !== 'after')" :key="att.id" 
                class="flex items-center justify-between p-2 rounded-lg border border-gray-100 bg-white hover:border-blue-300 transition-all cursor-pointer shadow-sm group"
-               :href="`/files/${att.id}/download`" target="_blank">
+               @click="openFilePreview(att)">
             <div class="flex items-center gap-2 min-w-0">
                <FileOutlined class="text-gray-400 text-xs" />
-               <span class="text-[10px] text-gray-700 font-medium truncate max-w-[280px] hover:text-blue-600">{{ att.original_name || att.file_name }}</span>
+               <span class="text-[10px] text-gray-700 font-medium truncate max-w-[260px] group-hover:text-blue-600">{{ att.original_name || att.file_name }}</span>
             </div>
-            <EyeOutlined class="text-[10px] text-gray-300 group-hover:text-blue-500" />
-          </a>
+            <EyeOutlined class="text-[11px] text-gray-400 group-hover:text-blue-600" />
+          </div>
         </div>
       </div>
 
@@ -1093,19 +1096,28 @@
           <!-- File List -->
           <div v-if="confirmEquipmentFiles.length" class="space-y-1.5 mt-1">
             <div v-for="(file, idx) in confirmEquipmentFiles" :key="idx" class="flex items-center justify-between p-2 bg-blue-50/50 rounded-lg border border-blue-100/50">
-              <div class="flex items-center gap-2 min-w-0">
+              <div class="flex items-center gap-2 min-w-0 cursor-pointer" @click="openFilePreview(file)">
                 <PaperClipOutlined class="text-blue-400 text-xs" />
-                <span class="text-[10px] font-medium text-blue-700 truncate max-w-[280px]">{{ file.name }}</span>
+                <span class="text-[10px] font-medium text-blue-700 truncate max-w-[220px] hover:underline">{{ file.name }}</span>
                 <span class="text-[9px] text-gray-400">({{ formatFileSize(file.size) }})</span>
               </div>
-              <a-button type="text" size="small" @click="confirmEquipmentFiles.splice(idx, 1)" class="h-5 w-5 p-0 flex items-center justify-center">
-                <CloseOutlined class="text-[10px] text-gray-400 hover:text-red-500" />
-              </a-button>
+              <div class="flex items-center gap-1">
+                <a-button type="text" size="small" @click.stop="openFilePreview(file)" class="h-5 w-5 p-0 flex items-center justify-center text-blue-500 hover:text-blue-700" title="Xem trước chứng từ">
+                  <EyeOutlined class="text-[11px]" />
+                </a-button>
+                <a-button type="text" size="small" @click.stop="confirmEquipmentFiles.splice(idx, 1)" class="h-5 w-5 p-0 flex items-center justify-center" title="Xóa tệp">
+                  <CloseOutlined class="text-[10px] text-gray-400 hover:text-red-500" />
+                </a-button>
+              </div>
             </div>
           </div>
-          <div class="text-[10px] text-red-500 pl-1 mt-1 font-medium flex items-center gap-1" v-else>
+          <div class="text-[10px] text-red-500 pl-1 mt-1 font-medium flex items-center gap-1" v-else-if="!hasTargetAttachments">
             <span class="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span>
             * Vui lòng đính kèm chứng từ chuyển khoản để hoàn tất xác nhận.
+          </div>
+          <div class="text-[10px] text-emerald-600 pl-1 mt-1 font-medium flex items-center gap-1" v-else>
+            <CheckCircleOutlined class="text-emerald-500" />
+            Đã có {{ confirmEquipmentTarget.attachments.length }} chứng từ được đính kèm sẵn. Bạn có thể đính kèm thêm hoặc bấm xác nhận luôn.
           </div>
         </div>
       </div>
@@ -1212,6 +1224,12 @@
       </div>
     </div>
   </a-modal>
+
+  <!-- Universal File Preview Modal -->
+  <FilePreviewModal
+    v-model:open="showPreviewModal"
+    :file="previewTargetFile"
+  />
 </template>
 
 
@@ -1221,11 +1239,21 @@ import { Head, useForm, router, usePage } from '@inertiajs/vue3'
 import CrmLayout from '@/Layouts/CrmLayout.vue'
 import PageHeader from '@/Components/Crm/PageHeader.vue'
 import StatCard from '@/Components/Crm/StatCard.vue'
+import FilePreviewModal from '@/Components/Crm/FilePreviewModal.vue'
 import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined, UploadOutlined, SendOutlined, CheckCircleOutlined, CheckSquareOutlined, InfoCircleOutlined, SafetyCertificateOutlined, FileOutlined, DownloadOutlined, CloseOutlined, PaperClipOutlined, ExportOutlined, CheckOutlined, RollbackOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 
 defineOptions({ layout: CrmLayout })
 const props = defineProps({ equipment: Object, stats: Object, filters: Object, globalEquipments: Array, projects: Array, suppliers: Array, users: Array })
+
+const showPreviewModal = ref(false)
+const previewTargetFile = ref(null)
+
+const openFilePreview = (file) => {
+  if (!file) return
+  previewTargetFile.value = file
+  showPreviewModal.value = true
+}
 
 onMounted(() => {
   const urlParams = new URLSearchParams(window.location.search)
@@ -1759,9 +1787,13 @@ const handleDeleteAttachment = (file) => {
   })
 }
 
+const hasTargetAttachments = computed(() => {
+  return !!(confirmEquipmentTarget.value && confirmEquipmentTarget.value.attachments && confirmEquipmentTarget.value.attachments.length > 0)
+})
+
 const confirmApproveEquipment = () => {
   if (confirmEquipmentLoading.value) return
-  if (!confirmEquipmentFiles.value.length) {
+  if (!confirmEquipmentFiles.value.length && !hasTargetAttachments.value) {
     message.error('Vui lòng đính kèm chứng từ thanh toán.')
     return
   }

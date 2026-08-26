@@ -7665,7 +7665,7 @@
   </a-modal>
 
   <!-- ACCOUNTANT CONFIRM PAYMENT MODAL (Unified for Material, Sub, Rental, Usage, Purchase, Project Payment) -->
-  <a-modal v-model:open="showConfirmPaymentModal" :title="{ material: 'Kế toán xác nhận - Phiếu Vật tư', cost: 'Kế toán xác nhận - Phiếu chi', sub: 'Kế toán xác nhận - Thanh toán thầu phụ', rental: 'Kế toán xác nhận - Thuê thiết bị', usage: 'Kế toán xác nhận - Sử dụng thiết bị', purchase: 'Kế toán xác nhận - Mua thiết bị', project_payment: 'Kế toán xác nhận - Đợt thanh toán từ Khách hàng' }[confirmPaymentType]" @ok="confirmApprovePayment" ok-text="Xác nhận" cancel-text="Hủy" centered class="crm-modal" :ok-button-props="{ disabled: (confirmPaymentType !== 'project_payment' && (!confirmPaymentFiles.length || !confirmPaymentBudgetItem)) || confirmPaymentLoading }" :confirm-loading="confirmPaymentLoading">
+  <a-modal v-model:open="showConfirmPaymentModal" :title="{ material: 'Kế toán xác nhận - Phiếu Vật tư', cost: 'Kế toán xác nhận - Phiếu chi', sub: 'Kế toán xác nhận - Thanh toán thầu phụ', rental: 'Kế toán xác nhận - Thuê thiết bị', usage: 'Kế toán xác nhận - Sử dụng thiết bị', purchase: 'Kế toán xác nhận - Mua thiết bị', project_payment: 'Kế toán xác nhận - Đợt thanh toán từ Khách hàng' }[confirmPaymentType]" @ok="confirmApprovePayment" ok-text="Xác nhận" cancel-text="Hủy" centered class="crm-modal" :ok-button-props="{ disabled: (confirmPaymentType !== 'project_payment' && ((!confirmPaymentFiles.length && !hasConfirmPaymentTargetAttachments) || !confirmPaymentBudgetItem)) || confirmPaymentLoading }" :confirm-loading="confirmPaymentLoading">
     <div class="p-4 space-y-4">
       <div class="bg-blue-50 p-3 rounded-xl border border-blue-100 flex items-center gap-3">
         <div class="w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center shadow-lg"><InfoCircleOutlined /></div>
@@ -7727,10 +7727,18 @@
         <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1">
           CHỌN HẠNG MỤC NGÂN SÁCH <span class="text-red-500 font-bold">* (BẮT BUỘC)</span>
         </div>
-        <a-select v-model:value="confirmPaymentBudgetItem" class="w-full" placeholder="Chọn hạng mục dự toán..." show-search :filter-option="(input, option) => (option.label || '').toLowerCase().indexOf(input.toLowerCase()) >= 0">
+        <a-select 
+          v-model:value="confirmPaymentBudgetItem" 
+          class="w-full" 
+          placeholder="Chọn hạng mục dự toán..." 
+          show-search 
+          allow-clear
+          option-filter-prop="label"
+          :filter-option="filterBudgetItemOption"
+        >
           <a-select-opt-group v-for="budget in (budgets || []).filter(b => b.status === 'approved' || b.status === 'active')" :key="budget.id">
             <template #label><span class="text-indigo-600 font-bold uppercase text-[10px]">{{ budget.name }} - ĐÃ DUYỆT</span></template>
-            <a-select-option v-for="item in (budget.items || [])" :key="item.id" :value="item.id" :label="`${budget.name} - ${item.name}`">
+            <a-select-option v-for="item in (budget.items || [])" :key="item.id" :value="item.id" :label="`${budget.name} - ${item.name}`" :searchValue="`${budget.name} ${item.name}`">
               <div class="flex justify-between items-center w-full">
                 <span>{{ item.name }}</span>
                 <span class="text-[10px] text-gray-400">Định mức: {{ fmt(item.remaining_amount ?? item.estimated_amount ?? 0) }}</span>
@@ -7739,7 +7747,7 @@
           </a-select-opt-group>
           <a-select-opt-group label="Các ngân sách khác (Bản nháp/Chờ duyệt)">
              <template v-for="budget in (budgets || []).filter(b => b.status !== 'approved' && b.status !== 'active')" :key="budget.id">
-                <a-select-option v-for="item in (budget.items || [])" :key="item.id" :value="item.id" :label="`${budget.name} - ${item.name}`">
+                <a-select-option v-for="item in (budget.items || [])" :key="item.id" :value="item.id" :label="`${budget.name} - ${item.name}`" :searchValue="`${budget.name} ${item.name}`">
                   <span class="text-gray-400">[{{ budget.name }}]</span> {{ item.name }}
                 </a-select-option>
              </template>
@@ -7788,9 +7796,13 @@
               </a-button>
             </div>
           </div>
-          <div v-else-if="confirmPaymentType !== 'project_payment'" class="text-[10px] text-red-500 pl-1 mt-1 font-medium flex items-center gap-1">
+          <div v-else-if="confirmPaymentType !== 'project_payment' && !hasConfirmPaymentTargetAttachments" class="text-[10px] text-red-500 pl-1 mt-1 font-medium flex items-center gap-1">
             <span class="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span>
             * Vui lòng đính kèm chứng từ chuyển khoản để hoàn tất xác nhận.
+          </div>
+          <div v-else-if="confirmPaymentType !== 'project_payment' && hasConfirmPaymentTargetAttachments" class="text-[10px] text-emerald-600 pl-1 mt-1 font-medium flex items-center gap-1">
+            <CheckCircleOutlined class="text-emerald-500" />
+            Đã có chứng từ được đính kèm sẵn. Bạn có thể đính kèm thêm chứng từ mới hoặc bấm xác nhận luôn.
           </div>
         </div>
       </div>
@@ -9175,21 +9187,21 @@ const checkAndOpenUrlTarget = () => {
   const tabParam = urlParams.get('tab')
   if (!openId) return
 
-  // 1. Material Bill (either via tab=materials/costs or matching bill id)
-  if (tabParam === 'materials' || tabParam === 'material_bills' || tabParam === 'costs' || activeTab.value === 'costs' || (activeTab.value && activeTab.value.startsWith('cost_group_'))) {
-    const bill = (materialBills.value || []).find(b => b.id == openId)
-    if (bill) {
-      openMaterialDetail(bill)
+  // 1. Cost item / Project Cost (check costs first when tab is costs or project_cost)
+  if (activeTab.value === 'costs' || tabParam === 'costs' || tabParam === 'project_cost') {
+    const cost = (costs.value || []).find(c => c.id == openId)
+    if (cost) {
+      openCostDetail(cost)
       autoOpenedUrlId.value = true
       return
     }
   }
 
-  // 2. Cost item
-  if (activeTab.value === 'costs' || tabParam === 'costs') {
-    const cost = (costs.value || []).find(c => c.id == openId)
-    if (cost) {
-      viewCostDrawer(cost)
+  // 2. Material Bill (either via tab=materials/material_bills/costs or matching bill id)
+  if (tabParam === 'materials' || tabParam === 'material_bills' || tabParam === 'costs' || activeTab.value === 'costs' || (activeTab.value && activeTab.value.startsWith('cost_group_'))) {
+    const bill = (materialBills.value || []).find(b => b.id == openId)
+    if (bill) {
+      openMaterialDetail(bill)
       autoOpenedUrlId.value = true
       return
     }
@@ -9654,8 +9666,14 @@ const importWbsTemplate = async () => {
   wbsImporting.value = false
 }
 
-// Auto-load gantt data when switching to gantt tab
 // Auto-load data when switching tabs (SOA Lazy Loading)
+const initialTabName = activeTab.value
+let initialTabMounted = false
+
+onMounted(() => {
+  nextTick(() => { initialTabMounted = true })
+})
+
 watch(activeTab, (val) => {
   // 1. Logic for specific data loading functions
   if (val === 'gantt') {
@@ -9667,7 +9685,9 @@ watch(activeTab, (val) => {
   if (val === 'labor') { loadLaborDashboard(); loadLaborRecords() }
   if (val === 'finance') loadFinanceData()
 
-  // 2. Logic for SOA Partial Reloads (Inertia::lazy)
+  // 2. Logic for SOA Partial Reloads (Inertia::lazy) - Skip on initial page mount to avoid clearing auto-opened drawers
+  if (!initialTabMounted || val === initialTabName) return
+
   if (['costs', 'payments', 'invoices', 'budgets', 'finance', 'pnl'].includes(val)) {
     router.reload({ only: ['financeData'], preserveState: true, preserveScroll: true })
   } else if (['gantt', 'progress', 'materials', 'material_bills'].includes(val)) {
@@ -9681,7 +9701,7 @@ watch(activeTab, (val) => {
   } else if (['other', 'documents', 'discussion', 'risks', 'warranty', 'maintenances', 'contract', 'comments'].includes(val)) {
     router.reload({ only: ['otherData'], preserveState: true, preserveScroll: true })
   }
-}, { immediate: true })
+})
 
 // ============ Sprint 2 — Finance Dashboard State ============
 const financeView = ref('cashflow')
@@ -10330,31 +10350,41 @@ const approveCostAcct = (c) => {
 
 // Drawer Openers
 const openCostDetail = (c) => {
+  if (!c) return
   // If linked to a material bill, open the material bill drawer directly
   if (c.material_bill_id) {
-    const bill = materialBills.value.find(b => b.id === c.material_bill_id)
+    const bill = (materialBills.value || []).find(b => b.id === c.material_bill_id)
     if (bill) {
       openMaterialDetail(bill)
-    } else {
-      viewCostDrawer(c)
+      return
     }
-    return
   }
   if (c.subcontractor_payment_id || c.subcontractor_id) {
-    activeTab.value = 'subcontractors'
-    return
+    const subPay = (allSubcontractorPayments.value || []).find(p => p.id === c.subcontractor_payment_id)
+    if (subPay) {
+      openSubPaymentDetail(subPay)
+      return
+    }
+    const sub = (subcontractors.value || []).find(s => s.id === c.subcontractor_id)
+    if (sub) {
+      openSubDetail(sub)
+      return
+    }
   }
   if (c.equipment_rental_id) {
-    activeTab.value = 'equipment'
-    return
+    const rental = (equipmentRentals.value || []).find(r => r.id === c.equipment_rental_id)
+    if (rental) {
+      openRentalDetail(rental)
+      return
+    }
   }
   if (c.additional_cost_id) {
-    activeTab.value = 'additional_costs'
-    return
-  }
-  if (c.attendance_id) {
-    activeTab.value = 'attendance'
-    return
+    const ac = (additionalCosts.value || []).find(a => a.id === c.additional_cost_id)
+    if (ac) {
+      showAdditionalCostDetailDrawer.value = true
+      additionalCostDetail.value = ac
+      return
+    }
   }
   // Standalone cost: open detail drawer
   viewCostDrawer(c)
@@ -12772,6 +12802,28 @@ const confirmPaymentBudgetItem = ref(null)
 const confirmPaymentFiles = ref([])
 const confirmPaymentNotes = ref('')
 const confirmPaymentLoading = ref(false)
+
+const hasConfirmPaymentTargetAttachments = computed(() => {
+  if (!confirmPaymentTarget.value) return false
+  return !!(
+    (confirmPaymentTarget.value.attachments && confirmPaymentTarget.value.attachments.length > 0) ||
+    confirmPaymentTarget.value.attachments_count > 0
+  )
+})
+
+const filterBudgetItemOption = (input, option) => {
+  if (!input || !input.trim()) return true
+  const query = input.trim().toLowerCase()
+  const label = (
+    option.label || 
+    option.props?.label || 
+    option.searchValue || 
+    option.props?.searchValue || 
+    option.value || 
+    ''
+  ).toString().toLowerCase()
+  return label.includes(query)
+}
 
 watch(showConfirmPaymentModal, (val) => {
   if (val) {

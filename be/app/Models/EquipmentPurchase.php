@@ -85,14 +85,15 @@ class EquipmentPurchase extends Model
             $costName = "Mua thiết bị mới #" . ($this->id);
         }
 
-        Cost::updateOrCreate(
+        $cost = Cost::updateOrCreate(
             ['equipment_purchase_id' => $this->id],
             [
                 'project_id'               => $this->project_id,
+                'supplier_id'              => $this->supplier_id,
                 'name'                     => $costName,
                 'amount'                   => $this->total_amount ?? 0,
                 'cost_date'                => $this->created_at ?: now(),
-                'category'                 => 'other',
+                'category'                 => 'equipment',
                 'cost_group_id'            => $costGroupId,
                 'expense_category'         => $this->expense_category ?: 'capex',
                 'description'              => $this->notes ?: "Đồng bộ từ phiếu mua thiết bị #" . ($this->uuid),
@@ -105,6 +106,30 @@ class EquipmentPurchase extends Model
                 'rejected_reason'          => $this->rejection_reason,
             ]
         );
+
+        // Synchronize attachments to the Cost record
+        if ($this->attachments()->count() > 0) {
+            foreach ($this->attachments as $att) {
+                $exists = $cost->attachments()
+                    ->where('original_name', $att->original_name)
+                    ->where('file_size', $att->file_size)
+                    ->exists();
+
+                if (!$exists) {
+                    $cost->attachments()->create([
+                        'file_path'     => $att->file_path,
+                        'file_name'     => $att->file_name,
+                        'original_name' => $att->original_name,
+                        'file_url'      => $att->file_url,
+                        'mime_type'     => $att->mime_type,
+                        'file_size'     => $att->file_size,
+                        'description'   => $att->description ?: 'sync_from_purchase',
+                        'type'          => $att->type,
+                        'uploaded_by'   => $att->uploaded_by,
+                    ]);
+                }
+            }
+        }
     }
 
     protected static function boot()
