@@ -230,11 +230,16 @@ class CrmFinanceController extends Controller
             'supplier_id' => 'nullable|exists:suppliers,id',
             'attachment_ids' => 'nullable|array',
             'attachment_ids.*' => 'exists:attachments,id',
+            'files' => 'nullable|array',
+            'files.*' => 'nullable|file|max:102400',
         ]);
 
         try {
             $validated['project_id'] = null; // Explicitly company cost
             $cost = $this->financialService->upsertCost($validated, null, $user);
+
+            // Attach files uploaded directly via FormData
+            $this->attachFilesToEntity($request, $cost, "company-costs/{$cost->id}", false);
 
             return redirect()->back()->with('success', 'Đã tạo chi phí công ty thành công.');
         } catch (\Exception $e) {
@@ -271,11 +276,20 @@ class CrmFinanceController extends Controller
             'supplier_id' => 'nullable|exists:suppliers,id',
             'attachment_ids' => 'nullable|array',
             'attachment_ids.*' => 'exists:attachments,id',
+            'files' => 'nullable|array',
+            'files.*' => 'nullable|file|max:102400',
+            'deleted_attachment_ids' => 'nullable',
         ]);
 
         try {
+            // Remove attachments if deleted
+            $this->attachmentService->handleDeletedRequest($request, $cost);
+
             $validated['project_id'] = null; // Explicitly company cost
-            $this->financialService->upsertCost($validated, $cost, $user);
+            $cost = $this->financialService->upsertCost($validated, $cost, $user);
+
+            // Attach files uploaded directly via FormData
+            $this->attachFilesToEntity($request, $cost, "company-costs/{$cost->id}", false);
 
             return redirect()->back()->with('success', 'Đã cập nhật chi phí công ty.');
         } catch (\Exception $e) {
@@ -304,13 +318,22 @@ class CrmFinanceController extends Controller
     /**
      * Submit company cost for approval
      */
-    public function submitCompanyCost($id)
+    public function submitCompanyCost(Request $request, $id)
     {
         $user = Auth::guard('admin')->user();
         $this->crmRequire($user, Permissions::COMPANY_COST_SUBMIT);
         $cost = Cost::companyCosts()->findOrFail($id);
 
         try {
+            // Handle file attachments if uploaded during submission
+            if ($request->hasFile('files') || $request->filled('attachment_ids')) {
+                if ($request->filled('attachment_ids')) {
+                    $this->attachmentService->linkExistingAttachments($request->input('attachment_ids'), $cost);
+                }
+                $this->attachFilesToEntity($request, $cost, "company-costs/{$cost->id}", false);
+                $cost->refresh();
+            }
+
             $this->financialService->submitCost($cost, $user);
             return redirect()->back()->with('success', 'Đã gửi chi phí để ban điều hành duyệt.');
         } catch (\Exception $e) {
@@ -386,5 +409,10 @@ class CrmFinanceController extends Controller
         } catch (\Exception $e) {
             return redirect()->back()->with('error', 'Lỗi: ' . $e->getMessage());
         }
+    }
+
+    private function attachFilesToEntity(Request $request, $entity, string $storagePath, bool $validate = true): int
+    {
+        return $this->attachmentService->handleCrmUpload($request, $entity, $storagePath, $validate);
     }
 }

@@ -232,7 +232,9 @@
             <PaperClipOutlined /> Chứng từ đính kèm ({{ selectedCost.attachments?.filter(a => a.description !== 'after')?.length || 0 }})
           </div>
           <div v-if="selectedCost.attachments?.filter(a => a.description !== 'after')?.length" class="grid grid-cols-2 gap-3">
-            <div v-for="file in selectedCost.attachments.filter(a => a.description !== 'after')" :key="file.id" class="relative group border border-gray-100 rounded-xl overflow-hidden bg-white hover:border-blue-300 hover:shadow-md transition-all cursor-pointer">
+            <div v-for="file in selectedCost.attachments.filter(a => a.description !== 'after')" :key="file.id" 
+                 class="relative group border border-gray-100 rounded-xl overflow-hidden bg-white hover:border-blue-300 hover:shadow-md transition-all cursor-pointer"
+                 @click="openFilePreview(file)">
               <a-popconfirm
                 title="Xóa tệp đính kèm này?"
                 ok-text="Xóa"
@@ -248,27 +250,23 @@
                   <DeleteOutlined style="font-size: 11px;" />
                 </button>
               </a-popconfirm>
-              <!-- Image files: clickable preview -->
               <template v-if="file.type === 'image' || file.mime_type?.startsWith('image/')">
-                <a-image
+                <img
                   :src="file.file_url"
-                  :preview-mask="false"
-                  class="w-full"
-                  style="aspect-ratio: 16/10; object-fit: cover;"
+                  class="w-full object-cover"
+                  style="aspect-ratio: 16/10;"
                 />
               </template>
-              <!-- Non-image files: open in new tab -->
               <template v-else>
-                <a :href="file.file_url" target="_blank" class="block">
-                  <div class="aspect-video flex items-center justify-center bg-gray-50">
-                    <FileTextOutlined style="font-size: 32px; color: #9CA3AF;" />
-                  </div>
-                </a>
+                <div class="aspect-[16/10] flex flex-col items-center justify-center bg-gray-50 text-gray-500 group-hover:bg-blue-50/50 transition-colors">
+                  <FileTextOutlined style="font-size: 28px;" />
+                  <span class="text-[10px] font-semibold uppercase mt-1 px-1.5 py-0.5 rounded bg-gray-200/60 text-gray-700">
+                    {{ (file.original_name || file.file_name || '').split('.').pop() }}
+                  </span>
+                </div>
               </template>
-              <div class="p-2 text-xs truncate bg-white border-t border-gray-50 font-medium text-gray-600">
-                <a :href="file.file_url" target="_blank" class="hover:text-blue-600 transition-colors">
-                  {{ file.original_name || file.file_name || 'File' }}
-                </a>
+              <div class="p-2 text-xs truncate bg-white border-t border-gray-50 font-medium text-gray-600 group-hover:text-blue-600">
+                {{ file.original_name || file.file_name || 'File' }}
               </div>
             </div>
           </div>
@@ -299,7 +297,9 @@
               <div v-if="selectedCost.attachments?.filter(a => a.description === 'after')?.length" class="mt-2 pl-7 space-y-2">
                 <div class="text-[10px] font-bold text-green-700 tracking-wider">CHỨNG TỪ THANH TOÁN / ỦY NHIỆM CHI:</div>
                 <div class="grid grid-cols-2 gap-2">
-                  <div v-for="file in selectedCost.attachments.filter(a => a.description === 'after')" :key="file.id" class="relative group border border-green-100 rounded-lg overflow-hidden bg-white hover:border-green-300 hover:shadow-sm transition-all cursor-pointer">
+                  <div v-for="file in selectedCost.attachments.filter(a => a.description === 'after')" :key="file.id" 
+                       class="relative group border border-green-100 rounded-lg overflow-hidden bg-white hover:border-green-300 hover:shadow-sm transition-all cursor-pointer"
+                       @click="openFilePreview(file)">
                     <a-popconfirm
                       title="Xóa chứng từ thanh toán này?"
                       ok-text="Xóa"
@@ -316,24 +316,22 @@
                       </button>
                     </a-popconfirm>
                     <template v-if="file.type === 'image' || file.mime_type?.startsWith('image/')">
-                      <a-image
+                      <img
                         :src="file.file_url"
-                        :preview-mask="false"
-                        class="w-full"
-                        style="aspect-ratio: 16/10; object-fit: cover;"
+                        class="w-full object-cover"
+                        style="aspect-ratio: 16/10;"
                       />
                     </template>
                     <template v-else>
-                      <a :href="file.file_url" target="_blank" class="block">
-                        <div class="aspect-[16/10] flex items-center justify-center bg-gray-50">
-                          <FileTextOutlined style="font-size: 24px; color: #9CA3AF;" />
-                        </div>
-                      </a>
+                      <div class="aspect-[16/10] flex flex-col items-center justify-center bg-gray-50 text-gray-500 group-hover:bg-green-50/50 transition-colors">
+                        <FileTextOutlined style="font-size: 24px;" />
+                        <span class="text-[9px] font-semibold uppercase mt-0.5 px-1 py-0.2 rounded bg-gray-200/60 text-gray-700">
+                          {{ (file.original_name || file.file_name || '').split('.').pop() }}
+                        </span>
+                      </div>
                     </template>
-                    <div class="p-1.5 text-[9px] truncate bg-white border-t border-gray-50 font-medium text-gray-600">
-                      <a :href="file.file_url" target="_blank" class="hover:text-green-600 transition-colors">
-                        {{ file.original_name || file.file_name || 'File' }}
-                      </a>
+                    <div class="p-1.5 text-[9px] truncate bg-white border-t border-gray-50 font-medium text-gray-600 group-hover:text-green-600">
+                      {{ file.original_name || file.file_name || 'File' }}
                     </div>
                   </div>
                 </div>
@@ -506,12 +504,12 @@
         <div class="space-y-1.5 max-h-[120px] overflow-y-auto">
           <div v-for="att in confirmCostTarget.attachments.filter(att => att.description !== 'after')" :key="att.id" 
                class="flex items-center justify-between p-2 rounded-lg border border-gray-100 bg-white hover:border-blue-300 transition-all cursor-pointer shadow-sm group"
-               @click="window.open(att.file_url || `/storage/${att.file_path}`, '_blank')">
+               @click="openFilePreview(att)">
             <div class="flex items-center gap-2 min-w-0">
                <FileTextOutlined class="text-gray-400 text-xs" />
                <span class="text-[10px] text-gray-700 font-medium truncate max-w-[280px] hover:text-blue-600">{{ att.original_name || att.file_name }}</span>
             </div>
-            <EyeOutlined class="text-[10px] text-gray-300 group-hover:text-blue-500" />
+            <EyeOutlined class="text-[10px] text-gray-400 group-hover:text-blue-500" />
           </div>
         </div>
       </div>
@@ -542,14 +540,19 @@
           <!-- File List -->
           <div v-if="confirmCostFiles.length" class="space-y-1.5 mt-1">
             <div v-for="(file, idx) in confirmCostFiles" :key="idx" class="flex items-center justify-between p-2 bg-blue-50/50 rounded-lg border border-blue-100/50">
-              <div class="flex items-center gap-2 min-w-0">
+              <div class="flex items-center gap-2 min-w-0 cursor-pointer" @click="openFilePreview(file)">
                 <PaperClipOutlined class="text-blue-400 text-xs" />
-                <span class="text-[10px] font-medium text-blue-700 truncate max-w-[280px]">{{ file.name }}</span>
+                <span class="text-[10px] font-medium text-blue-700 truncate max-w-[240px] hover:underline">{{ file.name }}</span>
                 <span class="text-[9px] text-gray-400">({{ formatFileSize(file.size) }})</span>
               </div>
-              <a-button type="text" size="small" @click="confirmCostFiles.splice(idx, 1)" class="h-5 w-5 p-0 flex items-center justify-center">
-                <CloseOutlined class="text-[10px] text-gray-400 hover:text-red-500" />
-              </a-button>
+              <div class="flex items-center gap-1">
+                <a-button type="text" size="small" @click.stop="openFilePreview(file)" class="h-5 w-5 p-0 flex items-center justify-center text-blue-600 hover:text-blue-800" title="Xem trước">
+                  <EyeOutlined class="text-[11px]" />
+                </a-button>
+                <a-button type="text" size="small" @click.stop="confirmCostFiles.splice(idx, 1)" class="h-5 w-5 p-0 flex items-center justify-center" title="Xóa tệp">
+                  <CloseOutlined class="text-[10px] text-gray-400 hover:text-red-500" />
+                </a-button>
+              </div>
             </div>
           </div>
           <div v-else class="text-[10px] text-red-500 pl-1 mt-1 font-medium flex items-center gap-1">
@@ -560,6 +563,86 @@
       </div>
     </div>
   </a-modal>
+
+  <!-- SUBMIT UPLOAD MODAL (For submitting cost slips that are missing attachments) -->
+  <a-modal 
+    v-model:open="showSubmitUploadModal" 
+    title="Tải chứng từ đính kèm & Gửi duyệt" 
+    @ok="confirmSubmitWithFiles" 
+    ok-text="Tải tệp & Gửi duyệt" 
+    cancel-text="Hủy" 
+    centered 
+    class="crm-modal" 
+    :ok-button-props="{ disabled: !submitCostFiles.length || submitCostLoading }" 
+    :confirm-loading="submitCostLoading"
+  >
+    <div class="p-4 space-y-4">
+      <div class="bg-amber-50 p-3 rounded-xl border border-amber-100 flex items-center gap-3">
+        <div class="w-10 h-10 rounded-full bg-amber-500 text-white flex items-center justify-center shadow-lg"><InfoCircleOutlined /></div>
+        <div class="text-[11px] text-amber-800 leading-tight">
+          Khoản chi này chưa có chứng từ đính kèm. Quy định hệ thống yêu cầu đính kèm tệp chứng từ (hóa đơn, biên lai, ảnh...) trước khi gửi Ban điều hành duyệt.
+        </div>
+      </div>
+
+      <div v-if="submitCostTarget" class="bg-gray-50 p-3 rounded-lg border border-gray-100 text-xs">
+         <div class="flex justify-between">
+            <span class="text-gray-400">Khoản chi:</span>
+            <span class="font-bold text-gray-700">{{ submitCostTarget.name }}</span>
+         </div>
+         <div class="flex justify-between mt-1">
+            <span class="text-gray-400">Số tiền:</span>
+            <span class="font-bold text-blue-600">{{ fmtCurrency(submitCostTarget.amount) }}</span>
+         </div>
+      </div>
+
+      <div class="border-t border-dashed pt-4">
+        <div class="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1">
+          <UploadOutlined class="text-blue-500" /> Tải lên chứng từ đính kèm <span class="text-red-500">*</span>
+        </div>
+        
+        <div class="flex flex-col gap-2">
+          <div class="relative group">
+            <input 
+              type="file" 
+              multiple 
+              @change="handleSelectSubmitCostFiles" 
+              class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" 
+            />
+            <div class="flex items-center justify-center gap-2 py-3 px-4 border-2 border-dashed border-blue-100 rounded-xl group-hover:border-blue-400 group-hover:bg-blue-50 transition-all">
+              <UploadOutlined class="text-blue-400 group-hover:text-blue-600" />
+              <span class="text-xs font-semibold text-blue-500 group-hover:text-blue-700">
+                {{ submitCostFiles.length ? 'Thay đổi tệp đã chọn' : 'Chọn tệp ảnh / PDF chứng từ' }}
+              </span>
+            </div>
+          </div>
+
+          <div v-if="submitCostFiles.length" class="space-y-1.5 mt-1">
+            <div v-for="(file, idx) in submitCostFiles" :key="idx" class="flex items-center justify-between p-2 bg-blue-50/50 rounded-lg border border-blue-100/50">
+              <div class="flex items-center gap-2 min-w-0 cursor-pointer" @click="openFilePreview(file)">
+                <PaperClipOutlined class="text-blue-400 text-xs" />
+                <span class="text-[10px] font-medium text-blue-700 truncate max-w-[240px] hover:underline">{{ file.name }}</span>
+                <span class="text-[9px] text-gray-400">({{ formatFileSize(file.size) }})</span>
+              </div>
+              <div class="flex items-center gap-1">
+                <a-button type="text" size="small" @click.stop="openFilePreview(file)" class="h-5 w-5 p-0 flex items-center justify-center text-blue-600 hover:text-blue-800" title="Xem trước">
+                  <EyeOutlined class="text-[11px]" />
+                </a-button>
+                <a-button type="text" size="small" @click.stop="submitCostFiles.splice(idx, 1)" class="h-5 w-5 p-0 flex items-center justify-center" title="Xóa tệp">
+                  <CloseOutlined class="text-[10px] text-gray-400 hover:text-red-500" />
+                </a-button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </a-modal>
+
+  <!-- Universal File Preview Modal -->
+  <FilePreviewModal
+    v-model:open="showPreviewModal"
+    :file="previewTargetFile"
+  />
 </template>
 
 <script setup>
@@ -583,9 +666,20 @@ import {
 } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 
+import FilePreviewModal from '@/Components/Crm/FilePreviewModal.vue'
+
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend)
 
 defineOptions({ layout: CrmLayout })
+
+const showPreviewModal = ref(false)
+const previewTargetFile = ref(null)
+
+const openFilePreview = (file) => {
+  if (!file) return
+  previewTargetFile.value = file
+  showPreviewModal.value = true
+}
 
 const props = defineProps({
   costs: Object,
@@ -917,21 +1011,114 @@ const showEditModal = (record) => {
   modalVisible.value = true
 }
 
+const showSubmitUploadModal = ref(false)
+const submitCostTarget = ref(null)
+const submitCostFiles = ref([])
+const submitCostLoading = ref(false)
+
+const handleSelectSubmitCostFiles = (e) => {
+  const newFiles = Array.from(e.target.files || [])
+  const existingMap = new Set(submitCostFiles.value.map(f => `${f.name}-${f.size}`))
+  const uniqueNew = newFiles.filter(f => !existingMap.has(`${f.name}-${f.size}`))
+  submitCostFiles.value = [...submitCostFiles.value, ...uniqueNew]
+  e.target.value = ''
+}
+
+const confirmSubmitWithFiles = () => {
+  if (submitCostLoading.value) return
+  if (!submitCostFiles.value.length) {
+    message.warning('Vui lòng chọn ít nhất một chứng từ.')
+    return
+  }
+
+  submitCostLoading.value = true
+  const fd = new FormData()
+  submitCostFiles.value.forEach(f => fd.append('files[]', f))
+
+  router.post(`/finance/company-costs/${submitCostTarget.value.id}/submit`, fd, {
+    forceFormData: true,
+    preserveScroll: true,
+    onSuccess: () => {
+      showSubmitUploadModal.value = false
+      submitCostFiles.value = []
+      message.success('Đã đính kèm chứng từ và gửi duyệt thành công.')
+      refreshSelectedCost(submitCostTarget.value.id)
+    },
+    onError: (errs) => {
+      const msg = errs ? Object.values(errs)[0] : 'Đã xảy ra lỗi khi gửi duyệt.'
+      message.error(msg)
+    },
+    onFinish: () => {
+      submitCostLoading.value = false
+    }
+  })
+}
+
 const saveForm = () => {
   form.cost_date = formDate.value ? formDate.value.format('YYYY-MM-DD') : ''
 
+  if (!form.name) {
+    message.error('Vui lòng nhập tên chi phí')
+    return
+  }
+  if (!form.expense_category) {
+    message.error('Vui lòng chọn phân loại phí')
+    return
+  }
+
+  // Extract raw File objects selected in uploader
+  const rawFiles = fileList.value
+    .map(f => f.originFileObj)
+    .filter(Boolean)
+
+  const attachedIds = fileList.value
+    .map(f => f.response?.id || f.id)
+    .filter(id => id && !isNaN(id))
+
+  const payload = {
+    name: form.name,
+    amount: form.amount || 0,
+    cost_group_id: form.cost_group_id || null,
+    expense_category: form.expense_category,
+    cost_date: form.cost_date,
+    description: form.description || '',
+    quantity: form.quantity || null,
+    unit: form.unit || '',
+    attachment_ids: attachedIds,
+    files: rawFiles,
+  }
+
   if (editingCost.value) {
-    form.put(`/finance/company-costs/${editingCost.value.id}`, {
+    payload._method = 'PUT'
+    router.post(`/finance/company-costs/${editingCost.value.id}`, payload, {
+      forceFormData: true,
       preserveScroll: true,
       onSuccess: () => { 
         modalVisible.value = false
         refreshSelectedCost(editingCost.value.id)
+        message.success('Đã cập nhật chi phí công ty thành công')
       },
+      onError: (errs) => {
+        if (errs) {
+          const firstErr = Object.values(errs)[0]
+          message.error(firstErr || 'Lỗi khi cập nhật chi phí')
+        }
+      }
     })
   } else {
-    form.post('/finance/company-costs', {
+    router.post('/finance/company-costs', payload, {
+      forceFormData: true,
       preserveScroll: true,
-      onSuccess: () => { modalVisible.value = false },
+      onSuccess: () => { 
+        modalVisible.value = false
+        message.success('Đã tạo chi phí công ty thành công')
+      },
+      onError: (errs) => {
+        if (errs) {
+          const firstErr = Object.values(errs)[0]
+          message.error(firstErr || 'Lỗi khi tạo chi phí')
+        }
+      }
     })
   }
 }
@@ -948,9 +1135,28 @@ const refreshSelectedCost = (id) => {
 // ACTIONS
 // ============================================================
 const submitCost = (id) => {
+  const cost = props.costs?.data?.find(c => c.id === id) || (selectedCost.value?.id === id ? selectedCost.value : null)
+  
+  // Check if cost has attachments
+  const hasAttachments = cost?.attachments && cost.attachments.filter(a => a.description !== 'after').length > 0
+  
+  if (!hasAttachments) {
+    submitCostTarget.value = cost
+    submitCostFiles.value = []
+    showSubmitUploadModal.value = true
+    return
+  }
+
   router.post(`/finance/company-costs/${id}/submit`, {}, { 
     preserveScroll: true,
-    onSuccess: () => refreshSelectedCost(id)
+    onSuccess: () => {
+      message.success('Đã gửi chi phí để ban điều hành duyệt.')
+      refreshSelectedCost(id)
+    },
+    onError: (errs) => {
+      const msg = errs ? Object.values(errs)[0] : 'Không thể gửi duyệt.'
+      message.error(msg)
+    }
   })
 }
 

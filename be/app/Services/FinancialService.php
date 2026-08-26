@@ -24,7 +24,7 @@ class FinancialService
         return DB::transaction(function () use ($data, $cost, $user) {
             $isNew = !$cost;
             $attachmentIds = $data['attachment_ids'] ?? [];
-            unset($data['attachment_ids']);
+            unset($data['attachment_ids'], $data['files'], $data['deleted_attachment_ids']);
 
             Log::info("Upserting Cost. IDs: " . (is_array($attachmentIds) ? implode(',', $attachmentIds) : $attachmentIds));
 
