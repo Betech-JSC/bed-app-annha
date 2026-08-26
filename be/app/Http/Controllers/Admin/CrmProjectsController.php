@@ -260,19 +260,24 @@ class CrmProjectsController extends Controller
                     ])
                     ->orderByDesc('payment_number')->get(),
                 'costs' => $project->costs()
-                    // ->whereNull('material_bill_id')
-                    // ->whereNull('subcontractor_payment_id')
-                    // ->whereNull('equipment_rental_id')
-                    // ->whereNull('equipment_allocation_id')
-                    ->select('id', 'project_id', 'name', 'amount', 'status', 'category', 'attendance_id', 'cost_date', 'created_by', 'management_approved_by', 'accountant_approved_by', 'cost_group_id', 'subcontractor_id', 'supplier_id', 'budget_item_id', 'created_at', 'material_bill_id', 'subcontractor_payment_id', 'equipment_rental_id', 'equipment_allocation_id', 'additional_cost_id')
+                    ->select('id', 'project_id', 'name', 'amount', 'status', 'category', 'description', 'quantity', 'unit', 'material_id', 'attendance_id', 'cost_date', 'created_by', 'management_approved_by', 'accountant_approved_by', 'cost_group_id', 'subcontractor_id', 'supplier_id', 'budget_item_id', 'created_at', 'material_bill_id', 'subcontractor_payment_id', 'equipment_rental_id', 'equipment_allocation_id', 'additional_cost_id')
                     ->with([
                         'creator:id,name',
                         'costGroup:id,name,code',
+                        'supplier:id,name,phone,bank_name,bank_account,bank_account_holder',
                         'subcontractor:id,name,total_quote,total_paid,payment_status',
+                        'material:id,name,unit',
                         'attachments:id,attachable_id,attachable_type,file_name,original_name,file_size,file_url,mime_type,description',
                         'managementApprover:id,name',
                         'accountantApprover:id,name',
-                        'materialBill.attachments:id,attachable_id,attachable_type,file_name,original_name,file_size,file_url,mime_type,description',
+                        'materialBill' => function($q) {
+                            $q->select('id', 'bill_number', 'bill_date', 'notes', 'supplier_id', 'total_amount')
+                              ->with([
+                                  'supplier:id,name,phone',
+                                  'items.material:id,name,unit,code',
+                                  'attachments:id,attachable_id,attachable_type,file_name,original_name,file_size,file_url,mime_type,description'
+                              ]);
+                        },
                         'subcontractorPayment.attachments:id,attachable_id,attachable_type,file_name,original_name,file_size,file_url,mime_type,description',
                         'additionalCost.attachments:id,attachable_id,attachable_type,file_name,original_name,file_size,file_url,mime_type,description',
                         'equipmentRental.attachments:id,attachable_id,attachable_type,file_name,original_name,file_size,file_url,mime_type,description'

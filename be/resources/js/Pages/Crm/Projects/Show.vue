@@ -559,37 +559,56 @@
         <template #tab><a-tooltip title="Xem tất cả phiếu chi phí của dự án" placement="bottom">Tất cả ({{ counts.costs || 0 }})</a-tooltip></template>
 
         <div class="p-4">
-          <!-- Premium Header for Phiếu chi -->
-          <div class="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
-            <div class="bg-white p-3 rounded-xl border border-gray-100 shadow-sm">
-              <div class="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-1">Tổng chi phí</div>
-              <div class="text-xl font-bold text-red-500">{{ fmt(totalCosts) }}</div>
+          <!-- Premium Header Cards for Chi phí -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 mb-4">
+            <div class="bg-white p-3.5 rounded-xl border border-gray-100 shadow-sm flex items-center justify-between">
+              <div>
+                <div class="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-1">Tổng chi phí</div>
+                <div class="text-xl font-bold text-red-500">{{ fmt(totalCosts) }}</div>
+              </div>
+              <div class="w-10 h-10 rounded-xl bg-red-50 text-red-500 flex items-center justify-center text-lg">💰</div>
             </div>
-            <div class="bg-white p-3 rounded-xl border border-gray-100 shadow-sm">
-              <div class="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-1">Chờ duyệt</div>
-              <div class="text-xl font-bold text-orange-500">{{ costs.filter(c => ['pending_management_approval','pending_accountant_approval'].includes(c.status)).length }} <span class="text-xs font-normal text-gray-400">phiếu</span></div>
+
+            <div class="bg-white p-3.5 rounded-xl border border-gray-100 shadow-sm flex items-center justify-between">
+              <div>
+                <div class="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-1">Chờ duyệt</div>
+                <div class="text-xl font-bold text-orange-500">{{ costs.filter(c => ['pending_management_approval','pending_accountant_approval'].includes(c.status)).length }} <span class="text-xs font-normal text-gray-400">phiếu</span></div>
+              </div>
+              <div class="w-10 h-10 rounded-xl bg-orange-50 text-orange-500 flex items-center justify-center text-lg">⏳</div>
             </div>
-            <div class="bg-white p-3 rounded-xl border border-gray-100 shadow-sm flex flex-col justify-center">
-              <a-select v-model:value="costGroupFilter" size="small" class="w-full" allow-clear placeholder="Lọc theo nhóm">
+
+            <div class="bg-white p-3.5 rounded-xl border border-gray-100 shadow-sm flex items-center justify-between">
+              <div>
+                <div class="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-1">Lọc theo nhóm</div>
+                <div class="text-xs text-gray-400">Nhóm chi phí</div>
+              </div>
+              <a-select v-model:value="costGroupFilter" size="small" class="w-36" allow-clear placeholder="Tất cả nhóm">
                 <a-select-option value="all">Tất cả nhóm</a-select-option>
                 <a-select-option v-for="g in allFilterGroups" :key="g.id" :value="g.id">{{ g.name }}</a-select-option>
               </a-select>
             </div>
-            <div class="flex items-center justify-end">
-              <a-button v-if="can('cost.create')" type="primary" size="small" class="rounded-lg" @click="openCostModal(null)">
-                <template #icon><PlusOutlined /></template>
-                Tạo phiếu chi
-              </a-button>
-            </div>
           </div>
 
-          <!-- Status Filters -->
-          <div class="flex gap-1.5 mb-4 overflow-x-auto pb-1 no-scrollbar">
-            <button v-for="s in ['all','draft','pending','approved','rejected']" :key="s" @click="costStatusFilter = s" 
-                    :class="[costStatusFilter === s ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-100']"
-                    class="px-3 py-1 rounded-full text-xs font-medium transition-all whitespace-nowrap">
-              {{ s === 'all' ? 'Tất cả' : s === 'draft' ? 'Nháp' : s === 'pending' ? 'Chờ duyệt' : s === 'approved' ? 'Đã duyệt' : 'Từ chối' }}
-            </button>
+          <!-- Toolbar: Status Filters + Action Dropdown Button -->
+          <div class="flex items-center justify-between gap-3 mb-4 flex-wrap">
+            <div class="flex gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+              <button v-for="s in ['all','draft','pending','approved','rejected']" :key="s" @click="costStatusFilter = s" 
+                      :class="[costStatusFilter === s ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-100']"
+                      class="px-3.5 py-1.5 rounded-full text-xs font-medium transition-all whitespace-nowrap">
+                {{ s === 'all' ? 'Tất cả' : s === 'draft' ? 'Nháp' : s === 'pending' ? 'Chờ duyệt' : s === 'approved' ? 'Đã duyệt' : 'Từ chối' }}
+              </button>
+            </div>
+
+            <div class="flex items-center gap-2">
+              <a-button v-if="can('material.create') || can('cost.create')" type="primary" size="small" class="rounded-lg bg-emerald-600 border-emerald-600 hover:bg-emerald-700 font-medium shadow-sm" @click="openBillModal(null)">
+                <template #icon><PlusOutlined /></template>
+                Tạo phiếu nhập vật liệu
+              </a-button>
+              <a-button v-if="can('cost.create')" type="default" size="small" class="rounded-lg font-medium shadow-sm" @click="openCostModal(null)">
+                <template #icon><PlusOutlined /></template>
+                Tạo phiếu chi khác
+              </a-button>
+            </div>
           </div>
           <a-table :columns="costCols" :data-source="filteredCosts" :pagination="{ pageSize: 10, showTotal: (t) => `${t} phiếu` }" row-key="id" size="small" class="crm-table hover-row" :custom-row="(record) => ({ onClick: () => viewCostDrawer(record), style: 'cursor: pointer' })">
             <template #bodyCell="{ column, record }">
@@ -4031,11 +4050,61 @@
             <span class="text-gray-400">Ngày chi</span>
             <span class="font-medium text-gray-700">{{ fmtDate(costDetailRecord.cost_date) }}</span>
           </div>
-          <div class="flex justify-between items-center py-2.5">
+          <div class="flex justify-between items-center py-2.5" :class="{ 'border-b border-gray-50': costDetailRecord.supplier || costDetailRecord.material_bill?.supplier || costDetailRecord.subcontractor || (costDetailRecord.quantity && costDetailRecord.unit) }">
             <span class="text-gray-400">Nhóm chi phí</span>
             <a-tag class="rounded-full bg-blue-50 text-blue-600 border-blue-100">{{ costDetailRecord.cost_group?.name || '—' }}</a-tag>
           </div>
+          <div v-if="costDetailRecord.supplier || costDetailRecord.material_bill?.supplier" class="flex justify-between items-center py-2.5" :class="{ 'border-b border-gray-50': costDetailRecord.subcontractor || (costDetailRecord.quantity && costDetailRecord.unit) }">
+            <span class="text-gray-400">Nhà cung cấp</span>
+            <span class="font-bold text-gray-800">{{ (costDetailRecord.supplier || costDetailRecord.material_bill?.supplier)?.name || '—' }}</span>
+          </div>
+          <div v-if="costDetailRecord.subcontractor" class="flex justify-between items-center py-2.5" :class="{ 'border-b border-gray-50': costDetailRecord.quantity && costDetailRecord.unit }">
+            <span class="text-gray-400">Nhà thầu phụ</span>
+            <span class="font-bold text-gray-800">{{ costDetailRecord.subcontractor?.name }}</span>
+          </div>
+          <div v-if="costDetailRecord.quantity && costDetailRecord.unit" class="flex justify-between items-center py-2.5">
+            <span class="text-gray-400">Số lượng & ĐVT</span>
+            <span class="font-medium text-gray-700">{{ costDetailRecord.quantity }} {{ costDetailRecord.unit }}</span>
+          </div>
         </div>
+      </div>
+
+      <!-- Detail Notes / Description Section (Fix: Chi tiết phiếu chi) -->
+      <div v-if="costDetailRecord.description || (costDetailRecord.material_bill || costDetailRecord.materialBill)?.notes" class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
+        <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2 text-blue-500"><FileTextOutlined /> Nội dung / Mô tả chi tiết phiếu</div>
+        <div class="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{{ costDetailRecord.description || (costDetailRecord.material_bill || costDetailRecord.materialBill)?.notes }}</div>
+      </div>
+
+      <!-- Linked Material Bill Items Section -->
+      <div v-if="((costDetailRecord.material_bill || costDetailRecord.materialBill)?.items || []).length" class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2 text-blue-500"><HistoryOutlined /> Chi tiết danh sách vật tư ({{ (costDetailRecord.material_bill || costDetailRecord.materialBill).items.length }} mục)</div>
+        <table class="w-full text-xs">
+          <thead>
+            <tr class="border-b border-gray-100 text-gray-400">
+              <th class="text-left pb-2 font-medium">Vật liệu</th>
+              <th class="text-right pb-2 font-medium">Số lượng</th>
+              <th class="text-right pb-2 font-medium">Đơn giá</th>
+              <th class="text-right pb-2 font-medium">Thành tiền</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-50">
+            <tr v-for="item in ((costDetailRecord.material_bill || costDetailRecord.materialBill).items)" :key="item.id">
+              <td class="py-2.5">
+                <div class="font-bold text-gray-700">{{ item.material?.name || ('Vật liệu #' + item.material_id) }}</div>
+                <div class="text-[10px] text-gray-400" v-if="item.material?.code">{{ item.material?.code }}</div>
+              </td>
+              <td class="py-2.5 text-right font-medium text-blue-600">
+                {{ item.quantity }} {{ item.material?.unit || '' }}
+              </td>
+              <td class="py-2.5 text-right text-gray-500">
+                {{ fmt(item.unit_price) }}
+              </td>
+              <td class="py-2.5 text-right font-bold text-gray-800">
+                {{ fmt(item.total_price || (item.quantity * item.unit_price)) }}
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
 
       <!-- People Information -->
@@ -10157,6 +10226,13 @@ const isAttachmentDeleted = (form, id) => form.deleted_attachment_ids?.includes(
 
 const removeSelectedFile = (index) => {
   modalFiles.value.splice(index, 1)
+}
+const handleCostCreateMenu = ({ key }) => {
+  if (key === 'bill') {
+    openBillModal(null)
+  } else if (key === 'cost') {
+    openCostModal(null)
+  }
 }
 const openCostModal = (c) => {
   editingCost.value = c
