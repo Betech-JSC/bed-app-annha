@@ -149,4 +149,93 @@ class CrmSupplierController extends Controller
 
         return redirect()->back()->with('success', 'Đã xóa nhà cung cấp.');
     }
+
+    /**
+     * Get supplier payment history and project breakdown
+     */
+    public function history($id)
+    {
+        $user = Auth::guard('admin')->user();
+        $this->crmRequire($user, Permissions::SUPPLIER_VIEW);
+
+        $supplier = Supplier::findOrFail($id);
+        $supplier->recalculateFinancials();
+
+        // Fetch all costs linked to this supplier
+        $costs = \App\Models\Cost::where('supplier_id', $id)
+            ->with(['project:id,name,code', 'creator:id,name', 'attachments'])
+            ->orderByDesc('cost_date')
+            ->orderByDesc('created_at')
+            ->get();
+
+        // Project summary calculation (group costs per project)
+        $projectGroups = $costs->groupBy(function ($cost) {
+            return $cost->project ? $cost->project->name : 'Chi phí công ty';
+        });
+
+        $projectSummaries = [];
+        foreach ($projectGroups as $projectName => $groupCosts) {
+            $projectSummaries[] = [
+                'project_name' => $projectName,
+                'project_code' => $groupCosts->first()->project->code ?? 'COMPANY',
+                'is_company' => !$groupCosts->first()->project_id,
+                'count' => $groupCosts->count(),
+                'total_amount' => (float) $groupCosts->sum('amount'),
+                'approved_amount' => (float) $groupCosts->where('status', 'approved')->sum('amount'),
+                'pending_amount' => (float) $groupCosts->whereIn('status', ['pending_management_approval', 'pending_accountant_approval'])->sum('amount'),
+            ];
+        }
+
+        // Sort project summaries by total_amount DESC
+        usort($projectSummaries, fn($a, $b) => $b['total_amount'] <=> $a['total_amount']);
+
+        return response()->json([
+            'supplier' => [
+                'id' => $supplier->id,
+                'name' => $supplier->name,
+                'code' => $supplier->code,
+                'phone' => $supplier->phone,
+                'email' => $supplier->email,
+                'contact_person' => $supplier->contact_person,
+                'category' => $supplier->category,
+                'total_debt' => (float) $supplier->total_debt,
+                'total_paid' => (float) $supplier->total_paid,
+                'remaining_debt' => (float) $supplier->remaining_debt,
+            ],
+            'costs' => $costs->map(function ($c) {
+                return [
+                    'id' => $c->id,
+                    'name' => $c->name,
+                    'amount' => (float) $c->amount,
+                    'cost_date' => $c->cost_date ? $c->cost_date->format('Y-m-d') : null,
+                    'created_at' => $c->created_at ? $c->created_at->format('Y-m-d H:i:s') : null,
+                    'status' => $c->status,
+                    'description' => $c->description,
+                    'expense_category' => $c->expense_category,
+                    'project' => $c->project ? [
+                        'id' => $c->project->id,
+                        'name' => $c->project->name,
+                        'code' => $c->project->code,
+                    ] : null,
+                    'creator' => $c->creator ? [
+                        'id' => $c->creator->id,
+                        'name' => $c->creator->name,
+                    ] : null,
+                    'attachments' => $c->attachments->map(fn($a) => [
+                        'id' => $a->id,
+                        'original_name' => $a->original_name,
+                        'file_name' => $a->file_name,
+                        'file_url' => $a->file_url,
+                        'file_size' => $a->file_size,
+                        'mime_type' => $a->mime_type,
+                        'type' => $a->type,
+                        'description' => $a->description,
+                    ]),
+                ];
+            }),
+            'project_summaries' => $projectSummaries,
+            'grand_total' => (float) $costs->sum('amount'),
+            'grand_approved' => (float) $costs->where('status', 'approved')->sum('amount'),
+        ]);
+    }
 }

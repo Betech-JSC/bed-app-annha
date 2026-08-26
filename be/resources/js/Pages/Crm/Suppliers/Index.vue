@@ -47,8 +47,8 @@
       <template #bodyCell="{ column, record }">
         <!-- Name -->
         <template v-if="column.dataIndex === 'name'">
-          <div>
-            <div class="font-bold text-blue-900 text-sm flex items-center gap-1">
+          <div class="cursor-pointer group" @click="showSupplierHistory(record)">
+            <div class="font-bold text-blue-900 text-sm flex items-center gap-1 group-hover:text-blue-600 transition-colors">
               <span class="text-xs text-gray-400 font-normal">[{{ record.code }}]</span> 
               {{ record.name }}
             </div>
@@ -88,7 +88,10 @@
 
         <!-- Actions -->
         <template v-if="column.dataIndex === 'actions'">
-          <div class="flex gap-1">
+          <div class="flex gap-1 items-center">
+            <a-tooltip title="Xem lịch sử chi trả">
+              <a-button type="text" size="small" class="text-blue-600" @click="showSupplierHistory(record)"><HistoryOutlined /></a-button>
+            </a-tooltip>
             <a-tooltip title="Sửa">
               <a-button type="text" size="small" @click="showEditModal(record)"><EditOutlined /></a-button>
             </a-tooltip>
@@ -114,6 +117,161 @@
     <p class="mt-4 text-gray-400 text-base">Chưa có nhà cung cấp nào</p>
     <a-button type="primary" class="mt-3 rounded-xl" @click="showCreateModal">Thêm nhà cung cấp đầu tiên</a-button>
   </div>
+
+  <!-- ═══ Supplier History Drawer ═══ -->
+  <a-drawer
+    v-model:open="historyDrawerVisible"
+    title="Lịch sử chi trả nhà cung cấp"
+    width="780"
+    :body-style="{ paddingBottom: '30px' }"
+  >
+    <div v-if="historyLoading" class="flex flex-col items-center justify-center py-20">
+      <a-spin size="large" tip="Đang tải lịch sử chi..." />
+    </div>
+
+    <div v-else-if="historyData" class="space-y-6">
+      <!-- Header Info Card -->
+      <div class="bg-gradient-to-br from-blue-900 to-slate-800 text-white p-5 rounded-2xl shadow-md">
+        <div class="flex justify-between items-start mb-3">
+          <div>
+            <div class="text-xs text-blue-200 uppercase tracking-wider font-semibold">[{{ historyData.supplier.code }}]</div>
+            <h3 class="text-xl font-bold text-white m-0 mt-0.5">{{ historyData.supplier.name }}</h3>
+          </div>
+          <span class="px-2.5 py-1 rounded-full text-xs font-semibold bg-white/10 backdrop-blur-md text-blue-100 border border-white/20">
+            {{ historyData.supplier.category || 'Nhà cung cấp' }}
+          </span>
+        </div>
+
+        <div class="grid grid-cols-3 gap-4 border-t border-white/10 pt-3 mt-3">
+          <div>
+            <div class="text-[11px] text-blue-200">Tổng công nợ</div>
+            <div class="text-lg font-bold text-red-300">{{ formatMoney(historyData.supplier.total_debt) }}</div>
+          </div>
+          <div>
+            <div class="text-[11px] text-blue-200">Đã thanh toán</div>
+            <div class="text-lg font-bold text-emerald-400">{{ formatMoney(historyData.supplier.total_paid) }}</div>
+          </div>
+          <div>
+            <div class="text-[11px] text-blue-200">Còn nợ</div>
+            <div class="text-lg font-bold text-amber-300">{{ formatMoney(historyData.supplier.remaining_debt) }}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Section 1: Itemized Cost / Payment History -->
+      <div>
+        <div class="flex items-center justify-between mb-3">
+          <div class="text-base font-bold text-gray-800 flex items-center gap-2">
+            <HistoryOutlined class="text-blue-600" /> Danh sách phiếu chi ({{ historyData.costs?.length || 0 }})
+          </div>
+          <div class="text-xs text-gray-500 font-medium">
+            Tổng cộng: <span class="font-bold text-blue-700">{{ formatMoney(historyData.grand_total) }}</span>
+          </div>
+        </div>
+
+        <div v-if="historyData.costs?.length" class="space-y-3">
+          <div v-for="cost in historyData.costs" :key="cost.id" class="p-3.5 bg-white border border-gray-100 rounded-xl hover:border-blue-300 hover:shadow-sm transition-all">
+            <div class="flex justify-between items-start">
+              <div class="space-y-1 min-w-0 flex-1 pr-4">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span class="font-bold text-sm text-gray-800">{{ cost.name }}</span>
+                  <span v-if="cost.project" class="text-xs px-2 py-0.5 rounded-lg bg-blue-50 text-blue-700 font-semibold border border-blue-100">
+                    🏢 {{ cost.project.name }}
+                  </span>
+                  <span v-else class="text-xs px-2 py-0.5 rounded-lg bg-gray-100 text-gray-600 font-medium">
+                    🏢 Chi phí công ty
+                  </span>
+                </div>
+
+                <div v-if="cost.description" class="text-xs text-gray-500 italic truncate max-w-md">
+                  {{ cost.description }}
+                </div>
+
+                <div class="text-[11px] text-gray-400 flex items-center gap-3">
+                  <span>📅 Ngày chi: <strong>{{ formatDate(cost.cost_date) }}</strong></span>
+                  <span v-if="cost.created_at">🕒 Tạo lúc: {{ formatDate(cost.created_at, 'HH:mm DD/MM/YYYY') }}</span>
+                  <span v-if="cost.creator">👤 Người tạo: {{ cost.creator.name }}</span>
+                </div>
+              </div>
+
+              <div class="text-right flex flex-col items-end flex-shrink-0">
+                <div class="text-base font-bold text-blue-700">{{ formatMoney(cost.amount) }}</div>
+                <span class="crm-tag mt-1" :class="statusClass(cost.status)">
+                  {{ statusLabel(cost.status) }}
+                </span>
+              </div>
+            </div>
+
+            <!-- Attachments if any -->
+            <div v-if="cost.attachments?.length" class="mt-2.5 pt-2 border-t border-dashed border-gray-100 flex items-center gap-2 overflow-x-auto">
+              <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1">
+                <PaperClipOutlined /> Tệp ({{ cost.attachments.length }}):
+              </span>
+              <div v-for="att in cost.attachments" :key="att.id" 
+                   class="flex items-center gap-1 px-2 py-0.5 rounded bg-gray-50 border border-gray-200/60 hover:border-blue-400 cursor-pointer text-xs transition-colors"
+                   @click="openFilePreview(att)">
+                <FileTextOutlined class="text-blue-500 text-[11px]" />
+                <span class="text-[10px] text-gray-700 font-medium truncate max-w-[150px] hover:text-blue-600">{{ att.original_name || att.file_name }}</span>
+                <EyeOutlined class="text-[10px] text-gray-400 hover:text-blue-600" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div v-else class="text-center py-10 bg-gray-50 rounded-xl border border-dashed border-gray-200">
+          <DollarOutlined class="text-4xl text-gray-300 mb-2" />
+          <div class="text-sm text-gray-400">Chưa có phiếu chi nào cho nhà cung cấp này</div>
+        </div>
+      </div>
+
+      <!-- Section 2: Bottom Summary Table (Tổng số tiền từng dự án) -->
+      <div v-if="historyData.project_summaries?.length" class="space-y-3 pt-4 border-t border-gray-100">
+        <div class="text-base font-bold text-gray-800 flex items-center gap-2">
+          <PieChartOutlined class="text-emerald-600" /> Tổng hợp chi phí theo từng dự án
+        </div>
+
+        <div class="bg-gray-50 border border-gray-100 rounded-xl overflow-hidden shadow-sm">
+          <table class="w-full text-xs text-left">
+            <thead class="bg-gray-100/80 text-gray-600 font-semibold border-b border-gray-200">
+              <tr>
+                <th class="py-2.5 px-4">STT</th>
+                <th class="py-2.5 px-4">Tên Dự Án</th>
+                <th class="py-2.5 px-4 text-center">Số lượt chi</th>
+                <th class="py-2.5 px-4 text-right">Đã thanh toán</th>
+                <th class="py-2.5 px-4 text-right">Tổng chi phí</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100 bg-white">
+              <tr v-for="(ps, idx) in historyData.project_summaries" :key="idx" class="hover:bg-blue-50/30 transition-colors">
+                <td class="py-2.5 px-4 font-medium text-gray-400">{{ idx + 1 }}</td>
+                <td class="py-2.5 px-4 font-bold text-gray-800">
+                  <span v-if="ps.is_company" class="text-gray-600">🏢 {{ ps.project_name }}</span>
+                  <span v-else class="text-blue-900">🏗️ {{ ps.project_name }} <span class="text-gray-400 text-[10px] font-normal">[{{ ps.project_code }}]</span></span>
+                </td>
+                <td class="py-2.5 px-4 text-center font-medium">{{ ps.count }} lượt</td>
+                <td class="py-2.5 px-4 text-right font-semibold text-emerald-600">{{ formatMoney(ps.approved_amount) }}</td>
+                <td class="py-2.5 px-4 text-right font-bold text-blue-700">{{ formatMoney(ps.total_amount) }}</td>
+              </tr>
+            </tbody>
+            <tfoot class="bg-gray-100/90 font-bold border-t border-gray-200 text-gray-800">
+              <tr>
+                <td colspan="2" class="py-3 px-4 text-right uppercase tracking-wider text-[11px]">Tổng cộng toàn bộ:</td>
+                <td class="py-3 px-4 text-center text-blue-800">{{ historyData.costs?.length || 0 }} lượt</td>
+                <td class="py-3 px-4 text-right text-emerald-700 text-sm">{{ formatMoney(historyData.grand_approved) }}</td>
+                <td class="py-3 px-4 text-right text-blue-800 text-sm font-extrabold">{{ formatMoney(historyData.grand_total) }}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+    </div>
+  </a-drawer>
+
+  <!-- Universal File Preview Modal -->
+  <FilePreviewModal
+    v-model:open="showPreviewModal"
+    :file="previewTargetFile"
+  />
 
   <!-- ═══ Create/Edit Modal ═══ -->
   <a-modal
@@ -216,10 +374,13 @@ import { Head, router, useForm } from '@inertiajs/vue3'
 import CrmLayout from '@/Layouts/CrmLayout.vue'
 import PageHeader from '@/Components/Crm/PageHeader.vue'
 import StatCard from '@/Components/Crm/StatCard.vue'
+import dayjs from 'dayjs'
+import FilePreviewModal from '@/Components/Crm/FilePreviewModal.vue'
 import {
   PlusOutlined, ShopOutlined, DollarOutlined, CheckCircleOutlined, 
   VerifiedOutlined, PhoneOutlined, EditOutlined, DeleteOutlined,
-  BankOutlined
+  BankOutlined, HistoryOutlined, EyeOutlined, PaperClipOutlined,
+  PieChartOutlined, FileTextOutlined
 } from '@ant-design/icons-vue'
 
 defineOptions({ layout: CrmLayout })
@@ -328,5 +489,60 @@ const saveForm = () => {
 
 const deleteSupplier = (id) => {
   router.delete(`/suppliers/${id}`, { preserveScroll: true })
+}
+
+// ============================================================
+// SUPPLIER HISTORY DRAWER & FILE PREVIEW
+// ============================================================
+const historyDrawerVisible = ref(false)
+const historyLoading = ref(false)
+const historyData = ref(null)
+
+const showSupplierHistory = (supplier) => {
+  historyDrawerVisible.value = true
+  historyLoading.value = true
+  historyData.value = null
+
+  fetch(`/suppliers/${supplier.id}/history`, {
+    headers: { 'Accept': 'application/json' }
+  })
+    .then(res => res.json())
+    .then(data => {
+      historyData.value = data
+      historyLoading.value = false
+    })
+    .catch(() => {
+      historyLoading.value = false
+    })
+}
+
+const formatDate = (d, fmt = 'DD/MM/YYYY') => {
+  if (!d) return '—'
+  return dayjs(d).format(fmt)
+}
+
+const statusLabel = (s) => ({
+  draft: 'Nháp',
+  pending_management_approval: 'Chờ BĐH',
+  pending_accountant_approval: 'Chờ KT',
+  approved: 'Đã thanh toán',
+  rejected: 'Từ chối',
+})[s] || s
+
+const statusClass = (s) => ({
+  draft: 'crm-tag--cancelled',
+  pending_management_approval: 'crm-tag--pending',
+  pending_accountant_approval: 'crm-tag--active',
+  approved: 'crm-tag--completed',
+  rejected: 'crm-tag--overdue',
+})[s] || ''
+
+const showPreviewModal = ref(false)
+const previewTargetFile = ref(null)
+
+const openFilePreview = (file) => {
+  if (!file) return
+  previewTargetFile.value = file
+  showPreviewModal.value = true
 }
 </script>

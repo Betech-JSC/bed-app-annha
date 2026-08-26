@@ -624,6 +624,7 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
     // Suppliers
     Route::prefix('suppliers')->name('suppliers.')->group(function () {
         Route::get('/', [CrmSupplierController::class, 'index'])->name('index');
+        Route::get('/{id}/history', [CrmSupplierController::class, 'history'])->name('history');
         Route::post('/', [CrmSupplierController::class, 'store'])->name('store');
         Route::put('/{id}', [CrmSupplierController::class, 'update'])->name('update');
         Route::delete('/{id}', [CrmSupplierController::class, 'destroy'])->name('destroy');
