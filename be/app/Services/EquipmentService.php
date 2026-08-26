@@ -329,15 +329,25 @@ class EquipmentService
             ]);
 
             // Side-effect: Create Inventory entries
+            $batchCodes = [];
             foreach ($purchase->items as $item) {
-                $itemCode = !empty(trim($item->code ?? '')) ? trim($item->code) : null;
+                $rawCode = !empty(trim($item->code ?? '')) ? trim($item->code) : null;
+                $prefix = !empty($rawCode) ? preg_replace('/\d+$/', '', $rawCode) : 'TB-';
+                if (empty($prefix)) $prefix = 'TB-';
+                $numPart = !empty($rawCode) && preg_match('/\d+$/', $rawCode, $m) ? intval($m[0]) : 0;
                 
-                // If code is not provided or already exists in equipment (including soft-deleted), generate a unique code
-                if (!$itemCode || Equipment::withTrashed()->where('code', $itemCode)->exists()) {
+                $itemCode = $rawCode;
+                if (!$itemCode || in_array($itemCode, $batchCodes) || Equipment::withTrashed()->where('code', $itemCode)->exists()) {
                     do {
-                        $itemCode = 'TB-' . strtoupper(Str::random(6));
-                    } while (Equipment::withTrashed()->where('code', $itemCode)->exists());
+                        if ($numPart > 0) {
+                            $numPart++;
+                            $itemCode = $prefix . str_pad($numPart, 4, '0', STR_PAD_LEFT);
+                        } else {
+                            $itemCode = 'TB-' . strtoupper(Str::random(6));
+                        }
+                    } while (in_array($itemCode, $batchCodes) || Equipment::withTrashed()->where('code', $itemCode)->exists());
                 }
+                $batchCodes[] = $itemCode;
 
                 Equipment::create([
                     'name'            => $item->name,

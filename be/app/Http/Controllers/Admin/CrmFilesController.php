@@ -200,7 +200,7 @@ class CrmFilesController extends Controller
 
         $file->delete();
 
-        if ($request->wantsJson() || $request->ajax()) {
+        if (($request->wantsJson() || $request->ajax()) && !$request->header('X-Inertia')) {
             return response()->json(['success' => true, 'message' => 'Đã xóa file thành công.']);
         }
 

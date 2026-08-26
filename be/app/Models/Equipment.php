@@ -213,11 +213,22 @@ class Equipment extends Model
             if (empty($equipment->uuid)) {
                 $equipment->uuid = Str::uuid();
             }
-            if (empty(trim($equipment->code ?? ''))) {
+            if (empty(trim($equipment->code ?? '')) || static::withTrashed()->where('code', trim($equipment->code))->exists()) {
+                $rawCode = trim($equipment->code ?? '');
+                $prefix = !empty($rawCode) ? preg_replace('/\d+$/', '', $rawCode) : 'TB-';
+                if (empty($prefix)) $prefix = 'TB-';
+                $numPart = !empty($rawCode) && preg_match('/\d+$/', $rawCode, $m) ? intval($m[0]) : 0;
+                
                 do {
-                    $code = 'TB-' . strtoupper(Str::random(6));
-                } while (static::withTrashed()->where('code', $code)->exists());
-                $equipment->code = $code;
+                    if ($numPart > 0) {
+                        $numPart++;
+                        $candidate = $prefix . str_pad($numPart, 4, '0', STR_PAD_LEFT);
+                    } else {
+                        $candidate = 'TB-' . strtoupper(Str::random(6));
+                    }
+                } while (static::withTrashed()->where('code', $candidate)->exists());
+
+                $equipment->code = $candidate;
             }
         });
 
