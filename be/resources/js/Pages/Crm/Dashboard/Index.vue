@@ -28,7 +28,7 @@
       <a-range-picker v-if="activePeriod === 'Tùy chỉnh'" v-model:value="customRange" format="DD/MM/YYYY" @change="onCustomRange" size="middle" class="rounded-xl" />
       <a-switch v-model:checked="compareMode" @change="onCompareToggle" size="small" />
       <span class="text-xs text-gray-500">So sánh kỳ trước</span>
-      <a-button size="middle" class="rounded-xl" @click="router.visit('/finance')">
+      <a-button type="primary" size="middle" class="rounded-xl premium-button shadow-blue" @click="openReportModal">
         <template #icon><BarChartOutlined /></template>
         Báo cáo
       </a-button>
@@ -329,6 +329,78 @@
       </div>
     </div>
   </div>
+
+  <!-- VISUAL EXECUTIVE REPORT MODAL -->
+  <a-modal
+    v-model:open="showReportModal"
+    title="📊 Báo Cáo Phân Tích Điều Hành (Biểu Đồ)"
+    :width="920"
+    :footer="null"
+    centered
+    class="crm-modal"
+  >
+    <div class="space-y-6 pt-2">
+      <!-- Filter Context Bar -->
+      <div class="bg-slate-50 border border-slate-200/80 rounded-xl p-3.5 flex items-center justify-between flex-wrap gap-2 text-xs">
+        <div class="flex items-center gap-2 text-slate-700 font-semibold">
+          <span class="px-2.5 py-1 bg-blue-100 text-blue-800 rounded-lg font-bold">
+            📅 Kỳ lọc: {{ filters?.periodLabel || 'Mặc định' }}
+          </span>
+          <span class="px-2.5 py-1 bg-purple-100 text-purple-800 rounded-lg font-bold">
+            📁 {{ selectedProjectId === 'all' ? 'Tất cả dự án' : (projectsList?.find(p => p.id == selectedProjectId)?.name || 'Dự án đã chọn') }}
+          </span>
+        </div>
+        <div class="text-slate-500 font-medium">
+          Thời gian: <span class="font-mono font-bold text-slate-800">{{ filters?.from || '—' }} đến {{ filters?.to || '—' }}</span>
+        </div>
+      </div>
+
+      <!-- KPI Summary Row -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div class="bg-emerald-50/70 border border-emerald-200/60 rounded-xl p-3 text-center">
+          <div class="text-[11px] font-bold text-emerald-700 uppercase tracking-wider">Thực Thu Trong Kỳ</div>
+          <div class="text-base font-extrabold text-emerald-800 mt-1">{{ fmt(periodStats?.paidPayments || 0) }}</div>
+        </div>
+        <div class="bg-amber-50/70 border border-amber-200/60 rounded-xl p-3 text-center">
+          <div class="text-[11px] font-bold text-amber-700 uppercase tracking-wider">Thực Chi Trong Kỳ</div>
+          <div class="text-base font-extrabold text-amber-800 mt-1">{{ fmt(periodStats?.costs || 0) }}</div>
+        </div>
+        <div class="bg-blue-50/70 border border-blue-200/60 rounded-xl p-3 text-center">
+          <div class="text-[11px] font-bold text-blue-700 uppercase tracking-wider">Dòng Tiền Ròng</div>
+          <div class="text-base font-extrabold mt-1" :class="(periodStats?.netCashFlow || 0) >= 0 ? 'text-blue-800' : 'text-rose-700'">
+            {{ fmt(periodStats?.netCashFlow || 0) }}
+          </div>
+        </div>
+        <div class="bg-indigo-50/70 border border-indigo-200/60 rounded-xl p-3 text-center">
+          <div class="text-[11px] font-bold text-indigo-700 uppercase tracking-wider">Dự Án Mới / Đã Xong</div>
+          <div class="text-base font-extrabold text-indigo-800 mt-1">
+            +{{ periodStats?.newProjects || 0 }} / {{ periodStats?.completedProjects || 0 }}
+          </div>
+        </div>
+      </div>
+
+      <!-- CHARTS SECTION -->
+      <div class="space-y-6">
+        <!-- 1. Cost Distribution in Filtered Period -->
+        <ChartCard title="📊 Cơ cấu chi phí theo nhóm trong kỳ lọc" :subtitle="`Tổng chi trong kỳ: ${fmt(periodStats?.costs || 0)}`" :height="260">
+          <Bar :data="periodCostGroupData" :options="hBarOpts" />
+        </ChartCard>
+
+        <!-- 2. Revenue vs Cost Chart -->
+        <ChartCard title="📈 Diễn biến Thực Thu vs Thực Chi theo tháng" subtitle="Thu thập từ các dự án" :height="260">
+          <Bar :data="monthlyCompData" :options="vBarOpts" />
+        </ChartCard>
+      </div>
+
+      <!-- Footer Buttons -->
+      <div class="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+        <a-button @click="showReportModal = false">Đóng</a-button>
+        <a-button type="primary" @click="handlePrintReport" class="premium-button shadow-blue">
+          <template #icon><PrinterOutlined /></template> In / Lưu Báo Cáo
+        </a-button>
+      </div>
+    </div>
+  </a-modal>
 </template>
 
 <script setup>
@@ -346,7 +418,7 @@ import {
   ProjectOutlined, ThunderboltOutlined, CheckCircleOutlined, ClockCircleOutlined,
   TeamOutlined, ExclamationCircleOutlined, DollarOutlined, ToolOutlined,
   BarChartOutlined, RocketOutlined, HistoryOutlined, PlusCircleOutlined,
-  FileTextOutlined, CloseOutlined, CheckOutlined
+  FileTextOutlined, CloseOutlined, CheckOutlined, PrinterOutlined
 } from '@ant-design/icons-vue'
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend, Filler)
@@ -378,6 +450,14 @@ const compareMode = ref(props.filters?.compare || false)
 const selectedProjectId = ref(props.filters?.project_id || 'all')
 const customRange = ref(null)
 
+const showReportModal = ref(false)
+const openReportModal = () => {
+  showReportModal.value = true
+}
+const handlePrintReport = () => {
+  window.print()
+}
+
 if (props.filters?.period === 'custom' && props.filters?.from && props.filters?.to) {
   customRange.value = [dayjs(props.filters.from), dayjs(props.filters.to)]
 }
@@ -405,7 +485,12 @@ const onCompareToggle = (val) => {
 }
 const onCustomRange = (dates) => {
   if (dates?.[0] && dates?.[1]) {
-    navigateDashboard({ period: 'custom' })
+    customRange.value = dates
+    navigateDashboard({
+      period: 'custom',
+      from: dates[0].format('YYYY-MM-DD'),
+      to: dates[1].format('YYYY-MM-DD')
+    })
   }
 }
 const onProjectChange = (val) => {
@@ -558,6 +643,10 @@ const hBarOpts = computed(() => ({
 const costGroupData = computed(() => ({
   labels: props.charts?.costByType?.labels || [],
   datasets: [{ label: 'Chi phí', data: props.charts?.costByType?.data || [], backgroundColor: CHART_COLORS.soft, borderColor: CHART_COLORS.primary, borderWidth: 1, borderRadius: 8 }]
+}))
+const periodCostGroupData = computed(() => ({
+  labels: props.charts?.periodCostGroups?.labels?.length ? props.charts.periodCostGroups.labels : (props.charts?.costByType?.labels || []),
+  datasets: [{ label: 'Chi phí trong kỳ', data: props.charts?.periodCostGroups?.data?.length ? props.charts.periodCostGroups.data : (props.charts?.costByType?.data || []), backgroundColor: 'rgba(59, 130, 246, 0.75)', borderColor: '#2563EB', borderWidth: 1, borderRadius: 8 }]
 }))
 
 // ── CHART: Monthly Comparison ──

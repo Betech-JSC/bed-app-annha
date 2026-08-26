@@ -18,7 +18,7 @@
       :class="currentType === 'project' ? 'bg-blue-600 text-white shadow-blue-500/20' : 'bg-white text-gray-600 hover:bg-gray-100 hover:text-gray-900 border border-gray-200'"
       @click="switchType('project')"
     >
-      <span class="text-base">🏗️</span> Nhóm chi phí dự án
+      <BuildOutlined class="text-base" /> Nhóm chi phí dự án
       <span class="ml-1 text-xs px-2.5 py-0.5 rounded-full" :class="currentType === 'project' ? 'bg-white/20 text-white' : 'bg-blue-50 text-blue-700 font-bold'">
         {{ stats.total_project || 0 }}
       </span>
@@ -30,7 +30,7 @@
       :class="currentType === 'company' ? 'bg-indigo-600 text-white shadow-indigo-500/20' : 'bg-white text-gray-600 hover:bg-gray-100 hover:text-gray-900 border border-gray-200'"
       @click="switchType('company')"
     >
-      <span class="text-base">🏢</span> Nhóm chi phí công ty
+      <BankOutlined class="text-base" /> Nhóm chi phí công ty
       <span class="ml-1 text-xs px-2.5 py-0.5 rounded-full" :class="currentType === 'company' ? 'bg-white/20 text-white' : 'bg-indigo-50 text-indigo-700 font-bold'">
         {{ stats.total_company || 0 }}
       </span>
@@ -39,7 +39,7 @@
 
   <!-- Stats -->
   <div class="crm-stats-grid">
-    <StatCard label="Nhóm chi phí dự án" :value="stats.total_project" icon="AppstoreOutlined" variant="primary" />
+    <StatCard label="Nhóm chi phí dự án" :value="stats.total_project" icon="BuildOutlined" variant="primary" />
     <StatCard label="Nhóm chi phí công ty" :value="stats.total_company" icon="BankOutlined" variant="accent" />
     <StatCard label="Đang hoạt động" :value="stats.active" icon="CheckCircleOutlined" variant="success" />
     <StatCard label="Chi phí đã gán" :value="stats.total_costs" icon="DollarOutlined" variant="info" />
@@ -69,7 +69,8 @@
       </a-select>
       <div class="flex-1"></div>
       <a-tag :color="currentType === 'company' ? 'purple' : 'blue'" class="text-sm">
-        {{ currentType === 'company' ? '🏢 Chi phí công ty' : '🏗️ Chi phí dự án' }}: {{ costGroups.total || 0 }} nhóm
+        <component :is="currentType === 'company' ? BankOutlined : BuildOutlined" class="mr-1" />
+        {{ currentType === 'company' ? 'Chi phí công ty' : 'Chi phí dự án' }}: {{ costGroups.total || 0 }} nhóm
       </a-tag>
     </div>
 
@@ -103,10 +104,10 @@
         <!-- Type -->
         <template v-else-if="column.key === 'type'">
           <span v-if="record.type === 'company'" class="px-2.5 py-0.5 rounded-full bg-purple-50 text-purple-700 text-[11px] font-bold border border-purple-100 flex items-center gap-1 w-max">
-            🏢 Công ty
+            <BankOutlined /> Công ty
           </span>
           <span v-else class="px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 text-[11px] font-bold border border-blue-100 flex items-center gap-1 w-max">
-            🏗️ Dự án
+            <BuildOutlined /> Dự án
           </span>
         </template>
 
@@ -211,8 +212,12 @@
     <a-form layout="vertical" class="mt-4">
       <a-form-item label="Loại nhóm chi phí" required>
         <a-radio-group v-model:value="form.type" button-style="solid" size="large" class="w-full flex">
-          <a-radio-button value="project" class="w-1/2 text-center">🏗️ Chi phí dự án</a-radio-button>
-          <a-radio-button value="company" class="w-1/2 text-center">🏢 Chi phí công ty</a-radio-button>
+          <a-radio-button value="project" class="w-1/2 text-center">
+            <BuildOutlined class="mr-1" /> Chi phí dự án
+          </a-radio-button>
+          <a-radio-button value="company" class="w-1/2 text-center">
+            <BankOutlined class="mr-1" /> Chi phí công ty
+          </a-radio-button>
         </a-radio-group>
       </a-form-item>
 
@@ -269,6 +274,7 @@ import {
   CodeOutlined,
   AppstoreOutlined,
   BankOutlined,
+  BuildOutlined,
 } from '@ant-design/icons-vue'
 
 defineOptions({ layout: CrmLayout })

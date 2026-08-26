@@ -197,6 +197,8 @@ class CrmDashboardController extends Controller
         // Actual Cash Flow Trend for 12 months
         $revenueChart = $this->getActualCashFlowTrend(12, $projectId);
 
+        $periodCostGroups = $this->getCostGroupByPeriod($periodStart, $periodEnd, $projectId);
+
         // RENDER
         return Inertia::render('Crm/Dashboard/Index', [
             'stats' => array_merge($metrics['stats'], [
@@ -218,6 +220,7 @@ class CrmDashboardController extends Controller
                 'newProjects' => $this->getNewProjectsTrend(),
                 'topProjectsCost' => $this->getTopProjectsByCost($projectId),
                 'monthlyComparison' => $monthlyComparison,
+                'periodCostGroups' => $periodCostGroups,
             ]),
             'periodStats' => $periodStats,
             'prevPeriodStats' => $prevStats,
@@ -230,12 +233,38 @@ class CrmDashboardController extends Controller
             'recentActivities' => $recentActivities,
             'filters' => [
                 'period' => $period,
+                'from' => $periodStart->format('Y-m-d'),
+                'to' => $periodEnd->format('Y-m-d'),
                 'compare' => $compare,
                 'project_id' => $projectId,
                 'periodLabel' => $this->getPeriodLabel($period, $periodStart, $periodEnd),
                 'prevLabel' => $compare ? $this->getPeriodLabel($period, $prevStart, $prevEnd) : null,
             ],
         ]);
+    }
+
+    private function getCostGroupByPeriod(Carbon $start, Carbon $end, $projectId = null): array
+    {
+        $query = Cost::where('status', 'approved')
+            ->whereBetween('cost_date', [$start, $end])
+            ->whereNotNull('cost_group_id')
+            ->select('cost_group_id', DB::raw('SUM(amount) as total'))
+            ->groupBy('cost_group_id')
+            ->orderByDesc('total')
+            ->with('costGroup:id,name');
+
+        if ($projectId && $projectId !== 'all') {
+            $query->where('project_id', $projectId);
+        } else {
+            $query->whereHas('project', fn($q) => $q->where('status', '!=', 'cancelled'));
+        }
+
+        $raw = $query->get();
+
+        return [
+            'labels' => $raw->pluck('costGroup.name')->filter()->values()->toArray(),
+            'data' => $raw->pluck('total')->map(fn($v) => (float) $v)->values()->toArray(),
+        ];
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -258,11 +287,11 @@ class CrmDashboardController extends Controller
                 $prevEnd = $end->copy()->subYear();
                 break;
             case 'custom':
-                $start = Carbon::parse($request->get('from', $now->copy()->startOfMonth()));
-                $end = Carbon::parse($request->get('to', $now));
-                $diff = $start->diffInDays($end);
-                $prevStart = $start->copy()->subDays($diff + 1);
-                $prevEnd = $start->copy()->subDay();
+                $start = Carbon::parse($request->get('from', $now->copy()->startOfMonth()))->startOfDay();
+                $end = Carbon::parse($request->get('to', $now))->endOfDay();
+                $diff = max(0, $start->diffInDays($end));
+                $prevStart = $start->copy()->subDays($diff + 1)->startOfDay();
+                $prevEnd = $start->copy()->subDay()->endOfDay();
                 break;
             default: // month
                 $start = $now->copy()->startOfMonth();
