@@ -27,6 +27,8 @@ class AuthController extends Controller
      */
     public function login(Request $request): RedirectResponse
     {
+        $request->merge(['email' => trim($request->email ?? '')]);
+
         $request->validate([
             'email' => 'required|email',
             'password' => 'required|string',

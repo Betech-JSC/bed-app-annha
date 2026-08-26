@@ -161,7 +161,7 @@ watch(() => [form.email, form.password], () => {
 const rules = {
   email: [
     { required: true, message: 'Vui lòng nhập email', trigger: 'blur' },
-    { type: 'email', message: 'Email không hợp lệ', trigger: 'blur' },
+    { type: 'email', message: 'Email không hợp lệ', trigger: 'blur', transform: (val) => val?.trim() },
   ],
   password: [
     { required: true, message: 'Vui lòng nhập mật khẩu', trigger: 'blur' },
@@ -170,6 +170,7 @@ const rules = {
 
 const handleLogin = () => {
   loginError.value = ''
+  form.email = form.email?.trim()
   form.post('/admin/login', {
     onError: (errors) => {
       // Parse error messages from Inertia validation

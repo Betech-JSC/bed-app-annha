@@ -1275,8 +1275,8 @@
           </div>
           
           <!-- Budget Cards -->
-          <div v-if="project.budgets?.length" class="space-y-3">
-            <div v-for="budget in project.budgets" :key="budget.id" 
+          <div v-if="budgets?.length" class="space-y-3">
+            <div v-for="budget in budgets" :key="budget.id" 
               class="group relative bg-white border border-gray-100 rounded-2xl p-4 hover:border-blue-300 hover:shadow-xl hover:shadow-blue-500/10 transition-all cursor-pointer overflow-hidden"
               @click="openBudgetDetail(budget)"
             >
@@ -7659,18 +7659,18 @@
           CHỌN HẠNG MỤC NGÂN SÁCH <span class="text-red-500 font-bold">* (BẮT BUỘC)</span>
         </div>
         <a-select v-model:value="confirmPaymentBudgetItem" class="w-full" placeholder="Chọn hạng mục dự toán..." show-search :filter-option="(input, option) => (option.label || '').toLowerCase().indexOf(input.toLowerCase()) >= 0">
-          <a-select-opt-group v-for="budget in (project.budgets || []).filter(b => b.status === 'active')" :key="budget.id">
-            <template #label><span class="text-indigo-600 font-bold uppercase text-[10px]">{{ budget.name }} - ĐANG SỬ DỤNG</span></template>
-            <a-select-option v-for="item in budget.items" :key="item.id" :value="item.id" :label="item.name">
+          <a-select-opt-group v-for="budget in (budgets || []).filter(b => b.status === 'approved' || b.status === 'active')" :key="budget.id">
+            <template #label><span class="text-indigo-600 font-bold uppercase text-[10px]">{{ budget.name }} - ĐÃ DUYỆT</span></template>
+            <a-select-option v-for="item in (budget.items || [])" :key="item.id" :value="item.id" :label="`${budget.name} - ${item.name}`">
               <div class="flex justify-between items-center w-full">
                 <span>{{ item.name }}</span>
-                <span class="text-[10px] text-gray-400">Còn lại: {{ fmt(item.remaining_amount || 0) }}</span>
+                <span class="text-[10px] text-gray-400">Định mức: {{ fmt(item.remaining_amount ?? item.estimated_amount ?? 0) }}</span>
               </div>
             </a-select-option>
           </a-select-opt-group>
           <a-select-opt-group label="Các ngân sách khác (Bản nháp/Chờ duyệt)">
-             <template v-for="budget in (project.budgets || []).filter(b => b.status !== 'active')" :key="budget.id">
-                <a-select-option v-for="item in budget.items" :key="item.id" :value="item.id" :label="item.name">
+             <template v-for="budget in (budgets || []).filter(b => b.status !== 'approved' && b.status !== 'active')" :key="budget.id">
+                <a-select-option v-for="item in (budget.items || [])" :key="item.id" :value="item.id" :label="`${budget.name} - ${item.name}`">
                   <span class="text-gray-400">[{{ budget.name }}]</span> {{ item.name }}
                 </a-select-option>
              </template>
@@ -8777,11 +8777,23 @@ const getSubTabCount = (tabKey) => {
 
 const getInitialTab = () => {
   const urlParams = new URLSearchParams(window.location.search)
-  const tabParam = urlParams.get('tab')
+  let tabParam = urlParams.get('tab')
+  
+  if (tabParam === 'materials' || tabParam === 'material_bills') {
+    const vlxdGroup = (props.costGroups || []).find(g => g.code === 'VLXD')
+    tabParam = vlxdGroup ? `cost_group_${vlxdGroup.id}` : 'costs'
+  } else if (tabParam === 'labor_cost') {
+    const ncGroup = (props.costGroups || []).find(g => g.code === 'NC')
+    tabParam = ncGroup ? `cost_group_${ncGroup.id}` : 'costs'
+  } else if (tabParam === 'management_cost') {
+    const cpqlGroup = (props.costGroups || []).find(g => g.code === 'CPQL')
+    tabParam = cpqlGroup ? `cost_group_${cpqlGroup.id}` : 'costs'
+  }
+
   const validTabs = [
     'overview', 'gantt', 'progress',
     'contract', 'costs', 'payments', 'additional_costs', 'budgets', 'finance', 'invoices',
-    'subcontractor_info', 'subcontractor_progress', 'subcontractors', 'materials', 'equipment', 'labor_cost', 'management_cost',
+    'subcontractor_info', 'subcontractor_progress', 'subcontractors', 'equipment',
     'logs', 'acceptance', 'defects', 'change_requests', 'comments', 'risks',
     'personnel', 'attendance', 'labor',
     'warranty', 'maintenances',
@@ -9103,52 +9115,124 @@ onMounted(() => {
     }))
   }
   // Auto-load drawer if ID provided in query param
+  checkAndOpenUrlTarget()
+})
+
+const autoOpenedUrlId = ref(false)
+const checkAndOpenUrlTarget = () => {
+  if (autoOpenedUrlId.value) return
   const urlParams = new URLSearchParams(window.location.search)
   const openId = urlParams.get('id')
-  if (openId) {
-    if (activeTab.value === 'acceptance') {
-      const stage = (acceptanceStages.value || []).find(s => s.id == openId)
-      if (stage) openAcceptDetailModal(stage)
-    } else if (activeTab.value === 'costs') {
-      const cost = (project.value.costs || []).find(c => c.id == openId)
-      if (cost) openCostDetail(cost)
-    } else if (activeTab.value === 'materials') {
-      const bill = (project.value.material_bills || []).find(b => b.id == openId)
-      if (bill) openMaterialDetail(bill)
-    } else if (activeTab.value === 'subcontractors') {
-      const payment = (allSubcontractorPayments.value || []).find(p => p.id == openId)
-      if (payment) {
-        openSubPaymentDetail(payment)
-      } else {
-        const sub = (project.value.subcontractors || []).find(s => s.id == openId)
-        if (sub) openSubDetail(sub)
-      }
-    } else if (activeTab.value === 'payments') {
-      const pay = (project.value.payments || []).find(p => p.id == openId)
-      if (pay) openPaymentDetail(pay)
-    } else if (activeTab.value === 'defects') {
-      const def = (project.value.defects || []).find(d => d.id == openId)
-      if (def) openDefectDetail(def)
-    } else if (activeTab.value === 'budgets') {
-      const bud = (project.value.budgets || []).find(b => b.id == openId)
-      if (bud) openBudgetDetail(bud)
-    } else if (activeTab.value === 'equipment') {
-      const rental = (project.value.equipment_rentals || []).find(r => r.id == openId)
-      if (rental) {
-        openRentalDetail(rental)
-      } else {
-        const usage = (project.value.asset_usages || []).find(u => u.id == openId)
-        if (usage) openUsageDetail(usage)
-      }
-    } else if (activeTab.value === 'logs') {
-      const log = (project.value.construction_logs || []).find(l => l.id == openId)
-      if (log) openLogDetailDrawer(log)
-    } else if (activeTab.value === 'technical') {
-      const maintenance = (project.value.maintenances || []).find(m => m.id == openId)
-      if (maintenance) openMaintenanceDetail(maintenance)
+  const tabParam = urlParams.get('tab')
+  if (!openId) return
+
+  // 1. Material Bill (tab=materials, tab=material_bills, or cost_group_*)
+  if (tabParam === 'materials' || tabParam === 'material_bills' || (activeTab.value && activeTab.value.startsWith('cost_group_'))) {
+    const bill = (materialBills.value || []).find(b => b.id == openId)
+    if (bill) {
+      openMaterialDetail(bill)
+      autoOpenedUrlId.value = true
+      return
     }
   }
-})
+
+  // 2. Cost item
+  if (activeTab.value === 'costs' || tabParam === 'costs') {
+    const cost = (costs.value || []).find(c => c.id == openId)
+    if (cost) {
+      viewCostDrawer(cost)
+      autoOpenedUrlId.value = true
+      return
+    }
+  }
+
+  // 3. Equipment rental / usage
+  if (activeTab.value === 'equipment' || tabParam === 'equipment') {
+    const rental = (equipmentRentals.value || []).find(r => r.id == openId)
+    if (rental) {
+      openRentalDetail(rental)
+      autoOpenedUrlId.value = true
+      return
+    }
+    const usage = (assetUsages.value || []).find(u => u.id == openId)
+    if (usage) {
+      openUsageDetail(usage)
+      autoOpenedUrlId.value = true
+      return
+    }
+  }
+
+  // 4. Subcontractor payment / subcontractor
+  if (activeTab.value === 'subcontractors' || tabParam === 'subcontractors') {
+    const payment = (allSubcontractorPayments.value || []).find(p => p.id == openId)
+    if (payment) {
+      openSubPaymentDetail(payment)
+      autoOpenedUrlId.value = true
+      return
+    }
+    const sub = (subcontractors.value || []).find(s => s.id == openId)
+    if (sub) {
+      openSubDetail(sub)
+      autoOpenedUrlId.value = true
+      return
+    }
+  }
+
+  // 5. Acceptance stage
+  if (activeTab.value === 'acceptance' || tabParam === 'acceptance') {
+    const stage = (acceptanceStages.value || []).find(s => s.id == openId)
+    if (stage) {
+      openAcceptDetailModal(stage)
+      autoOpenedUrlId.value = true
+      return
+    }
+  }
+
+  // 6. Project payment
+  if (activeTab.value === 'payments' || tabParam === 'payments') {
+    const pay = (payments.value || []).find(p => p.id == openId)
+    if (pay) {
+      openPaymentDetail(pay)
+      autoOpenedUrlId.value = true
+      return
+    }
+  }
+
+  // 7. Defects
+  if (activeTab.value === 'defects' || tabParam === 'defects') {
+    const def = (defects.value || []).find(d => d.id == openId)
+    if (def) {
+      openDefectDetail(def)
+      autoOpenedUrlId.value = true
+      return
+    }
+  }
+
+  // 8. Budgets
+  if (activeTab.value === 'budgets' || tabParam === 'budgets') {
+    const bud = (budgets.value || []).find(b => b.id == openId)
+    if (bud) {
+      openBudgetDetail(bud)
+      autoOpenedUrlId.value = true
+      return
+    }
+  }
+
+  // 9. Logs
+  if (activeTab.value === 'logs' || tabParam === 'logs') {
+    const log = (logs.value || []).find(l => l.id == openId)
+    if (log) {
+      openLogDetailDrawer(log)
+      autoOpenedUrlId.value = true
+      return
+    }
+  }
+}
+
+watch([materialBills, costs, equipmentRentals, assetUsages, allSubcontractorPayments, acceptanceStages, payments, defects, budgets, logs], () => {
+  checkAndOpenUrlTarget()
+}, { deep: true })
+
 onBeforeUnmount(() => {
   removeStartListener?.()
   removeFinishListener?.()
@@ -10190,9 +10274,19 @@ const approveCostAcct = (c) => {
 
 // Drawer Openers
 const openCostDetail = (c) => {
-  // Smart routing: if this cost is linked to another module, navigate to that tab
+  // Smart routing: if this cost is linked to another module, navigate + open detail
   if (c.material_bill_id) {
-    activeTab.value = 'materials'
+    const bill = materialBills.value.find(b => b.id === c.material_bill_id)
+    if (bill) {
+      // Navigate to the correct cost_group tab for this bill
+      const groupId = bill.cost_group_id || bill.cost_group?.id
+      const targetTab = groupId ? `cost_group_${groupId}` : 'costs'
+      activeTab.value = targetTab
+      nextTick(() => openMaterialDetail(bill))
+    } else {
+      // Fallback: open cost drawer directly
+      viewCostDrawer(c)
+    }
     return
   }
   if (c.subcontractor_payment_id || c.subcontractor_id) {
@@ -10230,10 +10324,10 @@ const openPaymentDetail = (p) => { paymentDetailRecord.value = p; showPaymentDet
 
 // Budget Item Options for cost form selector
 const budgetItemOptions = computed(() => {
-  if (!props.project.budgets?.length) return []
+  if (!budgets.value?.length) return []
   const options = []
-  for (const b of props.project.budgets) {
-    if (b.status !== 'approved' && b.status !== 'draft') continue
+  for (const b of budgets.value) {
+    if (b.status !== 'approved' && b.status !== 'active' && b.status !== 'draft') continue
     for (const item of (b.items || [])) {
       options.push({
         id: item.id,
@@ -12629,7 +12723,11 @@ const confirmPaymentNotes = ref('')
 const confirmPaymentLoading = ref(false)
 
 watch(showConfirmPaymentModal, (val) => {
-  if (!val) {
+  if (val) {
+    if (!budgets.value?.length) {
+      router.reload({ only: ['financeData'], preserveState: true, preserveScroll: true })
+    }
+  } else {
     confirmPaymentNotes.value = ''
   }
 })
@@ -12847,6 +12945,13 @@ const rentalFiles = ref([])
 const showRentalDetailDrawer = ref(false)
 const selectedRental = ref(null)
 
+watch(equipmentRentals, (newRentals) => {
+  if (selectedRental.value && newRentals?.length) {
+    const updated = newRentals.find(r => r.id === selectedRental.value.id)
+    if (updated) selectedRental.value = updated
+  }
+}, { deep: true })
+
 const openRentalDetail = (record) => {
   selectedRental.value = record
   showRentalDetailDrawer.value = true
@@ -12880,6 +12985,7 @@ const updateRentalTotal = () => {
 
 const submitRentalForm = () => {
   if (!rentalForm.value.equipment_name) return
+  updateRentalTotal()
   const fd = new FormData()
   Object.entries(rentalForm.value).forEach(([k, v]) => { if (v !== null && v !== undefined) fd.append(k, v) })
   rentalFiles.value.forEach(f => fd.append('files[]', f))

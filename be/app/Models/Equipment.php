@@ -216,7 +216,7 @@ class Equipment extends Model
             if (empty(trim($equipment->code ?? ''))) {
                 do {
                     $code = 'TB-' . strtoupper(Str::random(6));
-                } while (static::where('code', $code)->exists());
+                } while (static::withTrashed()->where('code', $code)->exists());
                 $equipment->code = $code;
             }
         });

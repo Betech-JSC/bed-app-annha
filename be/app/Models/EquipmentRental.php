@@ -21,7 +21,7 @@ class EquipmentRental extends Model
     protected $fillable = [
         'uuid', 'project_id', 'equipment_name', 'equipment_id',
         'quantity', 'unit_price',
-        'supplier_id', 'rental_start_date', 'rental_end_date', 'total_cost',
+        'supplier_id', 'budget_item_id', 'rental_start_date', 'rental_end_date', 'total_cost',
         'status', 'rejection_reason', 'notes', 'created_by',
         'approved_by', 'approved_at', 'confirmed_by', 'confirmed_at', 'cost_id',
     ];
@@ -30,6 +30,7 @@ class EquipmentRental extends Model
         'quantity'          => 'integer',
         'unit_price'        => 'decimal:2',
         'total_cost'        => 'decimal:2',
+        'budget_item_id'    => 'integer',
         'rental_start_date' => 'date',
         'rental_end_date'   => 'date',
         'approved_at'       => 'datetime',
@@ -61,6 +62,7 @@ class EquipmentRental extends Model
     public function project(): BelongsTo { return $this->belongsTo(Project::class); }
     public function equipment(): BelongsTo { return $this->belongsTo(Equipment::class, 'equipment_id'); }
     public function supplier(): BelongsTo { return $this->belongsTo(Supplier::class); }
+    public function budgetItem(): BelongsTo { return $this->belongsTo(BudgetItem::class, 'budget_item_id'); }
     public function creator(): BelongsTo { return $this->belongsTo(User::class, 'created_by'); }
     public function approver(): BelongsTo { return $this->belongsTo(User::class, 'approved_by'); }
     public function confirmer(): BelongsTo { return $this->belongsTo(User::class, 'confirmed_by'); }
@@ -155,6 +157,7 @@ class EquipmentRental extends Model
                 'cost_date'                => $this->rental_start_date ?: now(),
                 'category'                 => 'other',
                 'cost_group_id'            => $costGroupId,
+                'budget_item_id'           => $this->budget_item_id,
                 'expense_category'         => 'opex',
                 'supplier_id'              => $this->supplier_id,
                 'description'              => $this->notes ?: "Đồng bộ từ phiếu thuê thiết bị #" . ($this->uuid),
@@ -177,8 +180,12 @@ class EquipmentRental extends Model
         });
 
         static::saving(function ($model) {
-            // Auto-calculate total cost
-            $model->total_cost = ($model->quantity ?: 0) * ($model->unit_price ?: 0);
+            // Auto-calculate total cost if quantity and unit_price are provided
+            if ($model->quantity && $model->unit_price) {
+                $model->total_cost = $model->quantity * $model->unit_price;
+            } elseif (!$model->total_cost && ($model->quantity || $model->unit_price)) {
+                $model->total_cost = ($model->quantity ?: 0) * ($model->unit_price ?: 0);
+            }
         });
 
         static::saved(function ($model) {

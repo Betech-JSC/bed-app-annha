@@ -332,11 +332,11 @@ class EquipmentService
             foreach ($purchase->items as $item) {
                 $itemCode = !empty(trim($item->code ?? '')) ? trim($item->code) : null;
                 
-                // If code is not provided or already exists in equipment, generate a unique code
-                if (!$itemCode || Equipment::where('code', $itemCode)->exists()) {
+                // If code is not provided or already exists in equipment (including soft-deleted), generate a unique code
+                if (!$itemCode || Equipment::withTrashed()->where('code', $itemCode)->exists()) {
                     do {
                         $itemCode = 'TB-' . strtoupper(Str::random(6));
-                    } while (Equipment::where('code', $itemCode)->exists());
+                    } while (Equipment::withTrashed()->where('code', $itemCode)->exists());
                 }
 
                 Equipment::create([

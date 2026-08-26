@@ -492,7 +492,7 @@ class CrmEquipmentController extends Controller
 
         DB::transaction(function () use ($purchase) {
             if ($purchase->status === 'completed') {
-                \App\Models\Equipment::where('notes', 'like', "Nhập từ phiếu mua #{$purchase->id}%")->delete();
+                \App\Models\Equipment::where('notes', 'like', "Nhập từ phiếu mua #{$purchase->id}%")->forceDelete();
             }
 
             $purchase->update([
