@@ -257,6 +257,8 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
     });
 
     // Activity Logs & Audit Trail (Nhật ký thao tác & Truy xuất dữ liệu)
+    Route::get('/admin/activity-logs', fn() => redirect('/activity-logs'));
+    Route::get('/admin/system-logs', fn() => redirect('/system-logs'));
     Route::prefix('activity-logs')->name('activity-logs.')->group(function () {
         Route::get('/', [CrmActivityLogController::class, 'index'])->name('index');
         Route::get('/show/{id}', [CrmActivityLogController::class, 'show'])->name('show');
@@ -728,6 +730,7 @@ Route::name('crm.')->middleware(['auth:admin'])->group(function () {
     Route::prefix('settings')->name('settings.')->group(function () {
         Route::get('/', [CrmSettingsController::class, 'index'])->name('index');
         Route::put('/update', [CrmSettingsController::class, 'updateSetting'])->name('update');
+        Route::put('/branding', [CrmSettingsController::class, 'updateBranding'])->name('branding');
         Route::post('/logo', [CrmSettingsController::class, 'uploadLogo'])->name('logo');
         Route::put('/smtp', [CrmSettingsController::class, 'updateSmtp'])->name('smtp');
         Route::post('/smtp/test', [CrmSettingsController::class, 'testSmtp'])->name('smtp.test');

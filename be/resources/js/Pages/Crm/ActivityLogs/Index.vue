@@ -342,10 +342,13 @@
 <script setup>
 import { ref, reactive } from 'vue';
 import { Head, router } from '@inertiajs/vue3';
+import CrmLayout from '@/Layouts/CrmLayout.vue';
 import PageHeader from '@/Components/Crm/PageHeader.vue';
 
 import { message } from 'ant-design-vue';
 import axios from 'axios';
+
+defineOptions({ layout: CrmLayout });
 import {
   HistoryOutlined,
   DeleteOutlined,
@@ -459,7 +462,7 @@ function formatJson(val) {
 }
 
 function applyFilters() {
-  router.get('/admin/activity-logs', filterValues, { preserveState: true, replace: true });
+  router.get('/activity-logs', filterValues, { preserveState: true, replace: true });
 }
 
 function resetFilters() {
@@ -471,7 +474,7 @@ function resetFilters() {
 }
 
 function handlePageChange(page) {
-  router.get('/admin/activity-logs', { ...filterValues, page }, { preserveState: true });
+  router.get('/activity-logs', { ...filterValues, page }, { preserveState: true });
 }
 
 function fetchLogs() {
@@ -492,7 +495,7 @@ function handleTabChange(key) {
 async function fetchDeletedRecords(page = 1) {
   deletedLoading.value = true;
   try {
-    const res = await axios.get('/admin/activity-logs/deleted', {
+    const res = await axios.get('/activity-logs/deleted', {
       params: {
         type: deletedType.value,
         search: deletedSearch.value,
@@ -517,7 +520,7 @@ function handleDeletedPageChange(page) {
 }
 
 function restoreRecord(record) {
-  router.post('/admin/activity-logs/restore', {
+  router.post('/activity-logs/restore', {
     model_type: deletedType.value,
     id: record.id,
   }, {
@@ -532,7 +535,7 @@ function restoreRecord(record) {
 }
 
 function exportCsv() {
-  window.open('/admin/activity-logs/export', '_blank');
+  window.open('/activity-logs/export', '_blank');
 }
 </script>
 

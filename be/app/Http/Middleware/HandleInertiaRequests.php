@@ -35,7 +35,35 @@ class HandleInertiaRequests extends Middleware
     public function share(Request $request): array
     {
         return array_merge(parent::share($request), [
-            'appName' => config('app.name', 'BED CRM'),
+            'appName' => function () {
+                try {
+                    if (\Illuminate\Support\Facades\Schema::hasTable('settings')) {
+                        $name = \App\Models\Setting::where('key', 'app_name')->first()?->value;
+                        if (!empty($name)) return $name;
+                    }
+                } catch (\Exception $e) {}
+                return config('app.name', 'BED CRM');
+            },
+            'appTagline' => function () {
+                try {
+                    if (\Illuminate\Support\Facades\Schema::hasTable('settings')) {
+                        $tagline = \App\Models\Setting::where('key', 'app_tagline')->first()?->value;
+                        if (!empty($tagline)) return $tagline;
+                    }
+                } catch (\Exception $e) {}
+                return 'Construction ERP';
+            },
+            'appLogo' => function () {
+                try {
+                    if (\Illuminate\Support\Facades\Schema::hasTable('settings')) {
+                        $logo = \App\Models\Setting::where('key', 'app_logo')->first()?->value;
+                        if (!empty($logo) && \Illuminate\Support\Facades\Storage::disk('public')->exists($logo)) {
+                            return $logo;
+                        }
+                    }
+                } catch (\Exception $e) {}
+                return null;
+            },
             'auth' => function () use ($request) {
                 // CRM uses 'admin' guard which now points to users table
                 $user = $request->user('admin') ?? $request->user();

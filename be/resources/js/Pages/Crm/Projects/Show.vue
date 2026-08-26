@@ -600,11 +600,11 @@
             </div>
 
             <div class="flex items-center gap-2">
-              <a-button v-if="can('material.create') || can('cost.create')" type="primary" size="small" class="rounded-lg bg-blue-600 border-blue-600 hover:bg-blue-700 font-medium shadow-sm" @click="openBillModal(null)">
+              <a-button v-if="can('material.create') || can('cost.create') || can('cost.approve_accountant') || can('cost.view')" type="primary" size="small" class="rounded-lg bg-blue-600 border-blue-600 hover:bg-blue-700 font-medium shadow-sm" @click="openBillModal(null)">
                 <template #icon><PlusOutlined /></template>
                 Tạo phiếu nhập
               </a-button>
-              <a-button v-if="can('cost.create')" type="default" size="small" class="rounded-lg font-medium shadow-sm border-gray-300 hover:border-blue-500 hover:text-blue-600" @click="openCostModal(null)">
+              <a-button v-if="can('cost.create') || can('cost.approve_accountant') || can('cost.view')" type="default" size="small" class="rounded-lg font-medium shadow-sm border-gray-300 hover:border-blue-500 hover:text-blue-600" @click="openCostModal(null)">
                 <template #icon><PlusOutlined /></template>
                 Tạo phiếu chi
               </a-button>

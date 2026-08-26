@@ -137,10 +137,12 @@
             <div class="mb-6">
               <div class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Logo hiện tại</div>
               <div class="logo-preview-box">
-                <img v-if="branding.logo" :src="`/storage/${branding.logo}`" alt="Logo" class="max-h-20 max-w-48 object-contain" />
+                <img v-if="branding.logo && !logoPrevError" :src="`/storage/${branding.logo}`" alt="Logo" class="max-h-20 max-w-48 object-contain" @error="logoPrevError = true" />
                 <div v-else class="text-center py-6">
-                  <div class="w-20 h-20 rounded-2xl bg-gradient-to-br from-crm-primary to-crm-primary-light flex items-center justify-center text-white text-3xl font-bold mx-auto mb-3">B</div>
-                  <div class="text-sm text-gray-400">Chưa có logo tùy chỉnh</div>
+                  <div class="w-20 h-20 rounded-2xl bg-gradient-to-br from-crm-primary to-crm-primary-light flex items-center justify-center text-white text-3xl font-bold mx-auto mb-3">
+                    {{ (brandingForm.app_name || 'B').charAt(0).toUpperCase() }}
+                  </div>
+                  <div class="text-sm text-gray-400">Chưa có logo tùy chỉnh (hoặc file không tồn tại)</div>
                 </div>
               </div>
             </div>
@@ -574,6 +576,7 @@ const saveAdmin = () => {
 const logoInput = ref(null)
 const logoFile = ref(null)
 const logoPreview = ref(null)
+const logoPrevError = ref(false)
 const logoUploading = ref(false)
 const brandingSaving = ref(false)
 
@@ -620,23 +623,16 @@ const uploadLogo = () => {
 
 const saveBranding = () => {
   brandingSaving.value = true
-  const promises = [
-    { key: 'app_name', value: brandingForm.value.app_name },
-    { key: 'app_tagline', value: brandingForm.value.app_tagline },
-  ]
-  let completed = 0
-  promises.forEach(item => {
-    router.put('/settings/update', item, {
-      preserveState: true,
-      onSuccess: () => {
-        completed++
-        if (completed === promises.length) {
-          message.success('Đã lưu thông tin thương hiệu!')
-          brandingSaving.value = false
-        }
-      },
-      onError: () => { brandingSaving.value = false },
-    })
+  router.put('/settings/branding', brandingForm.value, {
+    preserveState: true,
+    onSuccess: () => {
+      message.success('Đã lưu thông tin thương hiệu!')
+      brandingSaving.value = false
+    },
+    onError: () => {
+      message.error('Lỗi lưu thông tin thương hiệu')
+      brandingSaving.value = false
+    },
   })
 }
 

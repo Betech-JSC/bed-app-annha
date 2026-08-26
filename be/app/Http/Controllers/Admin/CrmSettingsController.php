@@ -50,8 +50,10 @@ class CrmSettingsController extends Controller
         $settings = Setting::all();
 
         // Branding
+        $rawLogo = Setting::where('key', 'app_logo')->first()?->value;
+        $validLogo = ($rawLogo && Storage::disk('public')->exists($rawLogo)) ? $rawLogo : null;
         $branding = [
-            'logo' => Setting::where('key', 'app_logo')->first()?->value,
+            'logo' => $validLogo,
             'app_name' => Setting::where('key', 'app_name')->first()?->value ?? config('app.name'),
             'app_tagline' => Setting::where('key', 'app_tagline')->first()?->value ?? '',
         ];
@@ -144,6 +146,34 @@ class CrmSettingsController extends Controller
         );
 
         return back()->with('success', 'Đã cập nhật logo thành công.');
+    }
+
+    /**
+     * Update branding info (app_name, app_tagline)
+     */
+    public function updateBranding(Request $request)
+    {
+        $this->guardSuperAdmin();
+        $request->validate([
+            'app_name' => 'nullable|string|max:255',
+            'app_tagline' => 'nullable|string|max:255',
+        ]);
+
+        if ($request->has('app_name')) {
+            Setting::updateOrCreate(
+                ['key' => 'app_name'],
+                ['value' => $request->app_name ?? '', 'type' => 'string', 'description' => 'Tên ứng dụng']
+            );
+        }
+
+        if ($request->has('app_tagline')) {
+            Setting::updateOrCreate(
+                ['key' => 'app_tagline'],
+                ['value' => $request->app_tagline ?? '', 'type' => 'string', 'description' => 'Tagline ứng dụng']
+            );
+        }
+
+        return back()->with('success', 'Đã cập nhật thông tin thương hiệu thành công.');
     }
 
     /**
