@@ -600,13 +600,13 @@
             </div>
 
             <div class="flex items-center gap-2">
-              <a-button v-if="can('material.create') || can('cost.create')" type="primary" size="small" class="rounded-lg bg-emerald-600 border-emerald-600 hover:bg-emerald-700 font-medium shadow-sm" @click="openBillModal(null)">
+              <a-button v-if="can('material.create') || can('cost.create')" type="primary" size="small" class="rounded-lg bg-blue-600 border-blue-600 hover:bg-blue-700 font-medium shadow-sm" @click="openBillModal(null)">
                 <template #icon><PlusOutlined /></template>
-                Tạo phiếu nhập vật liệu
+                Tạo phiếu nhập
               </a-button>
-              <a-button v-if="can('cost.create')" type="default" size="small" class="rounded-lg font-medium shadow-sm" @click="openCostModal(null)">
+              <a-button v-if="can('cost.create')" type="default" size="small" class="rounded-lg font-medium shadow-sm border-gray-300 hover:border-blue-500 hover:text-blue-600" @click="openCostModal(null)">
                 <template #icon><PlusOutlined /></template>
-                Tạo phiếu chi khác
+                Tạo phiếu chi
               </a-button>
             </div>
           </div>
@@ -2879,7 +2879,7 @@
   </a-modal>
 
   <!-- Cost Modal -->
-  <a-modal v-model:open="showCostModal" :title="editingCost ? 'Sửa chi phí' : 'Thêm chi phí'" :width="640" @ok="saveCost" ok-text="Lưu" cancel-text="Hủy" :confirm-loading="savingForm" centered destroy-on-close class="crm-modal">
+  <a-modal v-model:open="showCostModal" :title="editingCost ? 'Sửa phiếu chi' : 'Tạo phiếu chi'" :width="640" @ok="saveCost" :ok-text="editingCost ? 'Cập nhật' : 'Tạo phiếu chi'" cancel-text="Hủy" :confirm-loading="savingForm" centered destroy-on-close class="crm-modal">
     <a-form layout="vertical" class="mt-4">
       <a-form-item label="Tên chi phí" required v-bind="fieldStatus('name')"><a-input v-model:value="costForm.name" size="large" /></a-form-item>
       <a-row :gutter="16">
@@ -4076,8 +4076,8 @@
       </div>
 
       <!-- Linked Material Bill Items Section -->
-      <div v-if="((costDetailRecord.material_bill || costDetailRecord.materialBill)?.items || []).length" class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-        <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2 text-blue-500"><HistoryOutlined /> Chi tiết danh sách vật tư ({{ (costDetailRecord.material_bill || costDetailRecord.materialBill).items.length }} mục)</div>
+      <div v-if="getCostMaterialBillItems(costDetailRecord).length" class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2 text-blue-500"><HistoryOutlined /> Chi tiết danh sách vật tư ({{ getCostMaterialBillItems(costDetailRecord).length }} mục)</div>
         <table class="w-full text-xs">
           <thead>
             <tr class="border-b border-gray-100 text-gray-400">
@@ -4088,7 +4088,7 @@
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-50">
-            <tr v-for="item in ((costDetailRecord.material_bill || costDetailRecord.materialBill).items)" :key="item.id">
+            <tr v-for="item in getCostMaterialBillItems(costDetailRecord)" :key="item.id">
               <td class="py-2.5">
                 <div class="font-bold text-gray-700">{{ item.material?.name || ('Vật liệu #' + item.material_id) }}</div>
                 <div class="text-[10px] text-gray-400" v-if="item.material?.code">{{ item.material?.code }}</div>
@@ -10257,11 +10257,21 @@ const handleCostCreateMenu = ({ key }) => {
 const openCostModal = (c) => {
   editingCost.value = c
   modalFiles.value = []
+
+  let defaultGroup = null
+  if (!c) {
+    if (activeTab.value && activeTab.value.startsWith('cost_group_')) {
+      const groupId = Number(activeTab.value.replace('cost_group_', ''))
+      defaultGroup = props.costGroups?.find(g => g.id === groupId)
+    }
+  }
+
   costForm.value = c ? { 
     name: c.name, 
     amount: c.amount, 
     cost_date: c.cost_date, 
     cost_group_id: c.cost_group_id, 
+    supplier_id: c.supplier_id || null,
     budget_item_id: c.budget_item_id || null, 
     subcontractor_id: c.subcontractor_id || null, 
     material_id: c.material_id || null, 
@@ -10269,7 +10279,20 @@ const openCostModal = (c) => {
     unit: c.unit || '', 
     description: c.description || '',
     deleted_attachment_ids: []
-  } : { name: '', amount: null, cost_date: dayjs().format('YYYY-MM-DD'), cost_group_id: null, budget_item_id: null, subcontractor_id: null, material_id: null, quantity: null, unit: '', description: '', deleted_attachment_ids: [] }
+  } : { 
+    name: '', 
+    amount: null, 
+    cost_date: dayjs().format('YYYY-MM-DD'), 
+    cost_group_id: defaultGroup ? defaultGroup.id : null, 
+    supplier_id: null,
+    budget_item_id: null, 
+    subcontractor_id: null, 
+    material_id: null, 
+    quantity: null, 
+    unit: '', 
+    description: '', 
+    deleted_attachment_ids: [] 
+  }
   showCostModal.value = true
 }
 const saveCost = () => {
@@ -10400,6 +10423,21 @@ const viewCostDrawer = (c) => {
   }
   costDetailRecord.value = c
   showCostDetail.value = true
+}
+
+const getCostMaterialBillItems = (costRecord) => {
+  if (!costRecord) return []
+  const mb = costRecord.material_bill || costRecord.materialBill
+  if (mb && mb.items && mb.items.length) {
+    return mb.items
+  }
+  if (costRecord.material_bill_id && materialBills.value?.length) {
+    const found = materialBills.value.find(b => Number(b.id) === Number(costRecord.material_bill_id))
+    if (found && found.items && found.items.length) {
+      return found.items
+    }
+  }
+  return []
 }
 const openPaymentDetail = (p) => { paymentDetailRecord.value = p; showPaymentDetail.value = true }
 
