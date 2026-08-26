@@ -162,8 +162,8 @@ class CrmFinanceController extends Controller
         // Suppliers for form
         $suppliers = Supplier::orderBy('name')->get(['id', 'name']);
         
-        // Active cost groups for company costs
-        $costGroups = CostGroup::active()->ordered()->get(['id', 'name', 'expense_category']);
+        // Active cost groups for company costs (ordered with type)
+        $costGroups = CostGroup::active()->ordered()->get(['id', 'name', 'type', 'expense_category']);
 
         $selectedCost = null;
         if ($id = $request->get('id')) {

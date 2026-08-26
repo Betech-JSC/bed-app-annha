@@ -19,7 +19,16 @@ class CrmCostGroupsController extends Controller
         $user = Auth::guard('admin')->user();
         $this->crmRequire($user, Permissions::COMPANY_COST_VIEW);
 
+        $type = $request->query('type', 'project');
+        if (!in_array($type, ['project', 'company', 'all'])) {
+            $type = 'project';
+        }
+
         $query = CostGroup::with('creator')->withCount('costs');
+
+        if ($type !== 'all') {
+            $query->where('type', $type);
+        }
 
         if ($search = $request->query('search')) {
             $query->where(function ($q) use ($search) {
@@ -38,16 +47,22 @@ class CrmCostGroupsController extends Controller
         $costGroups = $query->ordered()->paginate(20)->withQueryString();
 
         $stats = [
-            'total' => CostGroup::count(),
-            'active' => CostGroup::where('is_active', true)->count(),
-            'inactive' => CostGroup::where('is_active', false)->count(),
+            'total' => $type === 'all' ? CostGroup::count() : CostGroup::where('type', $type)->count(),
+            'active' => $type === 'all' ? CostGroup::where('is_active', true)->count() : CostGroup::where('type', $type)->where('is_active', true)->count(),
+            'inactive' => $type === 'all' ? CostGroup::where('is_active', false)->count() : CostGroup::where('type', $type)->where('is_active', false)->count(),
+            'total_project' => CostGroup::where('type', 'project')->count(),
+            'total_company' => CostGroup::where('type', 'company')->count(),
             'total_costs' => \App\Models\Cost::whereNotNull('cost_group_id')->count(),
         ];
 
         return Inertia::render('Crm/CostGroups/Index', [
             'costGroups' => $costGroups,
             'stats' => $stats,
-            'filters' => $request->only(['search', 'status']),
+            'filters' => [
+                'search' => $request->query('search', ''),
+                'status' => $request->query('status', ''),
+                'type' => $type,
+            ],
         ]);
     }
 
@@ -58,6 +73,7 @@ class CrmCostGroupsController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'code' => 'nullable|string|max:50|unique:cost_groups,code',
+            'type' => 'required|string|in:project,company',
             'description' => 'nullable|string|max:1000',
             'expense_category' => 'nullable|string|in:capex,opex',
             'is_active' => 'boolean',
@@ -83,6 +99,7 @@ class CrmCostGroupsController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'code' => ['nullable', 'string', 'max:50', Rule::unique('cost_groups', 'code')->ignore($costGroup->id)],
+            'type' => 'required|string|in:project,company',
             'description' => 'nullable|string|max:1000',
             'expense_category' => 'nullable|string|in:capex,opex',
             'is_active' => 'boolean',

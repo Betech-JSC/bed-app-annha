@@ -1,20 +1,47 @@
 <template>
-  <Head :title="`Nhóm chi phí | ${$page.props.appName || 'BED CRM'}`" />
+  <Head :title="`Phân nhóm chi phí | ${$page.props.appName || 'BED CRM'}`" />
 
-  <PageHeader title="Nhóm chi phí" subtitle="Quản lý danh mục & phân nhóm chi phí cho dự án">
+  <PageHeader title="Phân Nhóm Chi Phí" subtitle="Quản lý danh mục nhóm chi phí dự án & chi phí vận hành công ty">
     <template #actions>
       <a-button type="primary" size="large" @click="openCreateModal" class="premium-button shadow-blue">
         <template #icon><PlusOutlined /></template>
-        Thêm nhóm
+        {{ currentType === 'company' ? 'Thêm nhóm chi phí công ty' : 'Thêm nhóm chi phí dự án' }}
       </a-button>
     </template>
   </PageHeader>
 
+  <!-- Sub-Tabs Switcher -->
+  <div class="flex items-center gap-3 mb-6 border-b border-gray-200 pb-3">
+    <button 
+      type="button"
+      class="flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm transition-all cursor-pointer shadow-sm"
+      :class="currentType === 'project' ? 'bg-blue-600 text-white shadow-blue-500/20' : 'bg-white text-gray-600 hover:bg-gray-100 hover:text-gray-900 border border-gray-200'"
+      @click="switchType('project')"
+    >
+      <span class="text-base">🏗️</span> Nhóm chi phí dự án
+      <span class="ml-1 text-xs px-2.5 py-0.5 rounded-full" :class="currentType === 'project' ? 'bg-white/20 text-white' : 'bg-blue-50 text-blue-700 font-bold'">
+        {{ stats.total_project || 0 }}
+      </span>
+    </button>
+
+    <button 
+      type="button"
+      class="flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm transition-all cursor-pointer shadow-sm"
+      :class="currentType === 'company' ? 'bg-indigo-600 text-white shadow-indigo-500/20' : 'bg-white text-gray-600 hover:bg-gray-100 hover:text-gray-900 border border-gray-200'"
+      @click="switchType('company')"
+    >
+      <span class="text-base">🏢</span> Nhóm chi phí công ty
+      <span class="ml-1 text-xs px-2.5 py-0.5 rounded-full" :class="currentType === 'company' ? 'bg-white/20 text-white' : 'bg-indigo-50 text-indigo-700 font-bold'">
+        {{ stats.total_company || 0 }}
+      </span>
+    </button>
+  </div>
+
   <!-- Stats -->
   <div class="crm-stats-grid">
-    <StatCard label="Tổng nhóm" :value="stats.total" icon="AppstoreOutlined" variant="primary" />
+    <StatCard label="Nhóm chi phí dự án" :value="stats.total_project" icon="AppstoreOutlined" variant="primary" />
+    <StatCard label="Nhóm chi phí công ty" :value="stats.total_company" icon="BankOutlined" variant="accent" />
     <StatCard label="Đang hoạt động" :value="stats.active" icon="CheckCircleOutlined" variant="success" />
-    <StatCard label="Ngừng hoạt động" :value="stats.inactive" icon="CloseCircleOutlined" variant="warning" />
     <StatCard label="Chi phí đã gán" :value="stats.total_costs" icon="DollarOutlined" variant="info" />
   </div>
 
@@ -41,7 +68,9 @@
         <a-select-option value="inactive">Ngừng hoạt động</a-select-option>
       </a-select>
       <div class="flex-1"></div>
-      <a-tag color="blue" class="text-sm">{{ costGroups.total || 0 }} nhóm</a-tag>
+      <a-tag :color="currentType === 'company' ? 'purple' : 'blue'" class="text-sm">
+        {{ currentType === 'company' ? '🏢 Chi phí công ty' : '🏗️ Chi phí dự án' }}: {{ costGroups.total || 0 }} nhóm
+      </a-tag>
     </div>
 
     <a-table
@@ -71,19 +100,29 @@
           </div>
         </template>
 
+        <!-- Type -->
+        <template v-else-if="column.key === 'type'">
+          <span v-if="record.type === 'company'" class="px-2.5 py-0.5 rounded-full bg-purple-50 text-purple-700 text-[11px] font-bold border border-purple-100 flex items-center gap-1 w-max">
+            🏢 Công ty
+          </span>
+          <span v-else class="px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 text-[11px] font-bold border border-blue-100 flex items-center gap-1 w-max">
+            🏗️ Dự án
+          </span>
+        </template>
+
         <!-- Description -->
         <template v-else-if="column.key === 'description'">
           <span v-if="record.description" class="text-gray-500 text-sm line-clamp-2">{{ record.description }}</span>
           <span v-else class="text-gray-300 italic text-sm">—</span>
         </template>
 
-        <!-- Expense Category (Nhóm cha) -->
+        <!-- Expense Category (CAPEX / OPEX) -->
         <template v-else-if="column.key === 'expense_category'">
           <span v-if="record.expense_category === 'capex'" class="px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-600 text-[11px] font-medium border border-emerald-100">
-            CAPEX
+            CAPEX — Chi phí đầu tư
           </span>
           <span v-else-if="record.expense_category === 'opex'" class="px-2.5 py-0.5 rounded-full bg-orange-50 text-orange-600 text-[11px] font-medium border border-orange-100">
-            OPEX
+            OPEX — Vận hành
           </span>
           <span v-else class="text-gray-300 italic text-sm">—</span>
         </template>
@@ -147,7 +186,7 @@
       <template #emptyText>
         <div class="py-12 text-center">
           <AppstoreOutlined class="text-4xl text-gray-300 mb-3" />
-          <div class="text-gray-400">Chưa có nhóm chi phí nào</div>
+          <div class="text-gray-400">Chưa có nhóm chi phí {{ currentType === 'company' ? 'công ty' : 'dự án' }} nào</div>
           <a-button type="primary" size="small" class="mt-3" @click="openCreateModal">
             <PlusOutlined /> Tạo nhóm đầu tiên
           </a-button>
@@ -160,7 +199,7 @@
   <a-modal
     v-model:open="showModal"
     :title="editing ? 'Chỉnh sửa nhóm chi phí' : 'Thêm nhóm chi phí mới'"
-    :width="560"
+    :width="580"
     @ok="handleSubmit"
     @cancel="resetForm"
     ok-text="Lưu"
@@ -170,27 +209,37 @@
     destroy-on-close
   >
     <a-form layout="vertical" class="mt-4">
+      <a-form-item label="Loại nhóm chi phí" required>
+        <a-radio-group v-model:value="form.type" button-style="solid" size="large" class="w-full flex">
+          <a-radio-button value="project" class="w-1/2 text-center">🏗️ Chi phí dự án</a-radio-button>
+          <a-radio-button value="company" class="w-1/2 text-center">🏢 Chi phí công ty</a-radio-button>
+        </a-radio-group>
+      </a-form-item>
+
       <a-row :gutter="16">
         <a-col :span="16">
           <a-form-item label="Tên nhóm chi phí" required>
-            <a-input v-model:value="form.name" size="large" placeholder="VD: Chi phí vật liệu, Nhân công..." />
+            <a-input v-model:value="form.name" size="large" placeholder="VD: Chi phí mặt bằng, Vật liệu..." />
           </a-form-item>
         </a-col>
         <a-col :span="8">
           <a-form-item label="Mã nhóm">
-            <a-input v-model:value="form.code" size="large" placeholder="VD: VL, NC..." />
+            <a-input v-model:value="form.code" size="large" placeholder="VD: MB, VL..." />
           </a-form-item>
         </a-col>
       </a-row>
+
       <a-form-item label="Mô tả">
         <a-textarea v-model:value="form.description" :rows="3" placeholder="Mô tả chi tiết nhóm chi phí..." :maxlength="1000" show-count />
       </a-form-item>
-      <a-form-item label="Phân loại nhóm cha (Dành cho Chi phí công ty)">
-        <a-select v-model:value="form.expense_category" placeholder="Chọn nhóm cha (CAPEX hoặc OPEX)..." size="large" allow-clear>
+
+      <a-form-item label="Phân loại OPEX / CAPEX">
+        <a-select v-model:value="form.expense_category" placeholder="Chọn phân loại (CAPEX hoặc OPEX)..." size="large" allow-clear>
           <a-select-option value="capex">CAPEX — Chi phí đầu tư / Mua sắm tài sản</a-select-option>
           <a-select-option value="opex">OPEX — Chi phí vận hành (điện, nước, mặt bằng, sửa chữa...)</a-select-option>
         </a-select>
       </a-form-item>
+
       <a-row :gutter="16">
         <a-col :span="12">
           <a-form-item label="Thứ tự sắp xếp">
@@ -208,7 +257,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { Head, router } from '@inertiajs/vue3'
 import CrmLayout from '@/Layouts/CrmLayout.vue'
 import PageHeader from '@/Components/Crm/PageHeader.vue'
@@ -219,6 +268,7 @@ import {
   DeleteOutlined,
   CodeOutlined,
   AppstoreOutlined,
+  BankOutlined,
 } from '@ant-design/icons-vue'
 
 defineOptions({ layout: CrmLayout })
@@ -228,6 +278,8 @@ const props = defineProps({
   filters: Object,
 })
 
+const currentType = ref(props.filters?.type || 'project')
+
 const loading = ref(false)
 const showModal = ref(false)
 const editing = ref(null)
@@ -236,16 +288,22 @@ const filters = ref({
   status: props.filters?.status || undefined,
 })
 
-const columns = [
+const columns = computed(() => [
   { title: 'Nhóm chi phí', key: 'name', width: 240 },
+  { title: 'Loại nhóm', key: 'type', width: 130, align: 'center' },
   { title: 'Mô tả', key: 'description', ellipsis: true },
-  { title: 'Nhóm cha (Công ty)', key: 'expense_category', width: 160, align: 'center' },
-  { title: 'Số chi phí', key: 'costs_count', align: 'center', width: 120 },
+  { title: 'Phân loại (CAPEX/OPEX)', key: 'expense_category', width: 180, align: 'center' },
+  { title: 'Số chi phí', key: 'costs_count', align: 'center', width: 110 },
   { title: 'Thứ tự', key: 'sort_order', align: 'center', width: 80 },
   { title: 'Trạng thái', key: 'is_active', align: 'center', width: 100 },
   { title: 'Người tạo', key: 'creator', width: 130 },
   { title: '', key: 'actions', width: 100, align: 'center' },
-]
+])
+
+const switchType = (type) => {
+  currentType.value = type
+  applyFilters()
+}
 
 // ============ FILTERS ============
 let searchTimeout = null
@@ -257,6 +315,7 @@ const debounceSearch = () => {
 const applyFilters = () => {
   loading.value = true
   router.get('/cost-groups', {
+    type: currentType.value,
     search: filters.value.search || undefined,
     status: filters.value.status || undefined,
   }, {
@@ -270,10 +329,9 @@ const handleTableChange = (p) => {
   loading.value = true
   router.get('/cost-groups', {
     page: p.current,
-    ...{
-      search: filters.value.search || undefined,
-      status: filters.value.status || undefined,
-    },
+    type: currentType.value,
+    search: filters.value.search || undefined,
+    status: filters.value.status || undefined,
   }, {
     preserveState: true,
     replace: true,
@@ -285,6 +343,7 @@ const handleTableChange = (p) => {
 const defaultForm = () => ({
   name: '',
   code: '',
+  type: currentType.value || 'project',
   description: '',
   expense_category: null,
   is_active: true,
@@ -304,6 +363,7 @@ const openEditModal = (record) => {
   form.value = {
     name: record.name || '',
     code: record.code || '',
+    type: record.type || 'project',
     description: record.description || '',
     expense_category: record.expense_category || null,
     is_active: record.is_active ?? true,

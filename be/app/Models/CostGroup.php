@@ -14,6 +14,7 @@ class CostGroup extends Model
     protected $fillable = [
         'name',
         'code',
+        'type', // 'project' or 'company'
         'description',
         'expense_category',
         'is_active',
@@ -47,6 +48,16 @@ class CostGroup extends Model
     public function scopeActive($query)
     {
         return $query->where('is_active', true);
+    }
+
+    public function scopeProject($query)
+    {
+        return $query->where('type', 'project');
+    }
+
+    public function scopeCompany($query)
+    {
+        return $query->where('type', 'company');
     }
 
     public function scopeOrdered($query)
